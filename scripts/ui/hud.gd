@@ -188,7 +188,10 @@ func _on_placement_changed(active: bool, status: String, valid: bool) -> void:
 	_build_panel.visible = _build_button.button_pressed and not active
 	if not active:
 		return
-	_placement_status.text = status
+	# Tapping the ghost is the primary confirm, so the bar has to teach it — the
+	# gesture is invisible otherwise, and a player who never finds it is left tapping
+	# a small button at the bottom of the screen for every wall segment.
+	_placement_status.text = ("%s · tap to build" % status) if valid else status
 	_placement_status.add_theme_color_override("font_color",
 		Color(0.72, 0.88, 0.72) if valid else Color(0.95, 0.6, 0.55))
 	_confirm_button.disabled = not valid

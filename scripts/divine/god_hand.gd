@@ -80,9 +80,11 @@ func _on_touch(event: InputEventScreenTouch) -> void:
 		_dragging_ember = false
 		_pending_ember_grab = false
 		_drag_finger = -1
+		if was_drag:
+			Divine.end_ember_drag()
 		# Armed but never moved: the player tapped, so treat it like any other tap
 		# and let the Ember glide there.
-		if not was_drag and _handle_tap(_to_world(event.position)):
+		elif _handle_tap(_to_world(event.position)):
 			pass
 		get_viewport().set_input_as_handled()
 		return
@@ -108,6 +110,7 @@ func _on_drag(event: InputEventScreenDrag) -> void:
 			return
 		_dragging_ember = true
 		_pending_ember_grab = false
+		Divine.begin_ember_drag()
 
 	if not _dragging_ember:
 		return
@@ -123,11 +126,12 @@ func _is_on_ember(world_pos: Vector2) -> bool:
 	return world_pos.distance_to(Divine.ember_position()) <= _world_radius(EMBER_GRAB_PX)
 
 
+## Hands the raw touch point straight to Divine — no rounding to a cell. Snapping
+## the Ember to tile centres while the finger was still down made it lag half a tile
+## behind the thumb and jump in 16px steps; Divine eases it toward this point and
+## only settles on a cell when the drag ends.
 func _move_ember_to(world_pos: Vector2) -> void:
-	var cell := World.grid.to_cell_index(world_pos)
-	if cell == -1:
-		return
-	Divine.place_ember(cell)
+	Divine.drag_ember_to(world_pos)
 
 
 # --- Villagers -------------------------------------------------------------------------

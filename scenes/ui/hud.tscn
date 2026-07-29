@@ -117,22 +117,23 @@ layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="CancelButton" type="Button" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
-custom_minimum_size = Vector2(60, 26)
+custom_minimum_size = Vector2(76, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.960784, 0.6, 0.552941, 1)
+theme_override_font_sizes/font_size = 13
 text = "Cancel"
 
 [node name="Status" type="Label" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
-custom_minimum_size = Vector2(140, 0)
+custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "drag to position"
+text = "drag to move · tap to build"
 vertical_alignment = 1
 
 [node name="ConfirmButton" type="Button" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
-custom_minimum_size = Vector2(90, 26)
+custom_minimum_size = Vector2(96, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 13
 text = "Build"
 
 [node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout/BottomRow"]

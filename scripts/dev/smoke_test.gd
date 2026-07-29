@@ -413,6 +413,13 @@ func _check_building(seed_value: int, run: Node2D) -> void:
 	_expect(site.is_site() and site.needs_materials(), seed_value,
 		"starts as a blueprint awaiting materials")
 
+	# Ground held by an UNFINISHED site has to be off limits too. Occupancy is only
+	# stamped on completion (builders must be able to walk onto the site), so a check
+	# against occupancy alone happily let a second building be dropped on top of a
+	# blueprint — two structures on one footprint, one of them unreachable.
+	_expect(not Colony.check_placement(def, anchor)["ok"], seed_value,
+		"cannot build on top of an unfinished site")
+
 	var previous_scale := Sim.time_scale
 	Sim.time_scale = 10.0
 	var materials_arrived := false

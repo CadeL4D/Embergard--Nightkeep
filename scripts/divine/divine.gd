@@ -33,8 +33,21 @@ const TRAVEL_SPEED := 105.0
 const TRAVEL_MIN := 0.30
 const TRAVEL_MAX := 2.4
 
+## How fast the Ember chases the finger while it is being DRAGGED, as the rate of an
+## exponential approach. A drag used to snap the Ember cell to cell, which both
+## stuttered in 16px steps and parked the light up to half a tile away from the
+## thumb. Chasing a free world-space target fixes the offset and keeps the weight:
+## high enough that the Ember stays under the finger, low enough that it still reads
+## as something you are hauling rather than something you are teleporting.
+const DRAG_FOLLOW_RATE := 16.0
+## Settle time when the finger lifts. The Ember ends on a cell centre so the light
+## grid, the sim and the sprite cannot disagree about which tile it is on.
+const DRAG_SETTLE_TIME := 0.12
+
 var _light_handle: int = 0
 var _travel: Tween = null
+var _dragging: bool = false
+var _drag_target: Vector2 = Vector2.ZERO
 
 ## Lights dropped by Emberfall, and when they expire. Kept here rather than as
 ## scene nodes so they survive a scene reload and are trivially saveable.
@@ -54,6 +67,7 @@ func reset() -> void:
 	_light_handle = 0
 	_temp_lights.clear()
 	_cooldowns.clear()
+	_dragging = false
 	_kill_travel()
 
 
@@ -96,9 +110,13 @@ func faith_multiplier() -> float:
 ## The light grid is restamped only when the Ember crosses into a new CELL, not on
 ## every sub-pixel of the glide. Restamping per frame would redo a whole disc of
 ## light sixty times a second for no visible gain.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if ember_cell == -1:
 		return
+	# A drag steers a target rather than the Ember itself, so the follow stays smooth
+	# however coarsely or unevenly the touch events happen to arrive.
+	if _dragging:
+		ember_pos = ember_pos.lerp(_drag_target, clampf(DRAG_FOLLOW_RATE * delta, 0.0, 1.0))
 	var cell := World.grid.to_cell_index(ember_pos)
 	if cell != -1 and cell != ember_cell:
 		ember_cell = cell
@@ -108,11 +126,12 @@ func _process(_delta: float) -> void:
 
 # --- The Ember ---------------------------------------------------------------------
 
-## Snap the Ember somewhere with no travel. For run setup and for dragging, where
-## the player is manipulating it directly and any smoothing reads as input lag.
+## Snap the Ember somewhere with no travel at all. Run setup, saves, teleports —
+## anything where there is no gesture to stay in step with.
 func place_ember(cell: int) -> void:
 	if not World.grid.is_valid_index(cell):
 		return
+	_dragging = false
 	_kill_travel()
 	ember_cell = cell
 	ember_pos = World.grid.to_world_index(cell)
@@ -132,10 +151,58 @@ func tween_ember_to(cell: int) -> void:
 	var target := World.grid.to_world_index(cell)
 	var duration := clampf(ember_pos.distance_to(target) / TRAVEL_SPEED, TRAVEL_MIN, TRAVEL_MAX)
 
+	_dragging = false
 	_kill_travel()
 	_travel = create_tween()
 	_travel.tween_property(self, "ember_pos", target, duration)\
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+# --- Dragging ---------------------------------------------------------------------
+#
+# Direct manipulation, so it does NOT go through the grid: the Ember follows a
+# free world-space point and only settles onto a cell when the finger lifts.
+# Rounding to the nearest tile mid-gesture is what made the light sit beside the
+# thumb instead of under it.
+
+## Take hold of the Ember. Any glide in flight is abandoned — the player's hand wins.
+func begin_ember_drag() -> void:
+	if ember_cell == -1:
+		return
+	_kill_travel()
+	_dragging = true
+	_drag_target = ember_pos
+
+
+## Aim the drag. The Ember is not moved here; _process eases it toward this point.
+func drag_ember_to(world_pos: Vector2) -> void:
+	if not _dragging:
+		return
+	# Clamped to the map so a finger dragged past the edge cannot strand the Ember
+	# where to_cell_index reads -1 and the light quietly stops moving with it.
+	var rect := World.grid.world_rect()
+	_drag_target = Vector2(
+		clampf(world_pos.x, rect.position.x, rect.end.x - 1.0),
+		clampf(world_pos.y, rect.position.y, rect.end.y - 1.0)
+	)
+
+
+## Let go. The Ember settles onto the centre of whichever tile it came to rest over.
+func end_ember_drag() -> void:
+	if not _dragging:
+		return
+	_dragging = false
+	var cell := World.grid.to_cell_index(ember_pos)
+	if cell == -1:
+		return
+	_kill_travel()
+	_travel = create_tween()
+	_travel.tween_property(self, "ember_pos", World.grid.to_world_index(cell), DRAG_SETTLE_TIME)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+func is_dragging() -> bool:
+	return _dragging
 
 
 func is_travelling() -> bool:

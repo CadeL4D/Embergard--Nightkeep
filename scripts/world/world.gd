@@ -9,7 +9,8 @@ extends Node
 ## Layers, all flat arrays of grid.cell_count indexed y * width + x:
 ##   terrain   PackedByteArray  Terrain.Type       — what the ground is
 ##   feature   PackedByteArray  Terrain.Feature    — what sits on it
-##   occupancy PackedInt32Array building instance id, or 0 for empty
+##   occupancy PackedInt32Array building instance id, or 0 for empty (PATHING)
+##   claimed   PackedInt32Array building instance id, or 0 for empty (PLACEMENT)
 ##   light     PackedByteArray  0-255              — gameplay light, not the renderer's
 ##   blight    PackedByteArray  0-255 intensity
 ##   move_cost PackedByteArray  1-254, 255 = impassable (derived; never saved)
@@ -22,6 +23,12 @@ var grid: Grid = Grid.new(MAP_WIDTH, MAP_HEIGHT)
 var terrain: PackedByteArray = PackedByteArray()
 var feature: PackedByteArray = PackedByteArray()
 var occupancy: PackedInt32Array = PackedInt32Array()
+## Ground spoken for by a building, from the instant the blueprint goes down.
+## Deliberately NOT the same layer as occupancy: occupancy is about pathing and is
+## only stamped when a building COMPLETES, because builders have to be able to walk
+## onto a site to raise it. That left unfinished sites invisible to placement, so a
+## second hut could be dropped straight on top of one already under construction.
+var claimed: PackedInt32Array = PackedInt32Array()
 var light: PackedByteArray = PackedByteArray()
 var blight: PackedByteArray = PackedByteArray()
 var move_cost: PackedByteArray = PackedByteArray()
@@ -67,6 +74,8 @@ func generate(new_seed: int) -> void:
 
 	occupancy = PackedInt32Array()
 	occupancy.resize(grid.cell_count)
+	claimed = PackedInt32Array()
+	claimed.resize(grid.cell_count)
 	light = PackedByteArray()
 	light.resize(grid.cell_count)
 	blight = PackedByteArray()
@@ -156,6 +165,26 @@ func set_occupancy(cells: PackedInt32Array, building_id: int) -> void:
 		if grid.is_valid_index(i):
 			occupancy[i] = building_id
 	cost_dirty = true
+
+
+## Take ground for a building. Costs nothing to pathing — this layer exists purely so
+## placement can see sites that are not finished yet.
+func claim_cells(cells: PackedInt32Array, building_id: int) -> void:
+	for i in cells:
+		if grid.is_valid_index(i):
+			claimed[i] = building_id
+
+
+## Release ground, but only the cells this building still holds. A blanket zeroing
+## would let a demolished building free tiles a neighbour had legitimately taken.
+func release_cells(cells: PackedInt32Array, building_id: int) -> void:
+	for i in cells:
+		if grid.is_valid_index(i) and claimed[i] == building_id:
+			claimed[i] = 0
+
+
+func is_claimed(cell: int) -> bool:
+	return grid.is_valid_index(cell) and claimed[cell] != 0
 
 
 ## Nearest walkable cell to `from`, searched outward. Used when a spawn point or a

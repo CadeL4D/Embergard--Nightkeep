@@ -1,20 +1,33 @@
 extends Node2D
 ## Drives building placement: the ghost, the validity read-out, and confirmation.
 ##
-## Deliberately NOT tap-to-place. On a phone the player's thumb covers the exact
-## spot they are aiming at, so tapping to place means never being able to see what
-## you are doing. Instead the ghost is dragged — rendered offset ABOVE the finger so
-## it stays visible — and committed with a separate Confirm button that sits in the
-## thumb zone.
+## Drag-then-tap. The ghost sits directly UNDER the finger and follows it, and a tap
+## on the ghost commits it. An earlier version floated the ghost two tiles above the
+## touch point so the thumb could not cover it, but the constant offset was worse
+## than the occlusion: you aim at a tile and the building lands somewhere else, and
+## every placement becomes a correction. Lift the thumb and the site is fully visible
+## anyway, which is exactly the moment you decide whether to tap and build.
+##
+## Cancel is a button rather than a gesture — there is no spare gesture left, and a
+## way out of a mode must be visible rather than remembered.
 ##
 ## Sits after GodHand in the scene so it receives input first: while placing, a drag
 ## moves the ghost rather than the Ember or the camera.
 
 signal placement_changed(active: bool, status: String, valid: bool)
 
-## How far above the touch point the ghost floats, in tiles. Roughly a fingertip —
-## enough to clear the thumb without the ghost feeling detached from the gesture.
-const FINGER_OFFSET_TILES := 2.0
+## Minimum comfortable touch target for the confirm tap, in screen pixels. A 1x1
+## building is 16px of world art — far too small to demand a thumb land on it — so
+## the ghost's grab zone is padded out to this at the current zoom.
+const TOUCH_TARGET_PX := 44.0
+
+## How far the finger must travel before a touch that started on the ghost counts as
+## a move rather than a tap. Without it a slightly smeared confirm tap drags the
+## building off its site instead of building it.
+const DRAG_COMMIT_PX := 10.0
+
+const TAP_MAX_TIME := 0.35
+const TAP_MAX_TRAVEL := 12.0
 
 var active: bool = false
 var def: BuildingDef = null
@@ -25,6 +38,9 @@ var _status: String = ""
 var _bad_cells: Dictionary = {}
 var _cells: PackedInt32Array = PackedInt32Array()
 var _drag_finger: int = -1
+var _grabbed_ghost: bool = false
+var _touch_start: Vector2 = Vector2.ZERO
+var _touch_start_time: float = 0.0
 
 @onready var _ghost: Sprite2D = $Ghost
 @onready var _camera: Camera2D = get_node("../CameraRig")
@@ -59,6 +75,7 @@ func cancel() -> void:
 	_cells = PackedInt32Array()
 	_ghost.visible = false
 	_drag_finger = -1
+	_grabbed_ghost = false
 	queue_redraw()
 	placement_changed.emit(false, "", false)
 
@@ -85,37 +102,96 @@ func confirm() -> bool:
 
 # --- Input ------------------------------------------------------------------------------
 
+## Three gestures, all on one thumb:
+##   * Touch empty ground — the ghost moves there and follows the finger.
+##   * Drag the ghost — it stays under the finger.
+##   * Tap the ghost — build it, right where it is.
+##
+## Tapping the ghost is the confirm because the ghost is already where the player is
+## looking. Walls are placed in runs, and making someone travel to a button at the
+## bottom of the screen between every segment is what turns fortifying a keep into a
+## chore. The Build button stays as a second route — it is also the only place an
+## invalid site can explain itself.
 func _unhandled_input(event: InputEvent) -> void:
 	if not active:
 		return
 	if event is InputEventScreenTouch:
-		if event.pressed:
-			_drag_finger = event.index
+		_on_touch(event as InputEventScreenTouch)
+	elif event is InputEventScreenDrag:
+		_on_drag(event as InputEventScreenDrag)
+
+
+func _on_touch(event: InputEventScreenTouch) -> void:
+	if event.pressed:
+		_drag_finger = event.index
+		_touch_start = event.position
+		_touch_start_time = _now()
+		_grabbed_ghost = _is_on_ghost(_to_world(event.position))
+		# A touch that lands ON the ghost must not move it: that touch is most likely
+		# the confirm tap, and re-centring on the finger would shift the site out from
+		# under the very gesture trying to accept it.
+		if not _grabbed_ghost:
 			_move_to_finger(event.position)
-		elif event.index == _drag_finger:
-			_drag_finger = -1
-		get_viewport().set_input_as_handled()
-	elif event is InputEventScreenDrag and event.index == _drag_finger:
+	elif event.index == _drag_finger:
+		var elapsed := _now() - _touch_start_time
+		var travelled := event.position.distance_to(_touch_start)
+		var was_grab := _grabbed_ghost
+		_drag_finger = -1
+		_grabbed_ghost = false
+		if was_grab and elapsed < TAP_MAX_TIME and travelled < TAP_MAX_TRAVEL:
+			confirm()
+	get_viewport().set_input_as_handled()
+
+
+func _on_drag(event: InputEventScreenDrag) -> void:
+	if event.index != _drag_finger:
+		return
+	# A grab only becomes a move once the finger has really travelled, so a slightly
+	# smeared confirm tap still confirms.
+	if not (_grabbed_ghost and event.position.distance_to(_touch_start) < DRAG_COMMIT_PX):
 		_move_to_finger(event.position)
-		get_viewport().set_input_as_handled()
+	get_viewport().set_input_as_handled()
+
+
+## Is this world point on the ghost, generously? The footprint is grown to a
+## thumb-sized target at the current zoom, because a 1x1 hut is 16 world pixels and
+## demanding that precision to confirm would make the tap feel broken.
+func _is_on_ghost(world_pos: Vector2) -> bool:
+	if def == null or _anchor == -1:
+		return false
+	var c := World.grid.coord(_anchor)
+	var rect := Rect2(
+		Vector2(c) * float(Grid.TILE_SIZE),
+		Vector2(def.footprint) * float(Grid.TILE_SIZE)
+	)
+	var target := TOUCH_TARGET_PX / maxf(_camera.zoom.x, 0.01)
+	rect = rect.grow(maxf(0.0, (target - minf(rect.size.x, rect.size.y)) * 0.5))
+	return rect.has_point(world_pos)
 
 
 func _move_to_finger(screen_pos: Vector2) -> void:
-	var world_pos: Vector2 = _camera.get_canvas_transform().affine_inverse() * screen_pos
-	world_pos.y -= FINGER_OFFSET_TILES * Grid.TILE_SIZE
-	_move_to_world(world_pos)
+	_move_to_world(_to_world(screen_pos))
+
+
+func _to_world(screen_pos: Vector2) -> Vector2:
+	return _camera.get_canvas_transform().affine_inverse() * screen_pos
+
+
+func _now() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
 
 
 func _move_to_world(world_pos: Vector2) -> void:
 	if def == null:
 		return
 	var grid: Grid = World.grid
-	# Centre the footprint on the cursor so a 2x2 sits where the player is pointing
-	# rather than hanging down-right of it.
-	var centre := grid.to_cell(world_pos)
+	# Centre the footprint on the touch point in PIXELS, not in whole cells. Picking
+	# the cell first and then integer-dividing the footprint hangs a 2x2 down-right
+	# of the finger by a whole tile — the same detachment the floating ghost had,
+	# just smaller.
 	var anchor_coord := Vector2i(
-		centre.x - def.footprint.x / 2,
-		centre.y - def.footprint.y / 2
+		roundi(world_pos.x / float(Grid.TILE_SIZE) - def.footprint.x * 0.5),
+		roundi(world_pos.y / float(Grid.TILE_SIZE) - def.footprint.y * 0.5)
 	)
 	if not grid.is_valid_v(anchor_coord):
 		return

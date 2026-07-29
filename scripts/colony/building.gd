@@ -64,6 +64,9 @@ func _ready() -> void:
 	_progress_fill.position = _progress_back.position
 
 	Colony.register_building(self)
+	# The ground is spoken for from this moment, not from completion. Pathing still
+	# only closes on completion (see complete()) so builders can reach the site.
+	World.claim_cells(cells, get_instance_id())
 	_refresh_visuals()
 
 	# A zero-work building (the Hearth) is finished the moment it is placed.
@@ -75,6 +78,10 @@ func _exit_tree() -> void:
 	if _light_handle != 0:
 		World.light_field.remove_source(_light_handle)
 		_light_handle = 0
+	# Released here rather than only in destroy(), so a building torn down by a scene
+	# reload or by queue_free from anywhere else cannot leave its footprint locked out
+	# of placement for the rest of the run.
+	World.release_cells(cells, get_instance_id())
 	Colony.unregister_building(self)
 
 
@@ -272,6 +279,7 @@ func destroy() -> void:
 	# route monsters around a gap that is actually open.
 	if def.blocks_movement:
 		World.set_occupancy(cells, 0)
+	World.release_cells(cells, get_instance_id())
 	if def.is_stockpile:
 		Colony.remove_stockpile(_centre_cell())
 	Events.building_destroyed.emit(self)

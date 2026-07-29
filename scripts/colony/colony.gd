@@ -188,9 +188,15 @@ func check_placement(def: BuildingDef, anchor: int) -> Dictionary:
 	result["cells"] = cells
 
 	var bad: Dictionary = {}
+	var blocked := false
 	for cell in cells:
-		if World.occupancy[cell] != 0:
+		# `claimed`, not `occupancy`: occupancy is only stamped when a building
+		# completes, so testing it let the player stack a new blueprint on top of a
+		# site still under construction — and on top of any finished building that
+		# does not block movement.
+		if World.claimed[cell] != 0:
 			bad[cell] = true
+			blocked = true
 		elif not Terrain.WALKABLE.get(World.terrain[cell], false):
 			bad[cell] = true
 		elif Terrain.FEATURE_BLOCKS.get(World.feature[cell], false):
@@ -200,7 +206,10 @@ func check_placement(def: BuildingDef, anchor: int) -> Dictionary:
 	result["bad"] = bad
 
 	if not bad.is_empty():
-		result["reason"] = "blocked ground"
+		# Naming the specific obstruction matters: "blocked ground" next to a half-built
+		# hut reads as a bug, and the player has no way to tell that the site they are
+		# aiming at is already spoken for.
+		result["reason"] = "already built here" if blocked else "blocked ground"
 		return result
 	if not can_afford(def.cost):
 		result["reason"] = "need %s" % def.cost_text()
