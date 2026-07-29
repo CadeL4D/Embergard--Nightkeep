@@ -30,6 +30,7 @@ script = ExtResource("1_run")
 script = ExtResource("2_world_view")
 
 [node name="TerrainLayer" type="TileMapLayer" parent="WorldView"]
+z_index = -2
 tile_set = ExtResource("3_tileset")
 
 [node name="Sorted" type="Node2D" parent="WorldView"]

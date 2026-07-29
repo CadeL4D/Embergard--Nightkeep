@@ -108,11 +108,17 @@ const TINT_INTERVAL := 0.2
 
 @onready var _sprite: Sprite2D = $Sprite
 @onready var _ring: Sprite2D = $SelectionRing
+@onready var _carry: Sprite2D = $Carry
 
 
 func _ready() -> void:
 	super()
 	_ring.visible = false
+	# Frame count read from the resource list rather than baked into the scene, so
+	# adding a resource kind cannot silently leave the icon strip a frame short and
+	# mislabel every haul after it.
+	_carry.hframes = Colony.KINDS.size()
+	_carry.visible = false
 	Colony.villagers.append(self)
 	Events.villager_spawned.emit(self)
 
@@ -722,6 +728,12 @@ func _within_reach(target: int) -> bool:
 
 
 func _request_path(dest: int, next_state: State) -> void:
+	# Stand still while the solve is queued. A villager that keeps walking its OLD
+	# route — a wander, most often, since _seek_work runs while one is still in
+	# progress — ends up somewhere the new path never passes through, and then has to
+	# walk back to the cell it asked from. Half a second of standing reads as thinking;
+	# retracing your steps reads as broken.
+	stop()
 	_awaiting_path = true
 	World.paths.request(cell(), dest, func(path: PackedInt32Array) -> void:
 		_awaiting_path = false
@@ -822,12 +834,24 @@ func _animate(delta: float) -> void:
 
 	var lit := float(World.light_at(cell())) / 255.0
 	var tint := Color.WHITE.lerp(Color(0.75, 0.78, 0.9), 1.0 - lit)
-	if carry_amount > 0:
-		# Carrying something tints them slightly warm, so a glance at the colony
-		# tells you whether goods are actually flowing.
-		tint = tint.lerp(Color(1.15, 1.0, 0.8), 0.35)
 	if not _sprite.modulate.is_equal_approx(tint):
 		_sprite.modulate = tint
+
+	# What they are carrying, held over their head. This replaces a warm tint that
+	# used to stand in for "is holding something" — the tint said goods were moving
+	# but never WHAT, so a stalled stone supply was indistinguishable from a healthy
+	# one at a glance. Lit like the villager, or a night colony grows a row of
+	# floating icons brighter than the people holding them.
+	var showing := carry_amount > 0
+	if _carry.visible != showing:
+		_carry.visible = showing
+	if not showing:
+		return
+	var icon := Colony.KINDS.find(carry_kind)
+	if icon >= 0 and _carry.frame != icon:
+		_carry.frame = icon
+	if not _carry.modulate.is_equal_approx(tint):
+		_carry.modulate = tint
 
 
 func describe() -> String:

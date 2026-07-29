@@ -18,6 +18,9 @@ const VILLAGER_PATH := "res://assets/sprites/agents/villager.png"
 const EMBER_PATH := "res://assets/sprites/fx/ember.png"
 const LIGHT_PATH := "res://assets/sprites/fx/light_falloff.png"
 const RING_PATH := "res://assets/sprites/fx/selection_ring.png"
+const CARRY_PATH := "res://assets/sprites/fx/carry.png"
+
+const CARRY_SIZE := 7
 
 const LIGHT_SIZE := 256
 const VILLAGER_W := 12
@@ -74,6 +77,7 @@ func _ready() -> void:
 	_ensure_dirs()
 	_bake_tileset()
 	_bake_villager()
+	_bake_carry_icons()
 	_bake_monsters()
 	_bake_buildings()
 	_bake_ember()
@@ -228,6 +232,34 @@ func _bake_villager() -> void:
 		_stamp(img, map, i * VILLAGER_W, 0)
 
 	_save(img, VILLAGER_PATH)
+
+
+## Horizontal strip of carry icons, laid out in COLONY.KINDS ORDER. That ordering is
+## the contract: the villager picks its frame with Colony.KINDS.find(kind), so adding a
+## resource to that array and an icon to ArtData is all a new carryable takes — no
+## lookup table to keep in step, and nothing branching on a resource id.
+##
+## A kind with no icon still gets a slot, left blank, rather than shifting every frame
+## after it and silently mislabelling every haul in the game.
+func _bake_carry_icons() -> void:
+	var icons := ArtData.carry_frames()
+	var kinds: Array[StringName] = Colony.KINDS
+
+	var img := Image.create(CARRY_SIZE * kinds.size(), CARRY_SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for i in kinds.size():
+		var kind := kinds[i]
+		if not icons.has(kind):
+			printerr("carry icon missing for %s — its slot will render blank" % kind)
+			_failures += 1
+			continue
+		var map: Array = icons[kind]
+		if not _check_map("carry %s" % kind, map, CARRY_SIZE, CARRY_SIZE):
+			continue
+		_stamp(img, map, i * CARRY_SIZE, 0)
+
+	_save(img, CARRY_PATH)
 
 
 ## One horizontal 2-frame strip per monster. Monsters have no directional art —

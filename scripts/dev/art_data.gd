@@ -524,14 +524,21 @@ const VILLAGER_UP_1 := [
 	".kkk....kkk.",
 ]
 
-## Profile view. The head is shifted toward the facing direction and shows a SINGLE
-## eye — the first pass kept both eyes and a centred head, so side-on villagers were
-## indistinguishable from front-on ones and the whole sheet looked static.
+## Profile view, facing RIGHT — the renderer mirrors it for left. The head is shifted
+## toward the facing direction and shows a SINGLE eye; the first pass kept both eyes
+## and a centred head, so side-on villagers were indistinguishable from front-on ones
+## and the whole sheet looked static.
+##
+## The eye must sit at the FRONT of the head (column 8 of the 4..9 span). It was at
+## column 5 — the back of the skull — which fought the rightward head shift and made
+## every villager walking east look like it was facing west. At twelve pixels the eye
+## is the only facing cue there is, so one pixel on the wrong side reads as the whole
+## colony walking backwards.
 const VILLAGER_SIDE_0 := [
 	"............",
 	".....ffff...",
 	"....ffffff..",
-	"....fkffff..",
+	"....ffffkf..",
 	"....ffffff..",
 	".....ffff...",
 	"...CCCCC....",
@@ -548,7 +555,7 @@ const VILLAGER_SIDE_1 := [
 	"............",
 	".....ffff...",
 	"....ffffff..",
-	"....fkffff..",
+	"....ffffkf..",
 	"....ffffff..",
 	".....ffff...",
 	"...CCCCC....",
@@ -701,6 +708,57 @@ const SPITTER_1 := [
 	".k..k..k....",
 	"............",
 ]
+
+
+# =========================================================================================
+# CARRY ICONS — 7x7, floated above a villager's head while it is holding something
+# =========================================================================================
+#
+# Heavily outlined in near-black. These are read at a glance against grass, mud, stone
+# and full night, and a silhouette without an outline disappears against at least one
+# of those. Seven pixels is as small as a recognisable shape gets, and the icon still
+# has to be distinguishable from the other two at 1x zoom — hence one strong shape
+# cue each: stacked planks, a faceted lump, a round cluster.
+
+const CARRY_WOOD := [
+	".......",
+	".kkkkk.",
+	".kDEDk.",
+	".kkkkk.",
+	".kDEDk.",
+	".kkkkk.",
+	".......",
+]
+
+const CARRY_STONE := [
+	".......",
+	"..kkk..",
+	".kLLLk.",
+	"kLSSSLk",
+	"kSSSSSk",
+	".kkkkk.",
+	".......",
+]
+
+const CARRY_FOOD := [
+	".......",
+	"...m...",
+	"..mgm..",
+	".krrrk.",
+	"krrxrrk",
+	".krrrk.",
+	"..kkk..",
+]
+
+
+## Keyed by resource kind. The baker lays these out in Colony.KINDS order so the
+## villager can pick its frame with a single array lookup instead of a match block.
+static func carry_frames() -> Dictionary:
+	return {
+		&"wood": CARRY_WOOD,
+		&"stone": CARRY_STONE,
+		&"food": CARRY_FOOD,
+	}
 
 
 static func monster_frames() -> Dictionary:

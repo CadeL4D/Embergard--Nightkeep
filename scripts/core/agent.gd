@@ -74,10 +74,23 @@ func follow_path(path: PackedInt32Array) -> void:
 	if path.is_empty():
 		_has_step = false
 		return
-	# Skip the first node when it is the cell we are already standing in, otherwise
-	# the unit visibly snaps backward to the centre of its own tile before setting off.
-	if path.size() > 1 and path[0] == cell():
-		_path_cursor = 1
+
+	# Resume from where the agent actually IS, not from wherever it was standing when
+	# it asked. Two reasons, and the second is the nastier one:
+	#   * Starting on the cell you already occupy snaps the unit back to the centre of
+	#     its own tile before it sets off.
+	#   * Solves are QUEUED (see PathService) and can land several ticks after the
+	#     request. An agent that walked on in the meantime would turn round and
+	#     retrace its steps to a cell it had already left — which is exactly what
+	#     "the villagers are walking backwards" looks like on screen.
+	var here := cell()
+	var start := 0
+	for i in path.size():
+		if path[i] == here:
+			start = i + 1
+			break
+	_path_cursor = mini(start, path.size() - 1)
+
 	_step_target = World.grid.to_world_index(_path[_path_cursor])
 	_has_step = true
 
