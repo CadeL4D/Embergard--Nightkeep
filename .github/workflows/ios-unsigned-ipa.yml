@@ -30,11 +30,32 @@ env:
 
 jobs:
   build:
-    runs-on: macos-14
+    # Must be new enough to carry an iOS SDK matching the one Godot's official
+    # template was built against. On macos-14 (Xcode 15) the link fails with
+    # missing symbols like _MTLTensorDomain and _NSProcessPerformanceProfileDefault
+    # — those are Metal 4 / iOS 26 APIs that simply do not exist in an older SDK.
+    runs-on: macos-26
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
+
+      # Pick the newest Xcode the image has, rather than trusting the default.
+      # Printed loudly because an SDK mismatch shows up much later as an
+      # inscrutable wall of undefined symbols.
+      - name: Select newest Xcode
+        run: |
+          set -euo pipefail
+          echo "available:"
+          ls -d /Applications/Xcode*.app 2>/dev/null || echo "  (none found)"
+          NEWEST="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$NEWEST" ]; then
+            sudo xcode-select -s "$NEWEST/Contents/Developer"
+          fi
+          echo "--- selected ---"
+          xcodebuild -version
+          echo "--- iOS SDKs ---"
+          xcodebuild -showsdks | grep -i ios || true
 
       # The template archive is ~1 GB, so it is cached across runs. The key
       # includes the Godot version, so bumping the engine correctly misses.
