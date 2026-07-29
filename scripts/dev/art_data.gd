@@ -720,12 +720,16 @@ const SPITTER_1 := [
 # has to be distinguishable from the other two at 1x zoom — hence one strong shape
 # cue each: stacked planks, a faceted lump, a round cluster.
 
+## Stacked planks, banded light-dark-light. The first pass alternated dark wood with
+## black separator rows and photographed as a solid black rectangle at gameplay zoom —
+## a seven-pixel icon has no room for interior outlines, so the banding has to come
+## from tone contrast alone.
 const CARRY_WOOD := [
 	".......",
 	".kkkkk.",
-	".kDEDk.",
-	".kkkkk.",
-	".kDEDk.",
+	".kxxxk.",
+	".kDDDk.",
+	".kxxxk.",
 	".kkkkk.",
 	".......",
 ]
