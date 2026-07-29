@@ -79,6 +79,7 @@ func _ready() -> void:
 	_bake_ember()
 	_bake_light_falloff()
 	_bake_selection_ring()
+	_bake_app_icons()
 	_bake_preview()
 	if _failures > 0:
 		printerr("bake finished with %d problem(s)" % _failures)
@@ -289,6 +290,54 @@ func _bake_light_falloff() -> void:
 			var a := clampf(1.0 - d, 0.0, 1.0)
 			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a * a))
 	_save(img, LIGHT_PATH)
+
+
+## Every app-icon size iOS asks for. Godot falls back to the project icon when
+## these are blank — and the project icon is an SVG, which iOS cannot use, so the
+## exporter rejects the configuration. It does so WITHOUT printing a reason, which
+## makes this one of the more annoying failures to diagnose.
+const IOS_ICON_SIZES: Array[int] = [1024, 180, 167, 152, 120, 87, 80, 76, 60, 58, 40]
+
+
+## The Ember against a dark field — the game's one image, and the only thing on the
+## home screen that has to read at 40 pixels. Drawn with smooth falloff rather than
+## the chunky pixel-art version, because a 12px sprite scaled to 1024 looks like a
+## mistake rather than a style.
+func _bake_app_icons() -> void:
+	DirAccess.make_dir_recursive_absolute("res://assets/icons/ios")
+	for size: int in IOS_ICON_SIZES:
+		var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+		var centre := (size - 1) * 0.5
+		var radius := float(size) * 0.34
+
+		for y in size:
+			for x in size:
+				var d := Vector2(x - centre, y - centre).length()
+
+				# Background: a subtle vertical gradient so the tile is not flat.
+				var t := float(y) / float(size)
+				var bg := Color("11161f").lerp(Color("070a10"), t)
+
+				if d > radius * 1.9:
+					img.set_pixel(x, y, bg)
+					continue
+
+				# Outer bloom, falling off smoothly to nothing.
+				var glow := clampf(1.0 - (d / (radius * 1.9)), 0.0, 1.0)
+				var col := bg.lerp(Color("c85a1e"), glow * glow * 0.85)
+
+				# Mid body and pale core.
+				if d < radius:
+					var k := clampf(1.0 - (d / radius), 0.0, 1.0)
+					col = col.lerp(Color("ff9a3c"), clampf(k * 2.2, 0.0, 1.0))
+					if d < radius * 0.55:
+						var c := clampf(1.0 - (d / (radius * 0.55)), 0.0, 1.0)
+						col = col.lerp(Color("ffd88a"), clampf(c * 1.8, 0.0, 1.0))
+
+				col.a = 1.0
+				img.set_pixel(x, y, col)
+
+		_save(img, "res://assets/icons/ios/icon_%d.png" % size)
 
 
 ## Nearest-neighbour contact sheet of everything, written to user:// so it never
