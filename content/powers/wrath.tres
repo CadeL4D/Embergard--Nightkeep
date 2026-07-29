@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"wrath"
+display_name = "Wrath"
+description = "A burst of holy fire. Hurts everything corrupted standing in it."
+kind = 1
+faith_cost = 34.0
+cooldown = 8.0
+radius = 4
+amount = 42.0
+duration = 0.0
+color = Color(1, 0.45, 0.3, 1)
+order = 1

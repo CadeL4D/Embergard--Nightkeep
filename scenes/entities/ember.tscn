@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/divine/ember_view.gd" id="1_ember"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fx/light_falloff.png" id="2_falloff"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fx/ember.png" id="3_glow"]
+
+[node name="Ember" type="Node2D"]
+script = ExtResource("1_ember")
+
+[node name="Light" type="PointLight2D" parent="."]
+color = Color(1, 0.541176, 0.235294, 1)
+energy = 1.5
+shadow_enabled = false
+texture = ExtResource("2_falloff")
+
+[node name="Glow" type="Sprite2D" parent="."]
+texture = ExtResource("3_glow")

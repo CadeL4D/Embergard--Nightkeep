@@ -1,0 +1,11 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Export output. The iOS workflow writes the Xcode project, DerivedData and the
+# packaged .ipa in here; none of it belongs in the repo.
+/build/
+
+# macOS / editor noise
+.DS_Store
+*.tmp

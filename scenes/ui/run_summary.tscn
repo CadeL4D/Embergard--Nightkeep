@@ -1,0 +1,94 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/run_summary.gd" id="1_summary"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 22.0
+content_margin_top = 18.0
+content_margin_right = 22.0
+content_margin_bottom = 18.0
+bg_color = Color(0.0431373, 0.054902, 0.0784314, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.482353, 0.298039, 0.156863, 0.7)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="RunSummary" type="CanvasLayer"]
+layer = 80
+visible = false
+script = ExtResource("1_summary")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.62)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Card" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Layout" type="VBoxContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Center/Card/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.694118, 0.376471, 1)
+theme_override_font_sizes/font_size = 20
+text = "The keep has fallen"
+horizontal_alignment = 1
+
+[node name="Message" type="Label" parent="Center/Card/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.686275, 0.717647, 0.768627, 1)
+theme_override_font_sizes/font_size = 11
+text = "message"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Stats" type="Label" parent="Center/Card/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.827451, 0.843137, 0.870588, 1)
+theme_override_font_sizes/font_size = 13
+text = "stats"
+horizontal_alignment = 1
+
+[node name="Shards" type="Label" parent="Center/Card/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.850980, 0.501961, 1)
+theme_override_font_sizes/font_size = 16
+text = "+0 Relic Shards"
+horizontal_alignment = 1
+
+[node name="Unlocks" type="Label" parent="Center/Card/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.545098, 0.788235, 0.545098, 1)
+theme_override_font_sizes/font_size = 11
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="UnlockButton" type="Button" parent="Center/Card/Layout"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.615686, 0.858824, 0.588235, 1)
+theme_override_font_sizes/font_size = 12
+text = "Unlock"
+
+[node name="NewRun" type="Button" parent="Center/Card/Layout"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Begin again"

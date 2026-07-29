@@ -1,0 +1,44 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/debug_overlay.gd" id="1_debug"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 8.0
+content_margin_top = 5.0
+content_margin_right = 8.0
+content_margin_bottom = 5.0
+bg_color = Color(0.0196078, 0.0313726, 0.0509804, 0.72)
+corner_radius_bottom_right = 4
+
+[node name="DebugOverlay" type="CanvasLayer"]
+layer = 100
+visible = false
+script = ExtResource("1_debug")
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="Align" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+size_flags_vertical = 0
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="SafeArea/Align"]
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Readout" type="Label" parent="SafeArea/Align/Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.811765, 0.890196, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "booting..."

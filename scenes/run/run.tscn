@@ -1,0 +1,71 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://scripts/run/run.gd" id="1_run"]
+[ext_resource type="Script" path="res://scripts/divine/god_hand.gd" id="8_god_hand"]
+[ext_resource type="Script" path="res://scripts/world/world_view.gd" id="2_world_view"]
+[ext_resource type="TileSet" path="res://assets/tilesets/terrain_tiles.tres" id="3_tileset"]
+[ext_resource type="Shader" path="res://assets/shaders/blight_overlay.gdshader" id="4_blight"]
+[ext_resource type="PackedScene" path="res://scenes/entities/ember.tscn" id="5_ember"]
+[ext_resource type="Script" path="res://scripts/ui/camera_rig.gd" id="6_camera"]
+[ext_resource type="PackedScene" path="res://scenes/ui/debug_overlay.tscn" id="7_debug"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="9_hud"]
+[ext_resource type="Script" path="res://scripts/ui/placement_controller.gd" id="10_placement"]
+[ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="11_summary"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_blight"]
+shader = ExtResource("4_blight")
+shader_parameter/grid_size = Vector2(128, 128)
+shader_parameter/warp_speed = 0.08
+shader_parameter/warp_strength = 0.7
+shader_parameter/deep_color = Color(0.29, 0.05, 0.18, 1)
+shader_parameter/raw_color = Color(0.62, 0.13, 0.36, 1)
+shader_parameter/rim_color = Color(0.55, 0.18, 0.3, 1)
+
+[node name="Run" type="Node2D"]
+script = ExtResource("1_run")
+
+[node name="Sky" type="CanvasModulate" parent="."]
+
+[node name="WorldView" type="Node2D" parent="."]
+script = ExtResource("2_world_view")
+
+[node name="TerrainLayer" type="TileMapLayer" parent="WorldView"]
+tile_set = ExtResource("3_tileset")
+
+[node name="Sorted" type="Node2D" parent="WorldView"]
+y_sort_enabled = true
+
+[node name="FeatureLayer" type="TileMapLayer" parent="WorldView/Sorted"]
+y_sort_enabled = true
+tile_set = ExtResource("3_tileset")
+
+[node name="Entities" type="Node2D" parent="WorldView/Sorted"]
+y_sort_enabled = true
+
+[node name="BlightOverlay" type="ColorRect" parent="WorldView"]
+material = SubResource("ShaderMaterial_blight")
+offset_right = 2048.0
+offset_bottom = 2048.0
+mouse_filter = 2
+
+[node name="Ember" parent="." instance = ExtResource("5_ember")]
+
+[node name="CameraRig" type="Camera2D" parent="."]
+zoom = Vector2(2, 2)
+script = ExtResource("6_camera")
+
+[node name="GodHand" type="Node2D" parent="."]
+script = ExtResource("8_god_hand")
+
+[node name="PlacementController" type="Node2D" parent="."]
+script = ExtResource("10_placement")
+
+[node name="Ghost" type="Sprite2D" parent="PlacementController"]
+visible = false
+centered = false
+
+[node name="Hud" parent="." instance = ExtResource("9_hud")]
+
+[node name="RunSummary" parent="." instance = ExtResource("11_summary")]
+
+[node name="DebugOverlay" parent="." instance = ExtResource("7_debug")]

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"foraging"
+display_name = "Foraging"
+target_features = Array[int]([6])
+work_rate = 1.0
+carry_capacity = 8
+priority = 2
+color = Color(0.72, 0.35, 0.42, 1)

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"woodcutting"
+display_name = "Woodcutting"
+target_features = Array[int]([1])
+work_rate = 1.0
+carry_capacity = 12
+priority = 0
+color = Color(0.42, 0.65, 0.36, 1)

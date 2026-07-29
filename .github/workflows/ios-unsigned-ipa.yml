@@ -1,0 +1,145 @@
+name: Unsigned iOS IPA
+
+# Builds an unsigned .ipa for sideloading (AltStore, Sideloadly, TrollStore).
+# An unsigned build cannot be installed directly — the sideloader re-signs it with
+# your own Apple account on the way onto the device.
+#
+# Requires a macOS runner because the Xcode toolchain is macOS-only. macOS runners
+# are free on public repositories; on private ones they bill at a 10x minute rate.
+#
+# Route taken here: Godot emits an Xcode PROJECT (export_project_only=true in
+# export_presets.cfg), then xcodebuild compiles it with signing switched off, and
+# the resulting .app is zipped into the Payload/ layout that makes a .ipa. Letting
+# Godot produce the .ipa itself would have it invoke a signing step we have no
+# certificate for.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+env:
+  GODOT_VERSION: "4.7"
+  GODOT_RELEASE: "stable"
+  # Set this if the Godot project is NOT at the repository root
+  # (for example: PROJECT_PATH: embergard--nightkeep).
+  PROJECT_PATH: "."
+  EXPORT_PRESET: "iOS"
+  APP_NAME: "embergard"
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The template archive is ~1 GB, so it is cached across runs. The key
+      # includes the Godot version, so bumping the engine correctly misses.
+      - name: Cache Godot export templates
+        id: cache-templates
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Application Support/Godot/export_templates
+          key: godot-templates-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}
+
+      - name: Install Godot editor
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download"
+          TAG="${GODOT_VERSION}-${GODOT_RELEASE}"
+          curl -fL -o godot.zip \
+            "${BASE}/${TAG}/Godot_v${TAG}_macos.universal.zip"
+          unzip -q godot.zip
+          sudo mkdir -p /usr/local/bin
+          sudo ln -sf "$PWD/Godot.app/Contents/MacOS/Godot" /usr/local/bin/godot
+          godot --version
+
+      - name: Install iOS export templates
+        if: steps.cache-templates.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download"
+          TAG="${GODOT_VERSION}-${GODOT_RELEASE}"
+          curl -fL -o templates.tpz \
+            "${BASE}/${TAG}/Godot_v${TAG}_export_templates.tpz"
+          unzip -q templates.tpz
+          DEST="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
+          mkdir -p "$DEST"
+          mv templates/* "$DEST/"
+          ls "$DEST" | head -20
+
+      # Godot must build its import cache before it can export, and .godot/ is
+      # correctly gitignored. The first pass frequently exits non-zero while still
+      # doing the work, and a second pass settles anything the first missed — this
+      # is the flakiest step in the whole pipeline, so it is deliberately tolerant.
+      - name: Import project
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: |
+          godot --headless --editor --quit >/dev/null 2>&1 || true
+          godot --headless --editor --quit >/dev/null 2>&1 || true
+          test -d .godot || (echo "import produced no .godot directory" && exit 1)
+
+      - name: Export Xcode project
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/ios
+          godot --headless --export-release "${EXPORT_PRESET}" \
+            "build/ios/${APP_NAME}.xcodeproj"
+          echo "--- export output ---"
+          ls -la build/ios
+
+      - name: Build unsigned .app
+        working-directory: ${{ env.PROJECT_PATH }}/build/ios
+        run: |
+          set -euo pipefail
+          PROJ="$(ls -d *.xcodeproj | head -1)"
+          SCHEME="$(basename "$PROJ" .xcodeproj)"
+          echo "building $PROJ (scheme $SCHEME)"
+          xcodebuild \
+            -project "$PROJ" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ./DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            build
+
+      # A .ipa is just a zip with the .app inside a top-level Payload/ folder.
+      - name: Package .ipa
+        working-directory: ${{ env.PROJECT_PATH }}/build/ios
+        run: |
+          set -euo pipefail
+          APP="$(find ./DerivedData -name '*.app' -type d | head -1)"
+          test -n "$APP" || (echo "no .app was produced" && exit 1)
+          echo "packaging $APP"
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qr "${APP_NAME}-unsigned.ipa" Payload
+          ls -lh "${APP_NAME}-unsigned.ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-unsigned-ipa
+          path: ${{ env.PROJECT_PATH }}/build/ios/*.ipa
+          if-no-files-found: error
+
+      # Kept because the export step is the one most likely to behave differently
+      # than expected, and the logs alone rarely explain why.
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            ${{ env.PROJECT_PATH }}/build/ios
+          if-no-files-found: ignore

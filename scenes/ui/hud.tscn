@@ -1,0 +1,166 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar"]
+content_margin_left = 10.0
+content_margin_top = 5.0
+content_margin_right = 10.0
+content_margin_bottom = 5.0
+bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.78)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.88)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[node name="Hud" type="CanvasLayer"]
+layer = 50
+script = ExtResource("1_hud")
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TopRow" type="HBoxContainer" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_horizontal = 8
+mouse_filter = 2
+
+[node name="ResourceBar" type="PanelContainer" parent="SafeArea/Layout/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 8
+theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
+
+[node name="Resources" type="Label" parent="SafeArea/Layout/TopRow/ResourceBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.898039, 0.882353, 0.788235, 1)
+theme_override_font_sizes/font_size = 12
+text = "wood 0    stone 0    food 0"
+
+[node name="PhaseBar" type="PanelContainer" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
+
+[node name="Phase" type="Label" parent="SafeArea/Layout/PhaseBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "DAY"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="BottomRow" type="VBoxContainer" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 4
+
+[node name="JobPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
+visible = false
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/JobPanel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Hint" type="Label" parent="SafeArea/Layout/BottomRow/JobPanel/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
+theme_override_font_sizes/font_size = 10
+text = "assign survivors — unassigned drift to the lowest job"
+
+[node name="BuildPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="PlacementBar" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
+
+[node name="Row" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/PlacementBar"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CancelButton" type="Button" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
+custom_minimum_size = Vector2(60, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Cancel"
+
+[node name="Status" type="Label" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "drag to position"
+vertical_alignment = 1
+
+[node name="ConfirmButton" type="Button" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
+custom_minimum_size = Vector2(90, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Build"
+
+[node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout/BottomRow"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 6
+
+[node name="Powers" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/Buttons"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="JobsButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
+custom_minimum_size = Vector2(80, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Jobs"
+
+[node name="BuildButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
+custom_minimum_size = Vector2(80, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Build"
+
+[node name="AscendButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
+custom_minimum_size = Vector2(80, 26)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
+theme_override_font_sizes/font_size = 12
+text = "Ascend"

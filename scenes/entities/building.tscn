@@ -1,0 +1,21 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/colony/building.gd" id="1_building"]
+
+[node name="Building" type="Node2D"]
+script = ExtResource("1_building")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+centered = false
+
+[node name="Progress" type="Node2D" parent="."]
+
+[node name="Back" type="ColorRect" parent="Progress"]
+offset_right = 32.0
+offset_bottom = 2.0
+color = Color(0.0784314, 0.0941176, 0.121569, 0.75)
+
+[node name="Fill" type="ColorRect" parent="Progress"]
+offset_right = 32.0
+offset_bottom = 2.0
+color = Color(0.482353, 0.717647, 0.960784, 0.9)

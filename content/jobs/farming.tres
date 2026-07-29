@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"farming"
+display_name = "Farming"
+target_features = Array[int]([])
+workplace = &"farm"
+cycle_yield = {
+&"food": 10
+}
+cycle_work = 9.0
+work_rate = 1.0
+carry_capacity = 10
+priority = 1
+color = Color(0.55, 0.72, 0.36, 1)

@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/spitter.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"spitter"
+display_name = "Spitter"
+sprite = ExtResource("2_tex")
+max_health = 18.0
+move_speed = 20.0
+damage = 5.0
+attack_range = 4.5
+attack_cooldown = 2.0
+structure_damage_scale = 0.3
+threat_cost = 2.0
+min_night = 2
+weight = 0.8
+burn_per_second = 6.0
+burn_threshold = 150

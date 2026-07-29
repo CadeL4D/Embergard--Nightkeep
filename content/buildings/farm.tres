@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/farm.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"farm"
+display_name = "Farm"
+description = "Tilled beds. The only food that does not run out — assign farmers to work it."
+sprite = ExtResource("2_tex")
+footprint = Vector2i(2, 2)
+blocks_movement = false
+max_blight = 20
+cost = {
+&"wood": 14
+}
+build_work = 16.0
+max_hp = 80.0
+light_radius = 0
+is_stockpile = false
+sleep_slots = 0
+worker_slots = 3
+order = 2
+color = Color(0.55, 0.72, 0.36, 1)

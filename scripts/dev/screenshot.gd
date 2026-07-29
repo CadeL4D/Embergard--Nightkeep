@@ -1,0 +1,127 @@
+extends Node
+## Dev tool: boot a run, let it settle, and write frames to disk. Run with:
+##   Godot_v4.7-stable_win64_console.exe --path <project> res://scenes/dev/screenshot.tscn
+##
+## Exists because most of this game's visuals are generated in code (the tileset,
+## the blight shader, the Ember's falloff) rather than authored as art, so there is
+## no way to eyeball them in the editor's import view. Capturing at several points
+## in the day cycle also makes lighting regressions obvious at a glance.
+
+const OUT_DIR := "user://shots"
+const RUN_SCENE := preload("res://scenes/run/run.tscn")
+const SEED := 424242
+
+## Phase to jump to, and how long to let it settle before capturing.
+const SHOTS := [
+	{"name": "01_day_close", "phase": Sim.Phase.DAY, "settle": 1.2, "zoom": 4.0, "panel": ""},
+	{"name": "02_day", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0, "panel": ""},
+	{"name": "03_job_board", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0, "panel": "jobs"},
+	{"name": "04_build_menu", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0, "panel": "build"},
+	{"name": "05_dusk", "phase": Sim.Phase.DUSK, "settle": 0.4, "zoom": 3.0, "panel": ""},
+	{"name": "06_night", "phase": Sim.Phase.NIGHT, "settle": 3.0, "zoom": 2.0, "panel": "", "monsters": 18},
+]
+
+var _run: Node2D
+
+
+func _ready() -> void:
+	DirAccess.make_dir_recursive_absolute(OUT_DIR)
+	_run = RUN_SCENE.instantiate()
+	add_child(_run)
+	await get_tree().process_frame
+	_run.start_run(SEED)
+	_seed_buildings()
+	await _capture_all()
+	get_tree().quit(0)
+
+
+## Drop a few finished structures next to the keep. Screenshots are for judging how
+## the game LOOKS, and an empty field of grass says nothing about whether the
+## buildings read at gameplay zoom or sit correctly against the terrain.
+func _seed_buildings() -> void:
+	Colony.add(&"wood", 400)
+	Colony.add(&"stone", 200)
+
+	var grid: Grid = World.grid
+	var keep := grid.coord(World.keep_cell)
+	var entities := _run.get_node("WorldView/Sorted/Entities")
+
+	var layout := [
+		[&"hut", Vector2i(-6, -3)],
+		[&"hut", Vector2i(-6, 1)],
+		[&"watchtower", Vector2i(4, -4)],
+		[&"farm", Vector2i(3, 1)],
+		[&"stockpile", Vector2i(1, -3)],
+		[&"stockpile", Vector2i(2, -3)],
+	]
+	for entry in layout:
+		_place(entry[0], grid.index(keep.x + entry[1].x, keep.y + entry[1].y), entities)
+
+	# A short palisade run, to check that walls tile into a readable line.
+	for i in range(-5, 6):
+		_place(&"palisade", grid.index(keep.x + i, keep.y + 4), entities)
+
+
+## Drop attackers near the keep so a night shot shows an actual assault rather than
+## an empty dark field. Spawned close in on purpose — a wave still walking in from
+## the map edge photographs as nothing happening.
+func _seed_monsters(count: int) -> void:
+	if count <= 0:
+		return
+	var scene: PackedScene = load("res://scenes/entities/monster.tscn")
+	var pool := Monsters.all()
+	if pool.is_empty():
+		return
+	var grid: Grid = World.grid
+	var keep := grid.coord(World.keep_cell)
+	var entities := _run.get_node("WorldView/Sorted/Entities")
+
+	for i in count:
+		var angle := TAU * float(i) / float(count)
+		var dist := randf_range(6.0, 13.0)
+		var x := keep.x + int(cos(angle) * dist)
+		var y := keep.y + int(sin(angle) * dist)
+		if not grid.is_valid(x, y):
+			continue
+		var cell: int = World.nearest_walkable(grid.index(x, y), 6)
+		if cell == -1:
+			continue
+		var m: Monster = scene.instantiate()
+		m.setup(pool[i % pool.size()], 1.0)
+		m.position = grid.to_world_index(cell)
+		entities.add_child(m)
+
+
+func _place(id: StringName, anchor: int, parent: Node) -> void:
+	var def := Buildings.get_building(id)
+	if def == null:
+		return
+	var b: Node = Colony.place_building(def, anchor, parent)
+	if b != null:
+		b.complete()          # skip construction; we are photographing the result
+
+
+func _capture_all() -> void:
+	var camera: Camera2D = _run.get_node("CameraRig")
+	var bottom := _run.get_node("Hud/SafeArea/Layout/BottomRow")
+	var jobs_button: Button = bottom.get_node("Buttons/JobsButton")
+	var build_button: Button = bottom.get_node("Buttons/BuildButton")
+	for shot: Dictionary in SHOTS:
+		var panel: String = shot.get("panel", "")
+		jobs_button.button_pressed = panel == "jobs"
+		build_button.button_pressed = panel == "build"
+		_seed_monsters(int(shot.get("monsters", 0)))
+		Sim.set_phase(shot["phase"])
+		# Push the phase most of the way through so the sky tint has actually
+		# reached that phase's colour rather than still bleeding from the last one.
+		Sim.phase_elapsed = Sim.PHASE_DURATION[shot["phase"]] * 0.85
+		camera.zoom = Vector2(shot["zoom"], shot["zoom"])
+		camera.center_on_cell(World.keep_cell)
+
+		await get_tree().create_timer(shot["settle"]).timeout
+		await RenderingServer.frame_post_draw
+
+		var img := get_viewport().get_texture().get_image()
+		var path := "%s/%s.png" % [OUT_DIR, shot["name"]]
+		img.save_png(path)
+		print("wrote %s  (%s)" % [ProjectSettings.globalize_path(path), img.get_size()])

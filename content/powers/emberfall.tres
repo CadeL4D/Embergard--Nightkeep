@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"emberfall"
+display_name = "Emberfall"
+description = "Drops a lasting light. Monsters route around it and burn if they push through."
+kind = 0
+faith_cost = 18.0
+cooldown = 4.0
+radius = 5
+amount = 230.0
+duration = 45.0
+color = Color(1, 0.72, 0.35, 1)
+order = 0
