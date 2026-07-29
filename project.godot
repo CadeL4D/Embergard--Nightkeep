@@ -67,3 +67,9 @@ pointing/emulate_touch_from_mouse=true
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
+
+; iOS GPUs cannot decode the desktop BC/S3TC texture formats, so Godot refuses to
+; export to iOS at all unless textures are imported as ETC2/ASTC. Without this the
+; export fails with an EMPTY configuration error on the command line — the actual
+; explanation only ever appears in the editor's export dialog.
+textures/vram_compression/import_etc2_astc=true
