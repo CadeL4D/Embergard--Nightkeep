@@ -11,7 +11,8 @@ extends Node2D
 ## Y-sorting needs: a villager standing in front of a hut must draw over it, and a
 ## villager behind it must draw under.
 
-enum State { BLUEPRINT, COMPLETE }
+## New values go on the END — a saved run stores the integer.
+enum State { BLUEPRINT, COMPLETE, DEMOLISHING }
 
 signal completed(building: Building)
 
@@ -24,7 +25,36 @@ var work_done: float = 0.0
 
 ## Materials actually carried to the site so far. Construction cannot start until
 ## this matches the definition's cost.
+##
+## Also the ONLY basis for a demolition refund. Refunding a fraction of `def.cost` instead would
+## let a building that was force-completed by a debug tool, or upgraded, be farmed for materials
+## nobody ever carried to it.
 var delivered: Dictionary = {}
+
+# --- Demolition -----------------------------------------------------------------------------
+#
+# Construction run backwards, and reusing the same code: the worker accrues effort at the site,
+# then produces carry loads and hauls them to a stockpile. That is _tick_building and _begin_haul
+# unchanged, which is why demolition needed no new villager state.
+
+## Fraction of what was actually delivered that comes back out.
+##
+## Deliberately stingy. Salvage is the wrong place to be generous — a near-full refund makes
+## teardown-and-rebuild free, which erases every placement mistake and with it the entire point
+## of having a sphere of influence to plan against.
+const SALVAGE_FRACTION := 0.4
+
+## Teardown effort as a fraction of what the building cost to raise. Pulling something down is
+## quicker than putting it up, but not free, so demolishing under pressure is a real cost.
+const DEMOLISH_WORK_SCALE := 0.5
+
+## Materials pulled out of the frame and waiting to be carried off, kind -> amount.
+##
+## Held on the building rather than handed to the worker in one lump because the salvage MUST be
+## hauled: a worker takes one load, walks it to a stockpile and comes back for the next. That
+## makes demolishing something far from storage cost real time, exactly as building it did.
+var salvage: Dictionary = {}
+var demolish_done: float = 0.0
 
 var _light_handle: int = 0
 ## How often a tower with nothing in range looks again.
@@ -98,8 +128,17 @@ func _exit_tree() -> void:
 
 # --- Construction ---------------------------------------------------------------------
 
+## "Not a working building." True for a blueprint AND for something being torn down.
+##
+## Every caller of this means "can I sleep here / farm here / draw Faith from here", and the
+## answer for a half-demolished workshop is no. Keeping that in one predicate is what let
+## demolition land without auditing thirty call sites.
 func is_site() -> bool:
-	return state == State.BLUEPRINT
+	return state != State.COMPLETE
+
+
+func is_demolishing() -> bool:
+	return state == State.DEMOLISHING
 
 
 func remaining_work() -> float:
@@ -109,6 +148,10 @@ func remaining_work() -> float:
 # --- Materials ---------------------------------------------------------------------------
 
 func needs_materials() -> bool:
+	# A teardown wants no deliveries. Without this the site would look permanently under-supplied
+	# and builders would shuttle timber to a building they are supposed to be dismantling.
+	if state == State.DEMOLISHING:
+		return false
 	return not materials_complete()
 
 
@@ -153,8 +196,13 @@ func outstanding_cost() -> Dictionary:
 	return out
 
 
-## Apply builder effort. Returns true when this call finished the building.
+## Apply builder effort. Returns true when this call finished the job — raising it, or, for a
+## teardown, prising the last of the materials loose.
 func add_work(amount: float) -> bool:
+	if state == State.DEMOLISHING:
+		demolish_done += amount
+		_refresh_visuals()
+		return teardown_complete()
 	if state == State.COMPLETE or needs_materials():
 		return false
 	work_done += amount
@@ -162,6 +210,90 @@ func add_work(amount: float) -> bool:
 	if work_done < def.build_work:
 		return false
 	complete()
+	return true
+
+
+# --- Demolition -----------------------------------------------------------------------------
+
+## Start tearing this down. Returns false if there is nothing to tear down.
+##
+## A blueprint is not demolished — it is CANCELLED, immediately, by destroy(): nothing has been
+## built, so there is no frame to prise apart and no reason to make the player wait. That path
+## already hands back the outstanding reservation correctly.
+func begin_demolish() -> bool:
+	if state != State.COMPLETE:
+		return false
+	state = State.DEMOLISHING
+	demolish_done = 0.0
+	salvage = {}
+	for kind: StringName in delivered:
+		var amount := int(floorf(float(delivered[kind]) * SALVAGE_FRACTION))
+		if amount > 0:
+			salvage[kind] = amount
+
+	# Everything the building DID stops now, not when the last plank is carried off. A watchtower
+	# under demolition should not still be shooting, and a wall being pulled down should already
+	# have stopped turning the horde aside.
+	_clear_effects()
+	_refresh_visuals()
+	Events.building_demolishing.emit(self)
+	return true
+
+
+func demolish_work() -> float:
+	return maxf(def.build_work * DEMOLISH_WORK_SCALE, 0.01)
+
+
+func teardown_complete() -> bool:
+	return state == State.DEMOLISHING and demolish_done >= demolish_work()
+
+
+func salvage_remaining() -> bool:
+	for kind: StringName in salvage:
+		if int(salvage[kind]) > 0:
+			return true
+	return false
+
+
+## Hand a worker one armful. Returns [kind, amount], or an empty array when the pile is gone.
+##
+## One kind per trip because a villager carries one kind at a time; a mixed-material building
+## therefore takes several journeys, which is correct — that is what it took to build it.
+func take_salvage_load(capacity: int) -> Array:
+	for kind: StringName in salvage:
+		var have := int(salvage[kind])
+		if have <= 0:
+			continue
+		var taken := mini(have, capacity)
+		salvage[kind] = have - taken
+		return [kind, taken]
+	return []
+
+
+# --- Upgrading ------------------------------------------------------------------------------
+
+## Swap in a higher-tier definition and revert to a construction site, in place.
+##
+## Reuses the blueprint→deliver→build path wholesale, which is what this class's header says that
+## path is for. The caller (Colony.upgrade_building) has already reserved the new cost and checked
+## the gates; this only has to reset the construction bookkeeping and stop the OLD building
+## working, because complete() will re-apply everything for the new one.
+##
+## The footprint is required to match. Growing it would mean re-validating ground the player never
+## chose, and possibly failing halfway through an upgrade they have already paid for.
+func begin_upgrade(next: BuildingDef) -> bool:
+	if next == null or state != State.COMPLETE or next.footprint != def.footprint:
+		return false
+	_clear_effects()
+	def = next
+	state = State.BLUEPRINT
+	work_done = 0.0
+	delivered = {}
+	hp = next.max_hp
+	_sprite.texture = next.sprite
+	_sprite.offset = Vector2(0, -next.tile_size().y)
+	z_index = -1 if not next.blocks_movement else 0
+	_refresh_visuals()
 	return true
 
 
@@ -178,25 +310,85 @@ func complete() -> void:
 	state = State.COMPLETE
 	work_done = def.build_work
 	hp = def.max_hp
-
-	# Occupancy is only applied on COMPLETION. A blueprint the player has just
-	# placed must not block pathing, or the builders walking to raise it can find
-	# themselves locked out by the very thing they are coming to build.
-	if def.blocks_movement:
-		World.set_occupancy(cells, get_instance_id())
-
-	if def.light_radius > 0:
-		_light_handle = World.light_field.add_source(_centre_cell(), def.light_radius, 220)
-
-	if def.is_stockpile:
-		Colony.add_stockpile(_centre_cell())
+	_apply_effects()
 
 	_refresh_visuals()
 	completed.emit(self)
 	Events.building_completed.emit(self)
 
 
-func _centre_cell() -> int:
+# --- What a standing building DOES ----------------------------------------------------------
+#
+# Paired on purpose. Four things start or stop a building working — completing, being destroyed,
+# being upgraded in place, and being torn down — and every one of them has to touch the same five
+# world layers. Keeping them as one apply/clear pair is what stops the fifth caller forgetting the
+# gate stamp and leaving an invisible wall behind for the rest of the run.
+
+func _apply_effects() -> void:
+	# Occupancy is only applied on COMPLETION. A blueprint the player has just
+	# placed must not block pathing, or the builders walking to raise it can find
+	# themselves locked out by the very thing they are coming to build.
+	if def.blocks_movement:
+		World.set_occupancy(cells, get_instance_id())
+	elif def.blocks_monsters_only:
+		# Stamped on completion for the same reason occupancy is: an unfinished gate
+		# must not turn the horde aside, or a blueprint the player never manages to
+		# raise would defend the colony for free.
+		World.set_gate(cells, true)
+
+	if def.path_tier > 0:
+		World.set_path_tier(cells, def.path_tier)
+
+	if def.light_radius > 0:
+		_light_handle = World.light_field.add_source(centre_cell(), def.light_radius, 220)
+
+	if def.is_stockpile:
+		Colony.add_stockpile(centre_cell())
+
+	if def.influence_radius > 0:
+		World.rebuild_influence()
+
+	# A new Temple changes the slot count, so the library has to be re-shelved — a spare the priests
+	# already wrote should go straight into the new slot rather than waiting for the next cycle.
+	if def.tome_slots > 0:
+		Divine.refresh_library()
+	if def.temple_tier > 0:
+		# Announced, because raising a Temple is what makes a whole tier of abilities available to
+		# take up, and that is not a thing to discover by chance later.
+		Events.notice.emit(L10n.t(&"NOTICE_TEMPLE_RAISED", [def.temple_tier]), 0)
+
+
+func _clear_effects() -> void:
+	# Free the ground before anything else. A destroyed wall that leaves its occupancy
+	# behind would keep blocking pathing forever, and the flow field would route
+	# monsters around a gap that is actually open.
+	if def.blocks_movement:
+		World.set_occupancy(cells, 0)
+	elif def.blocks_monsters_only:
+		# A broken gate is an open gap. Clear the stamp, or the flow field keeps
+		# charging the horde wall-price to walk through the hole it just made.
+		World.set_gate(cells, false)
+
+	if def.path_tier > 0:
+		World.set_path_tier(cells, 0)
+
+	if _light_handle != 0:
+		World.light_field.remove_source(_light_handle)
+		_light_handle = 0
+
+	if def.is_stockpile:
+		Colony.remove_stockpile(centre_cell())
+
+	if def.influence_radius > 0:
+		World.rebuild_influence()
+
+	# Fewer slots now. Re-shelving here is what un-installs the tomes that no longer fit, so losing
+	# a Sanctum costs its bonuses as well as its tier.
+	if def.tome_slots > 0:
+		Divine.refresh_library()
+
+
+func centre_cell() -> int:
 	var c := World.grid.coord(anchor)
 	return World.grid.index(
 		c.x + def.footprint.x / 2,
@@ -205,7 +397,7 @@ func _centre_cell() -> int:
 
 
 func centre_position() -> Vector2:
-	return World.grid.to_world_index(_centre_cell())
+	return World.grid.to_world_index(centre_cell())
 
 
 # --- Defence -----------------------------------------------------------------------------
@@ -221,7 +413,11 @@ func _process(delta: float) -> void:
 
 	if def == null or def.attack_damage <= 0.0 or state != State.COMPLETE:
 		return
-	_attack_timer = maxf(_attack_timer - delta, 0.0)
+	# Towers reload on raw frame delta rather than sim time, so they have to be told about
+	# the pause explicitly — otherwise a paused colony keeps shooting.
+	if Sim.paused:
+		return
+	_attack_timer = maxf(_attack_timer - delta * Sim.time_scale, 0.0)
 	if _attack_timer > 0.0:
 		return
 
@@ -235,13 +431,86 @@ func _process(delta: float) -> void:
 	_scan_timer = SCAN_INTERVAL
 
 	var target := _find_enemy()
-	if target == null:
+	if target != null:
+		_attack_timer = def.attack_cooldown
+		target.take_damage(def.attack_damage, self)
+		_shot_target = target.position - position
+		_shot_fade = 1.0
+		queue_redraw()
+		return
+
+	# Nothing alive in range: fall back to shelling the Blight's own works. A structure is preferred
+	# over a nest because it is the thing that got there recently and is actively making nights
+	# worse — and because it is softer, so an idle tower makes visible progress rather than chipping
+	# forever at a nest's much larger pool.
+	var structure := _find_blight_structure()
+	if structure != -1:
+		_attack_timer = def.attack_cooldown
+		World.damage_blight_structure(structure, def.attack_damage)
+		_shot_target = World.grid.to_world_index(structure) - position
+		_shot_fade = 1.0
+		queue_redraw()
+		return
+
+	# Then a nest, if one is close enough.
+	#
+	# Handled here rather than inside _find_enemy because a nest is a cell in the
+	# feature layer, not a Node, and widening that function's return type to cover
+	# both would infect every caller. Monsters always take priority — this only fires
+	# on an idle tower.
+	#
+	# The point of this branch is to make "push a tower forward and siege the nest" a
+	# real strategy, which is the only way clearing a nest is achievable before
+	# warriors exist.
+	var nest := _find_nest()
+	if nest == -1:
 		return
 	_attack_timer = def.attack_cooldown
-	target.take_damage(def.attack_damage, self)
-	_shot_target = target.position - position
+	World.damage_nest(nest, def.attack_damage)
+	_shot_target = World.grid.to_world_index(nest) - position
 	_shot_fade = 1.0
 	queue_redraw()
+
+
+## Nearest Blight structure inside this building's reach, or -1.
+##
+## Iterates the dictionary directly rather than materialising a list, for the same reason _find_nest
+## does: this runs on every idle tower several times a second and the array would be pure garbage.
+func _find_blight_structure() -> int:
+	if World.blight_structures.is_empty():
+		return -1
+	var reach := def.attack_range * Grid.TILE_SIZE
+	var reach_sq := reach * reach
+	var origin := centre_position()
+	var best := -1
+	var best_dist := reach_sq
+	for cell in World.blight_structures:
+		var d := origin.distance_squared_to(World.grid.to_world_index(cell))
+		if d <= best_dist:
+			best_dist = d
+			best = cell
+	return best
+
+
+## Nearest live nest inside this building's reach, or -1.
+##
+## Walks the raw site list and tests each for life rather than calling
+## live_nest_cells(), which allocates — this runs on every idle tower several times a
+## second, and the array would be pure garbage.
+func _find_nest() -> int:
+	var reach := def.attack_range * Grid.TILE_SIZE
+	var reach_sq := reach * reach
+	var origin := centre_position()
+	var best := -1
+	var best_dist := reach_sq
+	for nest in World.nest_cells:
+		if not World.is_nest(nest):
+			continue
+		var d := origin.distance_squared_to(World.grid.to_world_index(nest))
+		if d <= best_dist:
+			best_dist = d
+			best = nest
+	return best
 
 
 func _find_enemy() -> Node:
@@ -281,18 +550,26 @@ func take_damage(amount: float) -> void:
 
 
 func destroy() -> void:
-	# An unfinished site hands its undelivered materials back, or the colony has
-	# quietly lost them for the rest of the run.
+	# An unfinished site squares its books. The reservation goes back, and so does everything
+	# actually carried out to it — a cancelled blueprint is a pile of timber lying on the ground,
+	# not a building, so there is nothing to have lost in the framing.
+	#
+	# Which is also why cancelling is cheap and demolishing is not: changing your mind before the
+	# work starts should cost nothing, and changing it afterwards should cost 60%.
 	if state == State.BLUEPRINT:
 		Colony.unreserve(outstanding_cost())
-	# Free the ground before anything else. A destroyed wall that leaves its
-	# occupancy behind would keep blocking pathing forever, and the flow field would
-	# route monsters around a gap that is actually open.
-	if def.blocks_movement:
-		World.set_occupancy(cells, 0)
+		for kind: StringName in delivered:
+			Colony.add(kind, int(delivered[kind]))
+	# Off the roster FIRST, before anything reads it. _clear_effects rebuilds the influence layer
+	# by summing over Colony.buildings, and this building is still COMPLETE at this instant — so
+	# leaving it registered would have it contribute its own disc to the sphere that is supposed to
+	# be shrinking because it is gone. _exit_tree calls this again; erase is idempotent.
+	Colony.unregister_building(self)
+	# A COMPLETE building is being destroyed by damage rather than torn down, so its effects are
+	# still live and have to be lifted here. One already mid-teardown cleared them in
+	# begin_demolish, and _clear_effects is safe to run twice.
+	_clear_effects()
 	World.release_cells(cells, get_instance_id())
-	if def.is_stockpile:
-		Colony.remove_stockpile(_centre_cell())
 	Events.building_destroyed.emit(self)
 	queue_free()
 
@@ -326,6 +603,18 @@ func _refresh_visuals() -> void:
 		_progress_fill.visible = false
 		return
 
+	# Being pulled apart. Warm and fading rather than the cold blue of a blueprint, so a teardown
+	# never reads as something going up — the two are opposite intentions and the player has to be
+	# able to tell them apart at a glance across a busy village.
+	if state == State.DEMOLISHING:
+		_progress_back.visible = true
+		_progress_fill.visible = true
+		var left := 1.0 - clampf(demolish_done / demolish_work(), 0.0, 1.0)
+		_sprite.modulate = Color(0.95, 0.72, 0.5, 0.30 + 0.55 * left)
+		_progress_fill.color = Color(0.93, 0.66, 0.36, 0.9)
+		_progress_fill.size = Vector2(_progress_back.size.x * left, 2)
+		return
+
 	# Blueprints are drawn as a translucent ghost so an unbuilt site never reads as
 	# a finished one at a glance. Awaiting-materials is dimmer and colder than
 	# under-construction, so the player can tell at a distance whether a site is
@@ -357,5 +646,5 @@ func _material_fraction() -> float:
 ## Cell a builder should stand on to work this site — just outside the footprint for
 ## solid buildings, since they cannot stand inside one.
 func work_cell() -> int:
-	var target: int = World.nearest_walkable(_centre_cell())
+	var target: int = World.nearest_walkable(centre_cell())
 	return target

@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/sanctum.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"sanctum"
+display_name = "BUILDING_SANCTUM"
+description = "BUILDING_SANCTUM_DESC"
+sprite = ExtResource("2_tex")
+category = &"divine"
+tier = 3
+footprint = Vector2i(2, 3)
+blocks_movement = true
+max_blight = 30
+cost = {
+&"cut_stone": 30,
+&"boards": 20,
+&"tools": 8
+}
+build_work = 90.0
+max_hp = 520.0
+upgrades_from = &"temple"
+min_population = 22
+light_radius = 8
+is_stockpile = false
+faith_capacity = 240.0
+influence_radius = 14
+temple_tier = 3
+tome_slots = 3
+sleep_slots = 0
+worker_slots = 5
+order = 42
+color = Color(0.92, 0.86, 1.0, 1)
+unlock_cost = 200

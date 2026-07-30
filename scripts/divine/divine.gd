@@ -10,10 +10,26 @@ extends Node
 ## Faith is designed as a flow, not a hoard. It accrues continuously from villagers
 ## who are fed, rested and lit, and is spent on powers both day and night — the day
 ## sinks exist specifically so hoarding until dusk is a real sacrifice.
+## How much Faith the colony can hold at once — see faith_max().
+##
+## A flat 100 made the ceiling a property of the game rather than of the colony: six survivors
+## and sixty had the same reservoir, and a large settlement that had earned real standing hit the
+## cap constantly with nowhere to put the overflow. Faith is worship, so its storage should be a
+## function of how many people are doing the worshipping and of what has been built to house it.
+const FAITH_BASE_CAP := 40.0
+const FAITH_PER_VILLAGER := 25.0
+
+## Kept so anything reasoning about "roughly how big is the reservoir" has a constant to compare
+## against; the live ceiling is faith_max().
 const FAITH_MAX := 100.0
 const FAITH_BASE_RATE := 0.6           ## per second with a baseline colony
 
 var faith: float = 20.0
+
+## Faith earned from kills since the current night began, reported at dawn. Not saved: a night
+## interrupted by a save is reported from whatever it had accumulated, which is close enough for
+## a summary line.
+var night_faith_earned: float = 0.0
 
 ## The Ember's authoritative position in WORLD space. `ember_cell` is derived from
 ## it, so the light, the aura and the sim can never disagree about where it is.
@@ -55,6 +71,71 @@ var _temp_lights: Array = []            ## [{handle, expires}]
 ## power id -> seconds until it can be cast again.
 var _cooldowns: Dictionary = {}
 
+# --- Burden and Tomes -------------------------------------------------------------------------
+#
+#   ability Burden   negative   PERMANENT
+#   Tome bonuses     positive   DECAYING
+#   priests          labour     the standing cost of keeping the positive alive
+#
+# Obligations that do not expire against income that does. That is why a Temple can never be
+# finished, and why the Burden ceiling MOVES over a run rather than sitting still.
+
+## Powers taken up this run. Each one charges its Burden against the Faith rate for as long as it
+## is held. Not the same thing as Meta.is_unlocked, which is the permanent cross-run purchase —
+## a power must be bought once with shards AND taken up each run.
+var taken_up: Array[StringName] = []
+
+## Faith cost of giving an ability back. Modest, but not free: relinquishing has to be a real
+## option or one greedy unlock is permanent regret, and it must not be a toggle the player flips
+## mid-night to dodge a deficit.
+const RELINQUISH_COST := 12.0
+
+## Every Tome the colony owns, installed or shelved.
+var tomes: Array[Tome] = []
+
+## One written book. Tier and toughness are rolled INDEPENDENTLY on purpose — a rare tier 3 can
+## still be fragile and a humble tier 1 can outlast everything, and that variance is what stops
+## the system settling into one optimal play.
+class Tome extends RefCounted:
+	## Durability lost per second by an INSTALLED tome of toughness 1.0.
+	##
+	## Shelved tomes do not decay. That matters three ways: the player can stockpile spares and
+	## plan replacements instead of watching a library rot, the Temple's installed slots become the
+	## meaningful active set, and a good run cannot be undone by decay nobody could act on.
+	##
+	## Declared INSIDE the class rather than beside the other Divine constants: a GDScript inner
+	## class does not see the outer script's scope, so a constant used by these methods has to live
+	## here or the reference does not resolve.
+	const TOME_WEAR := 0.055
+
+	var archetype: StringName
+	var tier: int = 1
+	## 0.5 (crumbling) to 2.2 (a masterwork). Divides the wear rate.
+	var toughness: float = 1.0
+	var durability: float = 100.0
+	var installed: bool = false
+
+	func def() -> TomeDef:
+		return Tomes.get_tome(archetype)
+
+	## Faith per second, right now. Zero for a crumbled book, and zero in daylight for a
+	## night-only one.
+	func rate() -> float:
+		var d := def()
+		if d == null or durability <= 0.0:
+			return 0.0
+		if d.night_only and not Sim.is_dark():
+			return 0.0
+		return d.faith_rate * pow(d.tier_scale, float(tier - 1))
+
+	func wear_per_second() -> float:
+		return TOME_WEAR / maxf(toughness, 0.2)
+
+	func label() -> String:
+		var d := def()
+		var name := tr(d.display_name) if d != null else String(archetype)
+		return L10n.t(&"TOME_LABEL", [name, tier])
+
 
 func _ready() -> void:
 	reset()
@@ -68,7 +149,44 @@ func reset() -> void:
 	_temp_lights.clear()
 	_cooldowns.clear()
 	_dragging = false
+	night_faith_earned = 0.0
+	# Both are RUN state, not profile state: shards buy the option to take a power up, and every run
+	# has to earn it again by raising a Temple and choosing to carry its Burden.
+	taken_up.clear()
+	tomes.clear()
+	_grant_baseline_powers()
 	_kill_travel()
+
+
+## Take up every ability that needs no Temple, silently, at run start.
+##
+## Without this the power bar opens EMPTY, and the game's signature mechanic becomes something the
+## player has to go and find in a breakdown panel before they can use it. The three baseline powers
+## carry 0.24/s between them against a passive rate of roughly 0.6/s, so they are affordable from
+## the first minute — and they can still be given back, which is a real option for a colony that
+## would rather bank the rate.
+##
+## The interesting decision is not whether to have Emberfall; it is whether a Sanctum's worth of
+## abilities is something the colony can carry. That decision starts at tier 1.
+func _grant_baseline_powers() -> void:
+	for def: PowerDef in Powers.all():
+		if def.required_temple_tier > 0:
+			continue
+		if def.unlock_cost > 0 and not Meta.is_unlocked(def.id):
+			continue
+		taken_up.append(def.id)
+
+
+## The Faith ceiling: a floor, plus every worshipper, plus whatever has been raised to store it.
+##
+## `faith_capacity` on BuildingDef is the hook the Temple will use — it is summed here so adding
+## a shrine or a reliquary is a content change rather than a code change.
+func faith_max() -> float:
+	var total := FAITH_BASE_CAP + float(Colony.population()) * FAITH_PER_VILLAGER
+	for b in Colony.buildings:
+		if is_instance_valid(b) and not b.is_site():
+			total += b.def.faith_capacity
+	return total
 
 
 ## Faith is generated by the colony, not by the clock. A well-fed, rested, well-lit
@@ -78,13 +196,283 @@ func reset() -> void:
 func step(delta: float) -> void:
 	_expire_lights(delta)
 	_tick_cooldowns(delta)
-	if faith >= FAITH_MAX:
+	_wear_tomes(delta)
+
+	var rate := net_faith_rate()
+	if is_zero_approx(rate):
 		return
-	var rate := FAITH_BASE_RATE * faith_multiplier()
-	if rate <= 0.0:
+	var cap := faith_max()
+	if rate > 0.0 and faith >= cap:
 		return
-	faith = minf(faith + rate * delta, FAITH_MAX)
+	# Clamped at zero rather than allowed to go negative. A colony carrying more Burden than it
+	# generates drains its buffer and its powers go DARK — which is a legible failure the player can
+	# fix by relinquishing something — instead of accruing a debt they can neither see nor pay.
+	faith = clampf(faith + rate * delta, 0.0, cap)
 	Events.faith_changed.emit(faith)
+
+
+# --- The Faith rate -------------------------------------------------------------------------
+
+## What the colony generates before Tomes and Burden. The original passive model, untouched.
+func passive_faith_rate() -> float:
+	return FAITH_BASE_RATE * faith_multiplier()
+
+
+## Faith per second from every installed, uncrumbled Tome.
+func tome_rate() -> float:
+	var total := 0.0
+	for tome in tomes:
+		if tome.installed:
+			total += tome.rate()
+	return total
+
+
+## Total standing cost of every ability currently taken up.
+func total_burden() -> float:
+	var total := 0.0
+	for id in taken_up:
+		var def := Powers.get_power(id)
+		if def != null:
+			total += def.burden
+	return total
+
+
+## The number that actually matters, and the one the resource bar shows with its sign:
+##
+##     net = passive generation + Tome bonuses - total Burden
+##
+## Once this is negative the pool is a countdown, which is exactly what the buffer is for. See
+## RateLedger.faith() for the breakdown that lets the player decide what to shed.
+func net_faith_rate() -> float:
+	return passive_faith_rate() + tome_rate() - total_burden()
+
+
+## Seconds until the buffer empties at the current rate, or -1.0 while it is filling.
+func faith_runway() -> float:
+	var rate := net_faith_rate()
+	if rate >= 0.0:
+		return -1.0
+	return faith / maxf(-rate, 0.0001)
+
+
+## Mood the colony gives up for its library. Applied by Villager._decay_needs, so an austere order
+## partially eats its own Faith output — and eats more of it in a colony that was already unhappy.
+func tome_mood_penalty() -> float:
+	var total := 0.0
+	for tome in tomes:
+		if not tome.installed or tome.durability <= 0.0:
+			continue
+		var d := tome.def()
+		if d != null:
+			total += d.mood_penalty
+	return total
+
+
+# --- Taking up and giving back abilities ---------------------------------------------------
+
+func is_taken_up(id: StringName) -> bool:
+	return id in taken_up
+
+
+## Can this power be taken up right now? Both layers have to pass: bought once with shards, and
+## earned this run by raising the Temple.
+func can_take_up(def: PowerDef) -> bool:
+	if def == null or is_taken_up(def.id):
+		return false
+	if def.unlock_cost > 0 and not Meta.is_unlocked(def.id):
+		return false
+	return def.required_temple_tier <= Colony.temple_tier()
+
+
+func take_up(def: PowerDef) -> bool:
+	if not can_take_up(def):
+		return false
+	taken_up.append(def.id)
+	Events.powers_changed.emit()
+	# Named loudly, because this is the moment the player has committed to a permanent cost and it
+	# must not be something they discover later by wondering why their Faith stopped filling.
+	Events.notice.emit(L10n.t(&"NOTICE_POWER_TAKEN", [tr(def.display_name), "%.2f" % def.burden]), 1)
+	return true
+
+
+## Give an ability back and recover its Burden exactly.
+##
+## Required, not optional. Without it one greedy unlock is permanent regret and the whole mechanic
+## reads as a punishment rather than a decision.
+func relinquish(id: StringName) -> bool:
+	if not is_taken_up(id):
+		return false
+	if not pay(RELINQUISH_COST):
+		return false
+	taken_up.erase(id)
+	_cooldowns.erase(id)
+	var def := Powers.get_power(id)
+	Events.powers_changed.emit()
+	if def != null:
+		Events.notice.emit(L10n.t(&"NOTICE_POWER_GIVEN_BACK", [tr(def.display_name)]), 0)
+	return true
+
+
+## Powers that can be cast at this instant: taken up, AND with their Temple still standing.
+##
+## The second half is what makes the Temple worth defending. Losing it mid-run re-locks its tier's
+## abilities rather than merely stopping new ones — but the Burden is dropped with them, so a
+## colony that loses its Sanctum is weakened, not also bankrupted.
+func power_active(def: PowerDef) -> bool:
+	if def == null or not is_taken_up(def.id):
+		return false
+	return def.required_temple_tier <= Colony.temple_tier()
+
+
+# --- Priests and the library ---------------------------------------------------------------
+
+## Total installed-Tome capacity across every standing Temple.
+func tome_capacity() -> int:
+	var total := 0
+	for b in Colony.buildings:
+		if not is_instance_valid(b) or b.is_site():
+			continue
+		var def: BuildingDef = b.def
+		total += def.tome_slots
+	return total
+
+
+func installed_count() -> int:
+	var n := 0
+	for tome in tomes:
+		if tome.installed:
+			n += 1
+	return n
+
+
+## A priest finishes a work cycle. Either three junk books become one better one, or a new one is
+## written.
+##
+## Combining is preferred when it is possible, so labour goes to consolidation before it goes to
+## yet another tier 1 — and it means combining genuinely COMPETES with scribing for the same
+## priests, which is the allocation tension the mechanic is for.
+##
+## `priests` shifts the tier odds, which is what makes staffing the Temple a scaling investment
+## rather than a binary on/off.
+func priest_cycle(priests: int) -> void:
+	if not _try_combine():
+		_scribe(priests)
+	_reshelve()
+
+
+## Roll a new Tome. Heavily weighted toward tier 1; more priests raise the tail.
+func _scribe(priests: int) -> void:
+	var archetype := Tomes.random_archetype()
+	if archetype == null:
+		return
+
+	var tome := Tome.new()
+	tome.archetype = archetype.id
+	# One priest: ~6% tier 2, ~0.5% tier 3. Five priests: ~22% and ~4%. Capped so a fully staffed
+	# Sanctum improves the odds substantially without making tier 1 vanish — the low tiers are the
+	# feedstock for combining, so a Temple that never writes them starves itself.
+	var bonus := clampf(float(priests - 1) * 0.04, 0.0, 0.18)
+	var roll := randf()
+	if roll < 0.005 + bonus * 0.2:
+		tome.tier = 3
+	elif roll < 0.06 + bonus:
+		tome.tier = 2
+	tome.toughness = _roll_toughness(archetype)
+	tomes.append(tome)
+	Events.tome_written.emit(tome.tier)
+	if tome.tier > 1:
+		Events.notice.emit(L10n.t(&"NOTICE_TOME_WRITTEN", [tome.label()]), 0)
+
+
+func _roll_toughness(archetype: TomeDef) -> float:
+	return clampf(randf_range(0.5, 1.8) + archetype.toughness_bias, 0.35, 2.2)
+
+
+## Three SHELVED tomes of the same tier become one of the next.
+##
+## The result inherits the AVERAGE toughness of its inputs, which is the detail that makes
+## combining interesting: feed it three fragile books and you get a fragile better one. So the
+## player is always choosing between combining their durable tomes (strong but expensive) or
+## dumping their junk (cheap but short-lived).
+##
+## Automated, and it always takes the three LEAST durable candidates of the lowest eligible tier.
+## The manual version needed a library-management panel, and "dump your junk" is the choice a
+## player makes almost every time anyway; what stays in their hands is how many priests to staff
+## and — through the slot count — how big the active set is.
+func _try_combine() -> bool:
+	for tier in [1, 2]:
+		var pool: Array[Tome] = []
+		for tome in tomes:
+			if not tome.installed and tome.tier == tier and tome.durability > 0.0:
+				pool.append(tome)
+		if pool.size() < 3:
+			continue
+		pool.sort_custom(func(a: Tome, b: Tome) -> bool: return a.toughness < b.toughness)
+		var inputs := pool.slice(0, 3)
+
+		var merged := Tome.new()
+		merged.archetype = inputs[randi() % 3].archetype
+		merged.tier = tier + 1
+		var sum := 0.0
+		for t: Tome in inputs:
+			sum += t.toughness
+		merged.toughness = sum / 3.0
+		for t: Tome in inputs:
+			tomes.erase(t)
+		tomes.append(merged)
+		Events.tome_written.emit(merged.tier)
+		Events.notice.emit(L10n.t(&"NOTICE_TOME_COMBINED", [merged.label()]), 0)
+		return true
+	return false
+
+
+## Keep the best books in the slots.
+##
+## Rebuilt from scratch each time rather than diffed, so a crumbled tome, a lost Temple and a fresh
+## write all resolve through one path. Sorted by CURRENT rate first and toughness second — the
+## strongest book installed, and among equals the one that will last.
+func _reshelve() -> void:
+	var capacity := tome_capacity()
+	var ranked := tomes.duplicate()
+	ranked.sort_custom(func(a: Tome, b: Tome) -> bool:
+		if not is_equal_approx(a.rate(), b.rate()):
+			return a.rate() > b.rate()
+		return a.toughness > b.toughness)
+
+	var used := 0
+	for tome: Tome in ranked:
+		var keep := used < capacity and tome.durability > 0.0
+		tome.installed = keep
+		if keep:
+			used += 1
+
+
+func _wear_tomes(delta: float) -> void:
+	if tomes.is_empty():
+		return
+	var crumbled := false
+	for tome in tomes:
+		if not tome.installed or tome.durability <= 0.0:
+			continue
+		tome.durability -= tome.wear_per_second() * delta
+		if tome.durability <= 0.0:
+			tome.durability = 0.0
+			crumbled = true
+			Events.notice.emit(L10n.t(&"NOTICE_TOME_CRUMBLED", [tome.label()]), 1)
+	if crumbled:
+		# Drop the dust and promote whatever was waiting on the shelf, so a spare the priests
+		# already wrote takes over rather than the slot sitting empty until the next cycle.
+		var kept: Array[Tome] = []
+		for tome in tomes:
+			if tome.durability > 0.0:
+				kept.append(tome)
+		tomes = kept
+		_reshelve()
+
+
+## Called when a Temple finishes or falls, so the slot count and the installed set stay in step.
+func refresh_library() -> void:
+	_reshelve()
 
 
 ## How fast Faith accrues right now, as a multiple of the base rate. Exposed so the
@@ -113,6 +501,14 @@ func faith_multiplier() -> float:
 func _process(delta: float) -> void:
 	if ember_cell == -1:
 		return
+
+	# The glide runs on a Tween, which the sim clock does not drive. Feeding it the sim's
+	# speed handles pause (scale 0 freezes it mid-flight) and fast-forward (the Ember
+	# travels at the same rate the world does) in one line. Without this the Ember would
+	# keep sailing across a paused map.
+	if _travel != null and _travel.is_valid():
+		_travel.set_speed_scale(Sim.speed_scale())
+
 	# A drag steers a target rather than the Ember itself, so the follow stays smooth
 	# however coarsely or unevenly the touch events happen to arrive.
 	if _dragging:
@@ -241,7 +637,9 @@ func cooldown_of(id: StringName) -> float:
 
 
 func can_cast(def: PowerDef) -> bool:
-	return def != null and faith >= def.faith_cost and cooldown_of(def.id) <= 0.0
+	if not power_active(def):
+		return false
+	return faith >= def.faith_cost and cooldown_of(def.id) <= 0.0
 
 
 ## Cast a power at a world position. Returns true if it actually went off — the
@@ -265,9 +663,33 @@ func cast(def: PowerDef, world_pos: Vector2) -> bool:
 			_cast_smite(def, world_pos)
 		PowerDef.Kind.PURIFY:
 			_cast_purify(def, centre)
+		PowerDef.Kind.BUFF:
+			_cast_buff(def, world_pos)
 
 	Events.power_cast.emit(def.id, world_pos)
 	return true
+
+
+## Strengthen or steady whoever is standing here.
+##
+## Three independent numbers rather than a buff TYPE, so Rally (speed and damage) and Blessing
+## (mood) are the same code path with different content. A power that sets only mood_boost is a
+## blessing; one that sets speed and damage is a rally; one that sets all three is whatever a
+## designer wants to call it. Nothing here branches on which power it is.
+func _cast_buff(def: PowerDef, world_pos: Vector2) -> void:
+	var reach := float(def.radius) * Grid.TILE_SIZE
+	var reach_sq := reach * reach
+	for v in Colony.villagers:
+		if not is_instance_valid(v) or not v.alive:
+			continue
+		if v.position.distance_squared_to(world_pos) > reach_sq:
+			continue
+		if def.mood_boost > 0.0:
+			# Mood lands outright and stays. It then feeds back into faith_multiplier, which is
+			# why Blessing is the power that partly pays for itself.
+			v.mood = minf(v.mood + def.mood_boost, Villager.NEED_MAX)
+		if def.speed_boost > 0.0 or def.damage_boost > 0.0:
+			v.apply_boost(def.speed_boost, def.damage_boost, def.boost_duration)
 
 
 func _cast_light(def: PowerDef, centre: int) -> void:
@@ -287,6 +709,26 @@ func _cast_smite(def: PowerDef, world_pos: Vector2) -> void:
 		if m.position.distance_squared_to(world_pos) <= reach_sq:
 			m.take_damage(def.amount, null)
 
+	# Nests are corrupted things standing in the blast too. Without this the only way
+	# to hurt a nest would be to wait for it to walk to you, which it never does — and
+	# the run reward for clearing one would stay permanently unreachable.
+	for nest in World.live_nest_cells():
+		if World.grid.to_world_index(nest).distance_squared_to(world_pos) <= reach_sq:
+			World.damage_nest(nest, def.amount)
+
+	# And the Blight's buildings. Keys are copied first because damage_blight_structure erases from
+	# the dictionary being walked when a structure falls.
+	for cell in World.blight_structures.keys():
+		if World.grid.to_world_index(cell).distance_squared_to(world_pos) <= reach_sq:
+			World.damage_blight_structure(cell, def.amount)
+
+
+## Fraction of a purify power's strength that lands on a nest as damage.
+##
+## Held below 1.0 because purification is measured against a 0-255 blight intensity
+## and nests have hit points on a different scale entirely — passing the raw amount
+## through would let one cheap Ward delete a nest outright.
+const PURIFY_NEST_SCALE := 0.5
 
 func _cast_purify(def: PowerDef, centre: int) -> void:
 	var grid: Grid = World.grid
@@ -297,7 +739,16 @@ func _cast_purify(def: PowerDef, centre: int) -> void:
 				continue
 			if not grid.is_valid(c.x + dx, c.y + dy):
 				continue
-			World.blight_field.purify(grid.index(c.x + dx, c.y + dy), int(def.amount))
+			var cell := grid.index(c.x + dx, c.y + dy)
+			World.blight_field.purify(cell, int(def.amount))
+			# Purification is the thematically right answer to a blight source, so it
+			# is also the efficient one: Ward is cheaper than Wrath and hurts nests
+			# harder. That split is what gives the two powers distinct jobs instead of
+			# both being "press to deal damage".
+			World.damage_nest(cell, def.amount * PURIFY_NEST_SCALE)
+			# Same treatment for the Blight's buildings, so Consecrate is the tool for clearing a
+			# whole enemy camp in one cast rather than a tower's worth of patience per structure.
+			World.damage_blight_structure(cell, def.amount * PURIFY_NEST_SCALE)
 
 
 func _expire_lights(delta: float) -> void:
@@ -324,6 +775,18 @@ func _tick_cooldowns(delta: float) -> void:
 
 
 # --- Faith -------------------------------------------------------------------------
+
+## Faith earned by destroying a Blight creature, banked for the night's tally.
+##
+## Goes through here rather than straight into `faith` so the dawn report can tell the player
+## what the night was worth. A reward nobody notices is not a reward.
+func reward_kill(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	faith = minf(faith + amount, faith_max())
+	night_faith_earned += amount
+	Events.faith_changed.emit(faith)
+
 
 func can_pay(cost: float) -> bool:
 	return faith >= cost

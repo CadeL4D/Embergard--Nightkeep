@@ -65,6 +65,7 @@ func begin(building_def: BuildingDef) -> void:
 	# Start at the centre of the view rather than under the finger, so the player
 	# can see the whole footprint before deciding where it goes.
 	_move_to_world(_camera.get_screen_center_position())
+	Events.placement_mode_changed.emit(true)
 
 
 func cancel() -> void:
@@ -78,6 +79,7 @@ func cancel() -> void:
 	_grabbed_ghost = false
 	queue_redraw()
 	placement_changed.emit(false, "", false)
+	Events.placement_mode_changed.emit(false)
 
 
 ## Commit the blueprint. Returns true if something was actually placed.

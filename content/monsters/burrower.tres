@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/burrower.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"burrower"
+display_name = "MONSTER_BURROWER"
+sprite = ExtResource("2_tex")
+max_health = 40.0
+move_speed = 13.0
+damage = 9.0
+attack_range = 1.2
+attack_cooldown = 1.5
+structure_damage_scale = 0.4
+faith_on_death = 2.6
+threat_cost = 2.5
+min_night = 5
+weight = 0.6
+burn_per_second = 4.0
+burn_threshold = 175
+tunnels = true

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TomeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/tome_def.gd" id="1_tome_def"]
+
+[resource]
+script = ExtResource("1_tome_def")
+id = &"nightwatch_litany"
+display_name = "TOME_NIGHTWATCH_LITANY"
+description = "TOME_NIGHTWATCH_LITANY_DESC"
+faith_rate = 0.52
+tier_scale = 1.8
+night_only = true
+color = Color(0.62, 0.66, 0.9, 1)
+order = 2

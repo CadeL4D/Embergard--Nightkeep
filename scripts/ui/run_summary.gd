@@ -13,9 +13,11 @@ extends CanvasLayer
 @onready var _unlocks: Label = $Center/Card/Layout/Unlocks
 @onready var _unlock_button: Button = $Center/Card/Layout/UnlockButton
 @onready var _new_run: Button = $Center/Card/Layout/NewRun
+@onready var _menu_button: Button = $Center/Card/Layout/MenuButton
 
-## The cheapest thing still locked, offered on this card.
-var _offer: BuildingDef = null
+## The cheapest thing still locked, offered on this card. An `Unlocks.Entry` rather than a
+## BuildingDef, so powers are offered on the same footing — see Unlocks.
+var _offer: Unlocks.Entry = null
 
 var _last_notice: String = ""
 
@@ -26,6 +28,9 @@ func _ready() -> void:
 	Events.notice.connect(_on_notice)
 	_new_run.pressed.connect(_on_new_run)
 	_unlock_button.pressed.connect(_on_unlock)
+	# Without this the main menu is a one-way door: the only way back to difficulty and
+	# seed choice would be to quit the game.
+	_menu_button.pressed.connect(_on_main_menu)
 
 
 ## The run's closing line arrives as a notice just after run_ended, so it is
@@ -36,14 +41,13 @@ func _on_notice(text: String, urgency: int) -> void:
 
 
 func _on_run_ended(ascended: bool, shards: int) -> void:
-	_title.text = "You carry the Ember onward" if ascended else "The keep has fallen"
+	_title.text = tr(&"SUMMARY_ASCENDED" if ascended else &"SUMMARY_FALLEN")
 	_title.add_theme_color_override("font_color",
-		Color(1.0, 0.85, 0.5) if ascended else Color(1.0, 0.55, 0.42))
+		UiPalette.ACCENT_PALE if ascended else UiPalette.DANGER)
 	_message.text = _last_notice
 
-	_stats.text = "Survived to day %d\n%d survivors remained" % [
-		Sim.day, Colony.population()]
-	_shards.text = "+%d Relic Shards   (%d total)" % [shards, Meta.shards]
+	_stats.text = L10n.t(&"SUMMARY_STATS", [Sim.day, Colony.population()])
+	_shards.text = L10n.t(&"SUMMARY_SHARDS", [shards, Meta.shards])
 
 	_refresh_offer()
 
@@ -59,32 +63,39 @@ func _on_run_ended(ascended: bool, shards: int) -> void:
 ## went up and immediately back down. Spending is a choice, and it is most of what
 ## the meta layer is for.
 func _refresh_offer() -> void:
-	var locked := Buildings.locked()
-	_offer = null
-	for def: BuildingDef in locked:
-		if _offer == null or def.unlock_cost < _offer.unlock_cost:
-			_offer = def
+	# Unlocks.cheapest() already sorts by price across every kind, so this no longer has to know
+	# whether it is offering a building or a miracle.
+	_offer = Unlocks.cheapest()
 
 	if _offer == null:
-		_unlocks.text = "Everything is unlocked."
+		_unlocks.text = tr(&"SUMMARY_ALL_UNLOCKED")
 		_unlock_button.visible = false
 		return
 
 	_unlock_button.visible = true
-	_unlock_button.text = "Unlock %s  —  %d shards" % [_offer.display_name, _offer.unlock_cost]
-	var affordable := Meta.shards >= _offer.unlock_cost
+	_unlock_button.text = L10n.t(&"SUMMARY_UNLOCK_OFFER",
+		[tr(_offer.display_name), _offer.cost])
+	var affordable := Meta.shards >= _offer.cost
 	_unlock_button.disabled = not affordable
-	_unlocks.text = _offer.description if affordable else \
-		"%d more shards for the %s." % [_offer.unlock_cost - Meta.shards, _offer.display_name]
+	_unlocks.text = tr(_offer.description) if affordable else L10n.t(
+		&"SUMMARY_UNLOCK_SHORT", [_offer.cost - Meta.shards, tr(_offer.display_name)])
 
 
 func _on_unlock() -> void:
-	if _offer == null or Meta.shards < _offer.unlock_cost:
+	if _offer == null or Meta.shards < _offer.cost:
 		return
-	Meta.shards -= _offer.unlock_cost
+	Meta.shards -= _offer.cost
 	Meta.unlock(_offer.id)
-	_shards.text = "%d Relic Shards remaining" % Meta.shards
+	_shards.text = L10n.t(&"SUMMARY_SHARDS_REMAINING", [Meta.shards])
 	_refresh_offer()
+
+
+## Back to the title. Safe from here specifically because the run is already over and its
+## save already cleared — leaving mid-run would need a confirmation.
+func _on_main_menu() -> void:
+	visible = false
+	_last_notice = ""
+	get_tree().change_scene_to_file("res://scenes/ui/main_menu.tscn")
 
 
 func _on_new_run() -> void:

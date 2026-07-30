@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="TomeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/tome_def.gd" id="1_tome_def"]
+
+[resource]
+script = ExtResource("1_tome_def")
+id = &"ashen_codex"
+display_name = "TOME_ASHEN_CODEX"
+description = "TOME_ASHEN_CODEX_DESC"
+faith_rate = 0.2
+tier_scale = 1.9
+color = Color(0.86, 0.72, 0.6, 1)
+order = 0

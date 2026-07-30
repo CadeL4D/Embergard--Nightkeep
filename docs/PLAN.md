@@ -1,0 +1,557 @@
+# Embergard: Nightkeep — Development Plan
+
+**Living document.** Update it when work lands or a decision changes. If this file and the code
+disagree, the file is wrong — fix it.
+
+Last updated: 2026-07-29
+
+---
+
+## Status
+
+| Phase | Scope | State |
+|---|---|---|
+| **0** | Close dead systems, menu, difficulty, gates, site picker, pause, audio plumbing | ✅ **done** |
+| **1** | Population growth, threat curve, needs + thirst, dead air, kill rewards, rate ledger | ✅ **done** |
+| **3** | Localization scaffolding | ✅ **done** |
+| **2** | Colony depth | 🟡 **in progress** — 2.1–2.6 and 2.8 done; 2.7 meta unlocks, 2.9 blight villages, smaller grid, edge-masked clusters pending |
+| **4** | The Realm — world map + constellation | ⬜ pending |
+| **5** | Audio content, onboarding, accessibility, desktop parity, stats | ⬜ pending |
+| **6** | Biomes, storyteller events, weather | ⬜ pending |
+
+## Verified state
+
+Phases 0–3 and Phase 2 are **engine-verified**: the whole project parses, the smoke test passes
+**all checks across 4 seeds**, and the stress test shows no regression.
+
+```
+Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/bake_assets.tscn
+Godot_v4.7-stable_win64_console.exe --headless --import --path .
+Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/smoke.tscn
+Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/stress.tscn
+```
+
+**The `--import` step is not optional, and its absence fails silently.** A headless bake writes the
+PNGs but only the editor generates `.import` files, and without one `load()` fails — so the
+catalogs skip the entry with no error at the point of use. It presented as *"building catalog
+loaded (6 defs)"* when 19 exist and *"monster catalog loaded (2 defs)"* when 6 do, which looks like
+a content bug and is not one. Run it after every bake that adds a new sprite.
+
+**Performance:** 6.90 ms average at 60 villagers + 120 monsters, against a 5.5 ms desktop target.
+Measured against a stashed pre-Phase-2 baseline of **6.92 ms**, so the whole phase — the influence
+layer, the road cost table, per-tile speed sampling, six monster types — cost nothing detectable.
+The verdict is `OVER`, but it was `OVER` before and is a standing item rather than a regression.
+Roughly a 2.4× margin against a 60 fps frame; worth profiling before mobile, not now.
+
+---
+
+## Locked decisions
+
+| Decision | Choice |
+|---|---|
+| Identity | Roguelite. The whole world regenerates from a seed each run; only the `Meta` profile persists. |
+| Objective | Everything orbits the **Heart** (first colony). Later colonies **directionally shield** it. |
+| Run length | Long haul — 6-10 hours per world, save-and-resume. |
+| Platform | **Mobile-first, desktop playable.** 800×360 (20:9), `canvas_items` stretch, `expand` aspect. |
+| Audio | Procedural, baked to WAV mirroring `bake_assets.gd`. Music synthesized at runtime. |
+| Background colonies | Abstracted ledger + deterministic reconstitution + visitable. No autoload refactor. |
+| Difficulty | 4 tiers, chosen at world creation. Every field is a multiplier on an existing tuned value. |
+| Economy | Multi-stage production chain, gated by a tiered Village Center. |
+| Buildable area | Sphere of influence — amorphous, grows directionally. |
+| Divine layer | Passive Faith + ability **Burden**; priests scribe perishable **Tomes**. |
+| UI styling | One `Theme` built in code from `UiPalette`. No scattered `add_theme_*_override`. |
+
+### Standing conventions
+
+- **Data-driven or nothing.** `JobDef`, `BuildingDef`, `MonsterDef`, `PowerDef`, `DifficultyDef`
+  all carry the rule: *if you catch yourself writing `if def.id == ...`, the property you need is
+  missing from the class.* Add an `@export`, not a branch.
+- **Derived state is never saved.** Occupancy, move cost, light, flow fields, the shore index and
+  the nest-HP table are all rebuilt from what is saved.
+- **One source of truth per number.** The rate ledger reads `Villager.MOOD_*` constants rather
+  than restating them; the blight shader is handed `TileAtlas.CORRUPT_THRESHOLD` rather than
+  duplicating it. Duplicated tuning silently drifts.
+- **Typed locals.** Reading a member off an `InputEvent`- or `Node`-typed value yields a Variant
+  and breaks `:=` inference. Narrow with a cast, or type the parameter.
+
+---
+
+## Phase 0 — done
+
+| # | Item | Notes |
+|---|---|---|
+| 0.1 | Ward power | `content/powers/ward.tres`, `kind = 2`. `_cast_purify` was implemented and unreachable. |
+| 0.2 | Destructible nests | `Terrain.NEST_HP = 260`. Damaged by Wrath (42), Ward (60, the efficient answer), and idle watchtowers (siege play). `Threat._spawn_cell` reads **live** nests only, so clearing one shifts attacks. |
+| 0.3 | Notifications | `notice_log.gd` toasts + `breach_markers.gd` screen-edge arrows for off-screen breaches only. `Events.notice` previously had one subscriber that discarded everything below urgency 2. |
+| 0.4 | Selection card | Finally calls `Villager.describe()`, which was written and never invoked. |
+| 0.5 | Debug keys guarded | **R** wiped the run with no confirmation in retail. |
+| 0.6 | Pause + speed | Real `Sim.paused` flag. `time_scale = 0` alone was not enough — towers count reload in raw delta and the Ember glides on a Tween. |
+| 0.7 | Main menu | Title / New World / Options / Credits as swapped panels. Seeds are text and hash if non-numeric, so worlds can be named. |
+| 0.8 | Difficulty | Sheltered / Harried / Besieged / Forsaken. |
+| 0.9 | Gates | `blocks_monsters_only` + a dedicated `World.gate` byte layer (the flow field reads it 16k times per sweep). Charged `WALL_PENALTY`, not forbidden — the funnel is the point. |
+| 0.10 | Site picker | `MapGen.generate(seed, keep_override)`; regenerates around the chosen cell. `_choose_keep` still runs so the RNG advances identically either way. |
+| 0.11 | UI Theme | `UiPalette` + `UiTheme` + `Ui` autoload. |
+| 0.12 | Audio plumbing | 4 buses, linear→dB volumes, 12-player pool, `play_sfx()` no-ops on unknown ids so call sites can be written now. |
+
+**Two map-gen bugs fixed:** `_flatten_keep` converted all water within radius 7 to dirt (filling
+in the lake you deliberately settled beside — `KEEP_PAD_RADIUS = 5` now, sized to preserve the
+smoke test's walkability guarantee); `_clear_around_keep` deleted all berries near spawn.
+
+---
+
+## Phase 1 — done
+
+### Final tuned values
+
+These **override** what the plan originally specified. Several were retuned from live play.
+
+| System | Value | Why |
+|---|---|---|
+| Threat budget | `4 + night*2.5 + 1.18^night * 1.5` | Was `3 + 1.32^night * 2` — night 20 hit 519, five times over the 120-body cap. Now 95, inside it. |
+| Phases | 240 / 60 / 120 / 45 = **465s** | Idle share 41% → 31%. Sub-25% needs the Warrior job. |
+| `REST_IN_BED` | 6.0 (was 16.0) | A full night's sleep took **4.7 seconds**; a hut bought ~5% productivity. |
+| `ROUGH_REST_CAP` | 60 + mood penalty | A roof is the only route to properly rested. |
+| Farm | 18s work / 6 food | One farmer fed 16.5 people; now 5.6. |
+| Berries | 0.035 (was 0.012) | Only pre-farm food, at ~1% of grass tiles. |
+| `THIRST_RATE` | 0.30, urgent at 40 | ~2.6 drinks/cycle. Answered by walking, not by stock. |
+| `MOOD_DRIFT` | 0.5, falling at ×0.5 | Was 2.5 — the full range in 40s, chasing every threshold flip. Asymmetric so routine hunger does not drag the average. |
+| Mood terms | base 62; hungry −20, thirsty −12, tired −12, rough −18, ember +25, blighted −18 | Transient states (walking to water) are the system working, not failing. Heavy penalties are for structural failures. |
+| Faith cap | `40 + pop*25 + Σ building.faith_capacity` | Hearth contributes 60. A flat 100 made the ceiling a property of the game, not of the colony. |
+| `BASE_SPREAD` | 0.005, night ×1.6 | Was 0.02 / ×2.0 = **7.3% of the map per day**. Now 1.8% on Harried — 25% of the map in 14 days. |
+| `faith_on_death` | Shambler 1.2, Spitter 2.4 | Scaled off `threat_cost`. Dawn burn-off pays nothing — sunrise is not a victory. |
+
+### Growth: two systems, deliberately different
+
+**Births** — internal, conditional, and they **stall rather than reset**. Minimum standard: a spare
+bed, water, 2 days of food, mood ≥ 45. Progress freezes on failure, so a bad night costs time and
+not the whole investment. Threshold randomised per birth (0.75–1.35) so growth never lands on a
+countable beat.
+
+**Migration** — external, ~2 cycles apart, heavily jittered, and runs **regardless** of colony
+state. A band of 1–3 arrives and the player **accepts or turns them away**. Accepting with no beds
+is allowed; that is the decision. Refusing costs 6 mood. They leave after 45s.
+
+**No countdown is exposed.** An ETA turned growth into a watched timer, and its inputs move
+continuously so the figure jittered uselessly. The HUD shows one blocker word instead.
+
+### Rate ledger (1.6)
+
+`RateLedger` is **pull, not push** — nothing registers contributions; it asks the systems on demand
+and only while the panel is open. Terms are **computed where the game is a formula** (mood, Faith)
+and **measured where it is a stream of events** (foraging).
+
+Farm supply is computed from occupied work slots, which is why the readout is stable. Measuring it
+produced `+7440/day` from a single 8-food haul inside a 2-second sample. Window is now 90s.
+
+`_check_ledger` asserts every breakdown **adds up to the number printed above it**. This is a hard
+prerequisite for Phase 2.8 — a Burden system is unplayable if a negative Faith rate cannot explain
+itself.
+
+### Corruption rendering (unplanned; added from play feedback)
+
+Blight read as floating fog. Three causes:
+
+1. **`BlightOverlay` was the last child of `WorldView`, after `Sorted`** — so it drew over
+   villagers, trees and buildings. Now `z_index = -1`.
+2. **The shader was fog by construction** — UV warp off the tile grid, translucent alpha, a `sin`
+   pulse. Now no warp, opaque, 4×4 ordered dither, no animation.
+3. **It was never terrain.** Atlas extended to 7 rows; rows 4-6 mirror 0-2 with corrupted variants
+   of each walkable material, each keeping a trace of what it was.
+
+Two-stage transition: blight 90→150 stipples via shader, ≥150 the baked tile takes over and the
+shader discards. `blight_changed` now fires on the threshold crossing in **both** directions.
+
+The menu was reusing this shader with no `blight_tex` bound; split into `menu_backdrop.gdshader`.
+
+---
+
+## Phase 3 — localization scaffolding — done
+
+`content/locale/embergard.csv` holds ~190 keys, parsed at runtime by the **`Locale` autoload**
+(first in the autoload order, since everything below it may translate while starting up).
+
+**Not** using Godot's `csv_translation` importer. That needs a generated `.import` and an editor
+pass to produce its `.translation` binaries, so the game could not be built or headlessly tested
+from a clean checkout until someone had opened the project once. Parsing the CSV ourselves removes
+that step: the file in version control is the source of truth, and the smoke test exercises exactly
+what ships.
+
+### Conventions
+- **Explicit UPPER_SNAKE keys, never English source text.** A missing entry renders as
+  `MISSING_KEY_NAME` — loud, obvious, greppable. English-as-key fails silently and hands
+  translators whole sentences as identifiers.
+- **`{0}` placeholders via `String.format`, never `%s`.** Positional `%s` cannot be reordered and
+  word order changes between languages.
+- **Separate singular and plural KEYS** rather than splicing an `"s"` onto a count. Plural rules
+  differ wildly and an English suffix baked into a format string cannot be translated away.
+- `tr()` for bare strings, `Locale.t(key, args)` when there are arguments.
+- Content `.tres` files hold keys in `display_name` / `description`; the display site calls `tr()`.
+
+### Adding a language
+Add a column to the CSV. No code changes.
+
+### What is covered
+Notices, the HUD (clock, resource bar, growth blocker, migrant prompt, selection card), the main
+menu, world creation, options, credits, the summary card, the site picker, placement verdicts,
+`BuildingDef.cost_text()`, and `Villager.describe()`. Scene `text` properties that are overwritten
+on first refresh were left as placeholders; the wordmark `EMBERGARD` is deliberately untranslated.
+
+`_check_locale` asserts every key a content file names exists **and** translates to something other
+than itself — which is what makes a typo in a `.tres` a test failure rather than a screenshot.
+
+---
+
+## Phase 2 — colony depth (in progress)
+
+### Landed so far
+
+- **2.1 Production chain.** `JobDef.cycle_cost` is the whole mechanism. Sawing (3 wood → 1 board),
+  stonecutting (3 stone → 1 cut stone), toolmaking (1 board + 1 cut stone → 1 tool). Inputs are
+  taken on cycle COMPLETION, not start — otherwise an interrupted worker silently destroys
+  materials. A workplace with no input idles instead of banking unearned progress. `Colony.KINDS`
+  is 3 → 6 with `KIND_GROUPS` for the readout. The **Watchtower now costs 2 tools**, so the chain
+  gates something.
+- **Rectangular footprints.** Sawmill 3×2, Stonecutter 2×3, Toolsmith 3×2, with matching 48×32 /
+  32×48 art. Everything used to be 2×2, which made layout tiling rather than a puzzle — a 3×2 shed
+  does not fit the gap a 2×3 yard leaves. The baker now takes explicit `w`/`h`; it assumed square
+  and would have truncated all three.
+- **2.3 Warrior job** (`JobDef.defends`). The real fix for the remaining dead air: warriors hold
+  the line, **everyone else keeps working if the ground they stand on is lit**
+  (`NIGHT_WORK_LIGHT = 110`, below the Ember's own strength so a watchtower is enough). That makes
+  Ember placement an economic decision after dark, not only a defensive one. Warriors walk toward
+  *threatened villagers* rather than to a light post — the only way a colony spread over several
+  work sites can be defended.
+- **2.6 Monster roster** 2 → 6. Brute (night 4, wall-breaker), Swarmling (3, cheap and numerous),
+  Burrower (5, `tunnels`), Shade (6, `burn_per_second = 0` so light cannot touch it).
+  `tunnels` is implemented as "does not read the flow field" — it walks a straight line at the
+  nearest structure. A second wall-free field would fork the thing that makes a hundred monsters
+  affordable, and a tunneller has no use for pathfinding anyway.
+- **2.2 Tabs, upgrades, demolition.** `BuildingDef.category` drives a tab strip *derived from the
+  content* — `Buildings.categories()` reads whatever categories exist and orders them by the lowest
+  `order` in each, so adding a tab is adding a `.tres` and a locale key. Upgrading is **in place**,
+  reusing the blueprint→deliver→build path exactly as `Building`'s header says that path exists to
+  be re-entered; footprints must match, so the ground never needs re-validating mid-upgrade.
+  Demolition needed **no new villager state**: `add_work` in reverse, then salvage carried off one
+  armful at a time via `_begin_haul`. Refund is 40% of `delivered` (never `def.cost`, or a
+  force-completed building could be farmed), and a *blueprint* refunds in full — changing your mind
+  before work starts should cost nothing, and after it should cost 60%.
+- **2.2 Village Center tiers.** Hearth → Great Hall (pop 10) → Stone Keep (pop 18), gating the
+  build list through `BuildingDef.tier` against `Colony.center_tier()`. One dial, read off whichever
+  standing building declares the highest `center_tier` rather than by id — which also fixed a latent
+  bug: `Run._on_building_destroyed` tested `id == &"hearth"`, so upgrading would have silently
+  disabled the defeat condition on the only building that matters.
+- **2.4 Paths.** A road is a **building**, not a new placement system, so it inherits cost,
+  reservation, hauling, demolition, the ghost and the influence check. `path_tier` overrides terrain
+  cost in `rebuild_move_cost`, so a paved route across marsh is as quick as one across grass — which
+  is the reason to pave the marsh. Villagers prefer roads in exact proportion to the saving, with no
+  AI code. `Agent._surface_speed` makes them genuinely faster (sampled once per tile, not per
+  frame); monsters override it to keep **half** the bonus and pay `PATH_PENALTY` in the flow field,
+  so roads still funnel the horde — which is good, a predictable approach is one you can tower — but
+  favour you on net.
+- **2.5 Sphere of influence.** An `influence` byte layer, contributions **summed with saturation**
+  rather than maxed: that is what makes the boundary amorphous and bulge toward wherever you have
+  been building, instead of being a union of circles. Full rebuild on completion and destruction —
+  additive stamping cannot be un-stamped without the classic drifting-accumulator bug, and there are
+  only ever a few dozen buildings. Gated in `check_placement` per cell, so the ghost red-Xes exactly
+  the tiles that overhang. Rendered by copying BlightField's R8-texture + shader trick, and shown
+  **only during placement**: it is a placement aid, not six hours of decoration.
+- **2.8 Temple, Burden, Tomes.** Shrine → Temple → Sanctum (2×3, upgraded in place). Every ability
+  taken up charges a permanent `PowerDef.burden` against the Faith rate, so the managed resource is
+  the **rate** and the pool reframes as a buffer — `Divine.faith_runway()` reports how long until the
+  powers go dark. Faith clamps at zero rather than going negative: a colony that overreaches loses
+  its miracles, which is legible, instead of accruing an invisible debt. Relinquishing costs 12
+  Faith — required, or one greedy unlock is permanent regret. Priests are a workplace job
+  (`JobDef.scribes`) reusing `_tick_workplace` untouched, and the *skip-the-haul* branch it needed is
+  the same one any future non-haulable output will use. `PowerDef.Kind.BUFF` is three independent
+  numbers (mood / speed / damage), so Rally and Blessing are one code path with different content.
+- **Per-job default quotas** (`JobDef.default_quota`). The old rule — two for every job without a
+  workplace — was fine at four jobs and wrong at ten: it asked for ten people out of six, opening
+  every board row amber and inflating the unmet work that draws migrants. Defaults now sum to
+  exactly the starting population.
+
+### Bugs the first real test run caught
+
+Worth recording, because every one of them was invisible to inspection and three were latent long
+before Phase 2:
+
+- **The sphere of influence blocked the founding Hearth.** Influence is granted *by* standing
+  buildings, so gating the first one on it meant the Village Center could never be placed, the run
+  silently fell back to a bare stockpile, and every later placement failed too. Fixed by
+  `World.has_influence()`: a colony with no sphere may build anywhere. Stated as "is there a sphere
+  yet" rather than "is this the Hearth", so it also covers a colony type that founds itself with
+  something else.
+- **Cleared ground stayed impassable.** `clear_feature` sets `cost_dirty` and defers the rebuild to
+  the next `World.step`, so straight after burning out a nest `is_walkable()` still reported solid
+  rock — villagers could not path onto ground the player had just taken. Pre-existing, and it would
+  have read as "clearing nests does nothing". `damage_nest` now rebuilds immediately; nests die a
+  handful of times a run.
+- **`Run._on_building_destroyed` tested `id == &"hearth"`.** Upgrading in place changes the
+  definition, so raising the Hearth into a Great Hall would have silently disabled the defeat
+  condition on the only building that matters. Now tests `center_tier`. Exactly the failure mode
+  `BuildingDef`'s header warns about.
+- **A flaky assertion, not a bug.** The migration test set `migration_progress = 0.999` assuming a
+  target of 1.0, but each birth needs a *randomised* 0.75–1.35 so growth never lands on a countable
+  beat. It passed on seeds that rolled low and failed on ones that rolled high. The game was right.
+- **Three carry icons were missing** for boards, cut stone and tools. The baker warned; a blank
+  frame makes a haul of boards look identical to a villager carrying nothing.
+
+### Decisions that differ from the original spec, and why
+
+- **Baseline powers are taken up automatically at run start.** The spec gated Emberfall and Ward
+  behind a Shrine. That would have put the game's signature mechanic behind a 20-stone building and
+  ten survivors, gutting the opening rather than deepening it. The three tier-0 powers carry 0.24/s
+  between them against a passive ~0.6/s, and they can still be given back. The interesting decision
+  is not whether to have Emberfall; it is whether a Sanctum's worth of abilities is something the
+  colony can carry — and that starts at tier 1.
+- **Combining and installing Tomes are automated.** The spec had the player queue combines and
+  choose which books to install. Both needed a library-management panel; instead priests combine the
+  three *least durable* shelved tomes of the lowest eligible tier (the choice a player makes almost
+  every time), and the best books are auto-shelved into the available slots. Averaged toughness on
+  combine is preserved, so feeding it junk still yields a fragile result. What stays in the player's
+  hands is how many priests to staff and — through the tier — how large the active set is. **This is
+  the one place Phase 2 has less player agency than specified**; a panel is the obvious later
+  addition if the mechanic proves worth it.
+- **`influence_radius` in tiles, not `influence_weight`.** The thing a designer wants to tune is
+  "how far does a watchtower reach", stated in tiles, not a weight against one global constant.
+- **`BuildingDef.workplace_role`.** Added because a Priest works at a Shrine, a Temple *or* a
+  Sanctum, and a job naming one building id would have silently stopped working the moment the
+  player upgraded the building it was written for.
+- **No Granary.** Storage caps do not exist, so a Granary would have been a building that does
+  nothing. Housing got the Longhouse instead.
+
+### Still to do
+
+- **2.7 Meta unlocks.** Exactly one building has a shard cost (Watchtower, 30) and a run earns
+  30–50, so after one run everything is unlocked forever and `threat_dial()` tops out at 1.03.
+  `Meta.ascension` is read by `threat_dial()` and **never written**. Needs 12–20 unlockables at
+  30–400 shards across buildings, powers and starting bonuses, plus `ascension` wired to world
+  completions. Powers now have `unlock_cost`, so they can join the same pool — all eight currently
+  sit at 0.
+- **2.9 Blight settlements.** Nests grow villages. Art exists (Spire, Hovel, Totem); behaviour does
+  not.
+- **Smaller grid.** 128 → ~96, to make the map read as a settlement rather than a plain. Requires
+  dropping `NEST_MIN_DIST` from 34 to ~26; the smoke test asserts nest distance ≥ 20.
+- **Edge-masked resource masses.** Trees, rocks and berries as solid clusters with uneven edges that
+  get eaten into: neighbour-mask → tile variant, ~16 tiles × 3 features ≈ 6 atlas rows.
+- **A Tome library panel**, if the automated version above proves not to be enough.
+
+Largest phase. **All of it lands before Phase 4**, because the Realm's `ColonyLedger` must
+serialize the finished colony state — building the abstractor twice is waste.
+
+### 2.1 Production chain
+`JobDef` has `cycle_yield` but no inputs. **Add `cycle_cost: Dictionary`** — one field turns the
+whole chain into content.
+
+```
+RAW          →  TOOLS GATE   →  PROCESSED      →  METAL          →  MILITARY
+wood            Toolsmith       Sawmill           Ore node          Blacksmith
+stone           wood+stone      wood → boards     Furnace           ingots+boards
+food             → tools        Stonecutter       ore+wood → ingots  → weapons
+water                           stone → cut stone
+```
+
+Tools are a **consumable construction input** for tier-2+ buildings. Upgrades accept **either 3×
+raw or 1× processed**, so skipping the Sawmill slows you but never hard-blocks you.
+
+Resource kinds go 4 → ~11. The 1.6 readout was built for an arbitrary list, so this adds rows plus
+grouping (Raw / Processed / Military). Storage caps become necessary (Granary / Warehouse).
+
+### 2.2 Upgrades, tiers, tabs, demolition
+Gate everything behind a tiered **Village Center** (Hearth T1→T3), each tier needing a population
+threshold *and* processed materials. One legible dial.
+
+New `BuildingDef` fields: `category` (tab), `tier`, `upgrades_from`, `influence_weight`,
+`path_tier`.
+
+Upgrade **in place**, reusing the existing blueprint→complete path.
+
+**Demolition:** refund a fraction of **`Building.delivered`** — never of `def.cost`, or a
+force-completed building can be farmed. ~40%, difficulty-tunable; salvage is the wrong place to be
+generous. Salvage must be **carried**, not teleported. Buildings left outside a shrunken sphere are
+**grandfathered**.
+
+### 2.3 Jobs
+`JobDef` already supports everything needed, so most are content.
+
+| Job | Behaviour |
+|---|---|
+| **Worker** | Idle unless something needs building. Formalizes the implicit builder role. |
+| **Warrior** | Defends threatened villagers; fights at night while others keep working. **This is the real fix for 1.4's dead air.** |
+| **Priest** | Workplace job at the Temple; scribes and combines Tomes. |
+| Toolsmith / Sawyer / Stonecutter / Smelter / Blacksmith | Workplace jobs, pure content once `cycle_cost` exists. |
+| **Miner** | Harvests the new ore feature. |
+| **Hunter** | Renewable food away from the keep; risky. |
+
+Only the Warrior needs new `State` values. Everything else reuses `_tick_workplace`.
+
+### 2.4 Paths
+`rebuild_move_cost()` already derives one cost array that villagers A* over, so **a path is just a
+tile that lowers cost** — villagers prefer it proportionally to the saving, which is exactly "prefer
+but don't detour." **No AI code.** Tiers are a `path_tier` byte layer.
+
+Two things do need code: `Agent._process` uses a flat `move_speed` and never reads cost; and
+**monsters read the same array, so roads are invasion highways.** Keep that — it makes gate placement
+matter — but add a modest monster-side penalty so roads favour the player on net.
+
+### 2.5 Sphere of influence
+A `PackedByteArray influence` layer. The Village Center stamps a large radius by tier; each building
+stamps a small one weighted by `influence_weight`. Radial falloff summed across sources produces an
+amorphous blob that **bulges toward wherever you build**, with no special-case geometry.
+
+Two clean reuses: gate placement in `Colony.check_placement()` (already returns per-cell verdicts,
+so the ghost red-Xes out-of-influence tiles for free), and render via `blight_field`'s proven
+R8-image-plus-shader pattern.
+
+### 2.6 Monster variety
+Art **done** for Brute, Shade, Swarmling, Burrower. Still needed: `MonsterDef` .tres files, a night
+boss every 5th night, and visually distinct **empowered** variants (`_apply_overflow` caps at 2.5×
+and silently discards excess budget, while a 2.5×-HP shambler looks identical to a night-1 one).
+
+### 2.7 Meta unlocks
+One building has `unlock_cost > 0`. A run earns ~30-50 shards, so after **one run** the summary says
+"Everything is unlocked" forever and `threat_dial()` tops out at 1.03. `Meta.ascension` is read and
+**never written**. Need 12-20 unlockables at 30-400 shards.
+
+### 2.8 The Temple — Divine progression
+`PowerDef` has **no unlock field at all**, so the signature system has zero progression.
+
+**Faith stays passive. Every unlocked ability applies a permanent negative rate — its Burden.**
+
+```
+net Faith rate = passive generation + Tome bonuses − total Burden
+```
+
+The managed resource becomes the **rate**, not the pool; the pool reframes as a buffer. It
+self-limits without an arbitrary cap, and it **brakes the death spiral** — a declining colony can no
+longer afford its abilities. Unlocking everything becomes a trap.
+
+**Relinquishing is required**, or one greedy unlock is permanent regret. Going net-negative must be
+loud: `faith 64/150 ▼−0.31/s · 3m 30s`.
+
+**Priests scribe Tomes** at the Temple. Tier is random; higher-tier odds rise with priest count.
+**3× same tier → 1× next**, inheriting the **average** toughness of its inputs — so combining is a
+real choice. Tomes have durability; **only installed ones decay**.
+
+The resulting economy: obligations permanent, income perishable, priests the standing cost of
+keeping it alive. A Temple can never be "finished."
+
+> **Balance risk:** permanent Burden against perishable income is a **ratchet**. Tune so a modest
+> standing priest assignment sustains a modest Burden indefinitely. Smoke test must assert a
+> baseline Temple staff holds a stable net rate across 10 days.
+
+Tiers: Shrine (1 priest / 1 Tome slot / cap 100) → Temple (3/2/150) → Sanctum (5/3/220). Eight
+powers across three tiers; needs one new `Kind.BUFF` appended to the enum.
+
+### 2.9 Blight settlements (new — not in the original plan)
+Nests should **grow into villages** rather than being spawn markers. Art done: `spire` (16×32),
+`hovel` (16×16), `totem` (16×24) in `assets/sprites/blight/`.
+
+Behaviour outstanding: nests periodically raise structures nearby; structures raise local threat,
+speed blight spread, or house extra spawns; each is destructible. Turns a nest from a spawn point
+into an objective, and pairs with the now-slower corruption — a days-long siege gives them time to
+build.
+
+### 2.10 More buildings
+**Gate** ✅ done. Still needed: Well ✅ done; **Granary** (spoilage + storage caps), **Barracks**,
+**Stone Wall**, **Ballista**, **Shrine/Temple/Sanctum**, **Bridge** (water is a hard wall today;
+`terrain.gd` already says "bridges later").
+
+---
+
+## Phase 4 — The Realm
+
+**Gated on Phases 1 and 2.** Autoloads stay singletons and hold whichever colony is **awake**.
+
+| New | Kind | Responsibility |
+|---|---|---|
+| `Realm` | autoload | World-map graph, colony ledgers, global + local corruption, arc coverage |
+| `ColonyLedger` | RefCounted | Abstract state of one colony, including production chain |
+| `Abstractor` | static | Live colony → ledger, on departure |
+| `Reconstitutor` | static | Ledger → live colony, on arrival |
+
+### The Constellation
+Your first colony is the **Heart**. Every later colony covers an **angular arc** measured from it;
+width and strength fall off with distance. Threat through a covered arc is intercepted into the
+shielding colony's ledger; through an **uncovered arc it hits the Heart at full strength**. You win
+by closing the ring.
+
+Build close → strong shielding, overlapping arcs, mutual tribute. Build far → weak shielding,
+isolated, but reaches nests and metal. **The Heart is never safe** — a baseline trickle always spawns
+there.
+
+The bones exist: `_place_nests` already distributes nests angularly; `_spawn_cell` already biases by
+direction. Arc coverage is a **filter over existing choices**, not a new system.
+
+### Abstracted colonies that feel simulated
+Not simulated — stored as a ledger and **deterministically reconstituted**, seeded from
+`colony_seed + days_elapsed`. Needs and jobs are derived from the ledger, so a colony that was
+starving greets you with hungry villagers. O(1) per colony per day.
+
+**Blight is the exception — advance it for real.** It is the pressure, and pressure must be honest.
+
+> **Three invariants.** (1) The ledger is the single source of truth; reconstitution must never
+> contradict the summary the player was shown. (2) No resources from nothing. (3) Neglect is a
+> choice, never an ambush — local corruption bars warn continuously and counterplay exists.
+
+### Also
+Save format extends to world seed + difficulty + N ledgers + full deltas for the awake colony.
+Migration between connected colonies is 1.1 at world scale. Win = close the ring, destroy the heart,
+increment `Meta.ascension`.
+
+---
+
+## Phase 5 — polish
+
+- **5.1 Audio content.** Buses shipped in 0.12; this is the sound. SFX baked to WAV via
+  `bake_audio.gd` + `audio_data.gd` mirroring the art pipeline. **Music synthesized at runtime**
+  (`AudioStreamGenerator`) — infinite and non-repeating over a 10-hour run at near-zero size.
+  Constrain to a mode (Aeolian at night, Dorian/pentatonic by day) so every note is consonant by
+  construction; drone of root/fifth/octave sines with slow independent detune LFOs. Crossfade on
+  `phase_changed`. New folders `scripts/audio/`, `content/music/`.
+  **Device risk:** `AudioStreamGenerator` underruns on iOS with a small buffer. ~0.5s buffer,
+  allocation-free fill, baked-loop fallback. Verify on hardware early.
+- **5.2 Onboarding.** The game teaches nothing, and Phase 2 adds a production chain, spheres,
+  thirst, gates and roads on top. Contextual, state-triggered, skippable, shown-once — staged across
+  the chain (teach the Toolsmith when tools are first needed).
+- **5.3 Accessibility.** Colourblind palettes (blight-red / light-warm / monster-magenta /
+  influence-boundary are the readability axes), text scaling, reduced motion, remappable input,
+  haptics.
+- **5.4 Desktop parity.** Right-click cancel, hotkeys, hover tooltips, **drag-placement for walls
+  and paths**.
+- **5.5 Run history.** `Meta` tracks 4 numbers. Add per-run history, seed sharing, achievements.
+
+---
+
+## Phase 6 — long tail
+
+- **Biomes.** One biome, one size, always 4 nests at 34-52 tiles. Vary `NEST_COUNT`, distance, and
+  metal/water availability by tier.
+- **Storyteller events.** `Events.storyteller_event` is declared and **never emitted**. Caravans,
+  refugee bands, blight surges, storms that dim light, droughts that dry wells.
+- **Weather / seasons** affecting light, yield and spread.
+
+---
+
+## Verification
+
+Extend the existing harness; do not replace it. `smoke_test.gd` runs 4 seeds
+(`1, 7, 424242, 99999`), 600 sim-seconds at a fixed 0.05 step, ~125 assertions.
+`stress_test.gd` covers performance; `screenshot.gd` covers visuals.
+
+### Manual checks that automation cannot cover
+- **Sphere geometry:** Watchtower east, Stockpile west — the boundary should bulge strongly east
+  and barely west.
+- **Arc shielding:** settle due west of the Heart; western pressure should drop and eastern should
+  not.
+- **Gates under load:** wall a village completely with one gate; monsters should funnel to it and
+  villagers should not be stuck inside.
+- **Corruption read:** blighted ground should look like ground, and the frontier should stipple
+  before tiles flip.
+
+---
+
+## Reference
+- [World Map — Rise to Ruins Wiki](https://rise-to-ruins.fandom.com/wiki/World_Map)
+- [Corruption Threat — Rise to Ruins Wiki](https://rise-to-ruins.fandom.com/wiki/Global_Corruption_Power)
+- [InDev 31 – The World Update](https://rayvolution.itch.io/risetoruins/devlog/48767/indev-31-the-world-update-released)
+- [Is this game just too hard? — Steam](https://steamcommunity.com/app/328080/discussions/0/353915953249211160)

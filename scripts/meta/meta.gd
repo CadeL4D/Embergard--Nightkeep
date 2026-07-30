@@ -16,6 +16,10 @@ var unlocked: Array[StringName] = []
 var ascension: int = 0
 var best_day: int = 0
 var runs_played: int = 0
+## The tier the player last chose, so the New World screen opens on it rather than
+## making them re-pick every session. Profile state, not run state — the run's own
+## difficulty is saved with the run.
+var last_difficulty: StringName = &"harried"
 
 
 func _ready() -> void:
@@ -35,6 +39,7 @@ func load_profile() -> void:
 	ascension = cfg.get_value(SECTION, "ascension", 0)
 	best_day = cfg.get_value(SECTION, "best_day", 0)
 	runs_played = cfg.get_value(SECTION, "runs_played", 0)
+	last_difficulty = StringName(cfg.get_value(SECTION, "last_difficulty", "harried"))
 	unlocked.assign(cfg.get_value(SECTION, "unlocked", []))
 
 
@@ -45,8 +50,18 @@ func save_profile() -> void:
 	cfg.set_value(SECTION, "ascension", ascension)
 	cfg.set_value(SECTION, "best_day", best_day)
 	cfg.set_value(SECTION, "runs_played", runs_played)
+	cfg.set_value(SECTION, "last_difficulty", String(last_difficulty))
 	cfg.set_value(SECTION, "unlocked", unlocked)
 	cfg.save(SAVE_PATH)
+
+
+## Remember the player's tier choice. Written straight through rather than batched,
+## because the profile is also what survives a crash.
+func set_last_difficulty(id: StringName) -> void:
+	if id == &"" or id == last_difficulty:
+		return
+	last_difficulty = id
+	save_profile()
 
 
 func _migrate(_cfg: ConfigFile, _from_version: int) -> void:
@@ -63,6 +78,16 @@ func unlock(id: StringName) -> void:
 	if id in unlocked:
 		return
 	unlocked.append(id)
+	save_profile()
+
+
+## A world seen through to a deliberate end. Raises baseline difficulty for every future run.
+##
+## Kept as its own call rather than folded into award() because the two answer different questions:
+## award() records that a run HAPPENED, this records that one was COMPLETED. Only the second should
+## make the next world harder.
+func record_ascension() -> void:
+	ascension += 1
 	save_profile()
 
 

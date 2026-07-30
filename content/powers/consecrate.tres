@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_power_def"]
+
+[resource]
+script = ExtResource("1_power_def")
+id = &"consecrate"
+display_name = "POWER_CONSECRATE"
+description = "POWER_CONSECRATE_DESC"
+kind = 2
+faith_cost = 58.0
+cooldown = 60.0
+radius = 8
+amount = 255.0
+duration = 0.0
+required_temple_tier = 2
+burden = 0.24
+color = Color(0.72, 0.9, 0.8, 1)
+order = 6
+unlock_cost = 130

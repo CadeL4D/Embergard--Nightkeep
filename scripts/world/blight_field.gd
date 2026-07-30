@@ -20,12 +20,24 @@ const SAMPLES_PER_PASS := 256          ## frontier cells examined per pass
 const SEED_INTENSITY := 90
 const RAMP_PER_PASS := 6               ## how fast an infected tile deepens
 const LIGHT_RESIST := 0.9              ## how strongly light suppresses spread
-const NIGHT_MULTIPLIER := 2.0
-## Per-frontier-cell chance to spread on a pass. Tuned low on purpose: the Blight
-## is meant to be a slow tightening pressure the player can plan against, not a
-## flood. At 0.10 it consumed ~42% of the map by day 2, which is unplayable — the
-## smoke test asserts the resulting coverage band so this cannot silently regress.
-const BASE_SPREAD := 0.02
+## Night pressure. Modest, because the Blight is a siege and not a tide — a big night
+## multiplier made corruption something that happened TO the player between dusk and dawn
+## rather than something they were losing ground to over a campaign.
+const NIGHT_MULTIPLIER := 1.6
+
+## Per-frontier-cell chance to spread on a pass.
+##
+## Tuned down from 0.02, which with a 256-cell sample and a pass every two seconds worked out to
+## roughly 1,100 new tiles per day cycle — about 7% of the map, EVERY DAY. That reads as a flood:
+## the player watches the map turn over while they are still working out where to put a farm.
+##
+## At 0.005 it is closer to 1.8% of the map per day on the baseline tier, so losing serious
+## ground takes a week and the player can see it coming, plan against it, and push back with Ward.
+## Difficulty scales this (Sheltered 0.5x through Forsaken 2.2x), so the tiers differ in how fast
+## the noose tightens rather than in whether it does.
+##
+## The smoke test asserts a coverage band so this cannot silently regress in either direction.
+const BASE_SPREAD := 0.005
 
 var _world: Node = null
 var _frontier: PackedInt32Array = PackedInt32Array()
@@ -95,9 +107,14 @@ func purify(cell: int, amount: int) -> bool:
 	var blight: PackedByteArray = _world.blight
 	if not _world.grid.is_valid_index(cell) or blight[cell] == 0:
 		return true
+	var before := blight[cell]
 	blight[cell] = maxi(blight[cell] - amount, 0)
 	_mark_pixel(cell, blight[cell])
 	if blight[cell] > 0:
+		# Partial cleansing that drops the tile back below the takeover line has to repaint too,
+		# or purified ground keeps its corrupted texture and Ward looks like it did nothing.
+		if before >= TileAtlas.CORRUPT_THRESHOLD and blight[cell] < TileAtlas.CORRUPT_THRESHOLD:
+			Events.blight_changed.emit(cell, false)
 		return false
 
 	# Cleaning a tile re-opens its still-blighted neighbours: they now have a clean
@@ -130,6 +147,9 @@ func step(tick: int) -> void:
 	var blight: PackedByteArray = _world.blight
 	var light: PackedByteArray = _world.light
 	var night_mult: float = NIGHT_MULTIPLIER if Sim.is_dark() else 1.0
+	# Hoisted with night_mult: both are constant for the whole pass, and this loop runs
+	# a couple of hundred times per pass.
+	var base_chance: float = BASE_SPREAD * night_mult * Difficulties.blight_mult()
 
 	var examined := 0
 	var samples := mini(SAMPLES_PER_PASS, _frontier.size())
@@ -141,8 +161,15 @@ func step(tick: int) -> void:
 
 		# Deepen, then decide whether it is still a frontier tile at all.
 		if blight[cell] < 255:
+			var before := blight[cell]
 			blight[cell] = mini(blight[cell] + RAMP_PER_PASS, 255)
 			_mark_pixel(cell, blight[cell])
+			# The ground turns partway up the ramp, not the moment it is infected. Announce that
+			# crossing so the renderer can swap the tile — without this the terrain would only
+			# ever update on spread and purify, and a tile deepening from "taking hold" to
+			# "taken" would never actually change.
+			if before < TileAtlas.CORRUPT_THRESHOLD and blight[cell] >= TileAtlas.CORRUPT_THRESHOLD:
+				Events.blight_changed.emit(cell, true)
 
 		var open := _open_neighbours(cell)
 		if open.is_empty():
@@ -154,7 +181,7 @@ func step(tick: int) -> void:
 			_suppression[cell] = maxi(_suppression[cell] - 8, 0)
 			continue
 
-		var chance := BASE_SPREAD * night_mult
+		var chance := base_chance
 		chance *= 1.0 - (float(light[cell]) / 255.0) * LIGHT_RESIST
 		if chance <= 0.0 or _rng.randf() > chance:
 			continue

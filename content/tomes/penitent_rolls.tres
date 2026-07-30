@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TomeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/tome_def.gd" id="1_tome_def"]
+
+[resource]
+script = ExtResource("1_tome_def")
+id = &"penitent_rolls"
+display_name = "TOME_PENITENT_ROLLS"
+description = "TOME_PENITENT_ROLLS_DESC"
+faith_rate = 0.34
+tier_scale = 2.0
+mood_penalty = 5.0
+color = Color(0.74, 0.62, 0.68, 1)
+order = 3

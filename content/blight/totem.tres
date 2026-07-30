@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BlightStructureDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blight_structure_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/blight/totem.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"totem"
+display_name = "BLIGHT_TOTEM"
+description = "BLIGHT_TOTEM_DESC"
+sprite = ExtResource("2_tex")
+max_hp = 110.0
+height_tiles = 2
+min_night = 6
+weight = 0.9
+threat_bonus = 1.0
+glow = 90
+monster_scale = 1.18
+color = Color(0.72, 0.22, 0.46, 1)
+order = 2

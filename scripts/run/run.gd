@@ -7,11 +7,18 @@ extends Node2D
 ## and rebuild when a run ends. Keeping that boundary clean is what makes "Ascend to
 ## a new map" a scene reload rather than a hunt for stale state.
 
-const VILLAGER_SCENE := preload("res://scenes/entities/villager.tscn")
-
 ## The band that survivors arrive with. Small enough that every individual matters
 ## on day one, which is what makes the first night frightening.
+##
+## Difficulty adjusts this rather than replacing it — see starting_villagers().
 const STARTING_VILLAGERS := 6
+
+
+## How many survivors this run actually begins with. Floored at two: a difficulty tier
+## is allowed to make the opening desperate, never to make it unplayable, and a single
+## founder cannot gather, build and stand watch at once.
+func starting_villagers() -> int:
+	return maxi(STARTING_VILLAGERS + Difficulties.start_pop_bonus(), 2)
 
 ## Sky colour per phase. The whole art direction rests on this: the world is cold
 ## and desaturated so that firelight — and the Ember — are the only warm things on
@@ -28,9 +35,14 @@ const SKY_COLORS := {
 @onready var camera: Camera2D = $CameraRig
 @onready var sky: CanvasModulate = $Sky
 @onready var ember: Node2D = $Ember
+## Optional: absent in the dev and test scenes, which found a colony directly.
+@onready var site_picker: Node = get_node_or_null("SitePicker")
 
 var _sky_from: Color = Color.WHITE
 var _sky_to: Color = Color.WHITE
+## The seed being played. Held because confirming a site has to regenerate with it, and by
+## then the caller's argument is long gone.
+var _pending_seed: int = 0
 
 ## Set once the run is over, so the end sequence cannot fire twice — a keep can be
 ## destroyed on the same frame its last villager dies.
@@ -45,9 +57,18 @@ func _ready() -> void:
 	Events.building_destroyed.connect(_on_building_destroyed)
 	Events.building_completed.connect(_on_building_completed)
 
+	# An explicit request from the main menu wins over anything on disk: the player asked
+	# for a new world, and silently resuming their old one instead would be maddening.
+	var request := NewRunRequest.consume()
+	if bool(request["pending"]):
+		start_run(int(request["seed"]), request["difficulty"], bool(request["pick_site"]))
+		return
+
 	if RunSave.has_save():
 		if _resume():
 			return
+	# No request and no save. Reached by the dev scenes and by running run.tscn directly,
+	# so it founds immediately rather than waiting on a site choice nobody asked for.
 	start_run(randi())
 
 
@@ -63,23 +84,87 @@ func _resume() -> bool:
 	_sky_to = _sky_from
 	sky.color = _sky_from
 	Events.run_started.emit(World.seed_value)
-	Events.notice.emit("The keep endures. Day %d." % Sim.day, 0)
+	Events.notice.emit(L10n.t(&"NOTICE_KEEP_ENDURES", [Sim.day]), 0)
 	return true
 
 
-func start_run(seed_value: int) -> void:
+## Begin a fresh run. An empty difficulty id means "whatever the player chose last",
+## which is what keeps a debug reseed and the summary screen's Next Run button on the
+## tier the player was actually playing.
+##
+## `pick_site` opens the site picker instead of founding immediately. Off by default so
+## every existing caller — the smoke test, the debug reseed, the summary card — keeps
+## working unchanged and headlessly; only the New World flow turns it on.
+func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool = false) -> void:
 	_clear_entities()
 	_ended = false
 	_buildings_raised = 0
+	_pending_seed = seed_value
 	RunSave.clear()
 
+	# Settled before anything reads it: the founding band size and the first night's
+	# threat budget both depend on the tier, and both are decided below.
+	#
+	# Selecting does NOT write the profile. Remembering a preference is the world-creation
+	# screen's job (it is the only place the player actually expresses one) — doing it here
+	# would mean every headless test and debug reseed silently rewrote the player's saved
+	# choice.
+	Difficulties.select(difficulty_id if difficulty_id != &"" else Meta.last_difficulty)
+
 	World.generate(seed_value)
+
+	if pick_site:
+		_begin_site_selection()
+		return
+	_found_colony(seed_value)
+
+
+## Show the generated land and let the player choose where to settle.
+##
+## Nothing is founded yet and the clock does not run, so the player can pan and zoom over
+## a still world with no pressure. This is the first real decision of a run and it should
+## be the calmest.
+func _begin_site_selection() -> void:
+	camera.center_on_cell(World.keep_cell)
+	# Daylight, so the land is actually legible while it is being judged.
+	_sky_from = SKY_COLORS[Sim.Phase.DAY]
+	_sky_to = _sky_from
+	sky.color = _sky_from
+	_sync_ember()
+	if site_picker != null:
+		site_picker.begin(_suggested_site())
+
+
+## Where the generator would have put the keep. Offered as a suggestion so a player who
+## does not want to make this decision can take one tap and move on.
+func _suggested_site() -> int:
+	return World.keep_cell
+
+
+## Commit to a site. Regenerates the map around the chosen cell — the flatten pad, the
+## nest ring and the cleared start area all key off the keep, so they have to be rebuilt
+## rather than patched.
+func confirm_site(cell: int) -> void:
+	if not World.grid.is_valid_index(cell):
+		return
+	World.generate(_pending_seed, cell)
+	if site_picker != null:
+		site_picker.finish()
+	_found_colony(_pending_seed)
+
+
+## Raise the colony and start the clock. Everything from the Ember to the founding band,
+## shared by the picked and unpicked paths so the two cannot drift apart.
+func _found_colony(seed_value: int) -> void:
 	Colony.reset()
 	Divine.reset()
 	Threat.reset()
 	# Monsters share the Y-sorted container with villagers and buildings so they
 	# draw in the right order against everything they are attacking.
 	Threat.set_spawn_parent(entities)
+	# Migrants arrive on their own schedule, so Colony needs to be able to create people
+	# without asking the scene.
+	Colony.set_spawn_parent(entities)
 
 	# The Ember goes down before anything else — half the sim asks where it is.
 	Divine.place_ember(World.keep_cell)
@@ -132,12 +217,13 @@ func _spawn_starting_villagers() -> void:
 	var keep := grid.coord(World.keep_cell)
 	var placed := 0
 	var radius := 1
+	var want := starting_villagers()
 	# Spiral outward from the keep rather than stacking everyone on one tile, so
 	# the founding band reads as a group of people instead of a single sprite.
-	while placed < STARTING_VILLAGERS and radius < 12:
+	while placed < want and radius < 12:
 		for dy in range(-radius, radius + 1):
 			for dx in range(-radius, radius + 1):
-				if placed >= STARTING_VILLAGERS:
+				if placed >= want:
 					break
 				if absi(dx) != radius and absi(dy) != radius:
 					continue
@@ -146,15 +232,9 @@ func _spawn_starting_villagers() -> void:
 				var cell := grid.index(keep.x + dx, keep.y + dy)
 				if not World.is_walkable(cell):
 					continue
-				_spawn_villager(cell)
+				Colony.spawn_villager(cell)
 				placed += 1
 		radius += 1
-
-
-func _spawn_villager(cell: int) -> void:
-	var v: Villager = VILLAGER_SCENE.instantiate()
-	v.position = World.grid.to_world_index(cell)
-	entities.add_child(v)
 
 
 func _process(_delta: float) -> void:
@@ -192,9 +272,16 @@ func _on_villager_died(_v: Node, _cause: StringName) -> void:
 	call_deferred("_check_defeat")
 
 
+## Losing the Village Center ends the run, whatever tier it had reached.
+##
+## Tested on `center_tier` rather than on `id == &"hearth"`, because upgrading is done IN PLACE and
+## changes the definition: a colony that had raised its Hearth into a Great Hall would have had the
+## defeat condition silently stop applying to the only building that matters. Exactly the failure
+## BuildingDef's header warns about — the property needed was missing, not the branch.
 func _on_building_destroyed(b: Node) -> void:
-	if b.def.id == &"hearth":
-		call_deferred("_end_run", false, "The Hearth is broken. The light goes out.")
+	var def: BuildingDef = b.def
+	if def.center_tier > 0:
+		call_deferred("_end_run", false, tr(&"NOTICE_HEARTH_BROKEN"))
 	else:
 		call_deferred("_check_defeat")
 
@@ -203,15 +290,19 @@ func _check_defeat() -> void:
 	if _ended:
 		return
 	if Colony.population() <= 0:
-		_end_run(false, "The last of them has fallen.")
+		_end_run(false, tr(&"NOTICE_LAST_FALLEN"))
 
+
+## Days a run must reach before ascending counts toward the difficulty ratchet. Low enough that a
+## competent run clears it easily, high enough that it cannot be farmed on day one.
+const ASCENSION_MIN_DAY := 5
 
 ## Voluntarily leave with what you have earned. "Ascend" exists so a good run can be
 ## banked rather than played until it collapses — losing should be a payout, and so
 ## should knowing when to stop.
 func ascend() -> void:
 	if not _ended:
-		_end_run(true, "You carry the Ember onward.")
+		_end_run(true, tr(&"NOTICE_ASCEND"))
 
 
 func _end_run(ascended: bool, message: String) -> void:
@@ -229,7 +320,24 @@ func _end_run(ascended: bool, message: String) -> void:
 	if ascended:
 		# Leaving on your own terms is worth more than being driven out.
 		shards = int(shards * 1.25)
+	# Harder tiers pay proportionally more. Without this the hard tiers are strictly
+	# worse choices and nobody plays the content.
+	shards = int(shards * Difficulties.shard_mult())
 	Meta.award(shards, Sim.day)
+
+	# Ascension: the meta layer's difficulty ratchet, and until now a number `threat_dial()` read
+	# and NOTHING ever wrote — so baseline difficulty could only ever climb 0.03 per unlock and
+	# topped out at 1.03 forever.
+	#
+	# Counted for a run BANKED on the player's own terms and taken far enough to mean something.
+	# Not for dying, because losing is already a payout and should not also be progress; and not for
+	# a day-2 exit, or the optimal play is to ascend immediately, repeatedly, and inflate the dial
+	# without ever having played a run.
+	#
+	# Phase 4 replaces this with closing the ring around the Heart. Voluntarily walking away from a
+	# world you have made safe is the closest thing this version has to completing one.
+	if ascended and Sim.day >= ASCENSION_MIN_DAY:
+		Meta.record_ascension()
 	RunSave.clear()
 
 	Events.run_ended.emit(ascended, shards)
@@ -246,7 +354,13 @@ func _sync_ember() -> void:
 
 # --- Debug -----------------------------------------------------------------------------
 
+## Debug-only shortcuts, and they must stay that way: `debug_reseed` is bound to R and
+## throws the current run away without confirmation. In a shipped build that is one
+## stray keypress between a player and three hours of progress, so the whole block is
+## compiled out of release. Player-facing speed control lives on the HUD instead.
 func _unhandled_input(event: InputEvent) -> void:
+	if not OS.is_debug_build():
+		return
 	if event.is_action_pressed(&"debug_reseed"):
 		start_run(randi())
 		get_viewport().set_input_as_handled()

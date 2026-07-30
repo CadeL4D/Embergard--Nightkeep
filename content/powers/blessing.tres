@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_power_def"]
+
+[resource]
+script = ExtResource("1_power_def")
+id = &"blessing"
+display_name = "POWER_BLESSING"
+description = "POWER_BLESSING_DESC"
+kind = 3
+faith_cost = 20.0
+cooldown = 25.0
+radius = 6
+amount = 0.0
+duration = 0.0
+mood_boost = 22.0
+required_temple_tier = 1
+burden = 0.12
+color = Color(0.86, 0.84, 0.6, 1)
+order = 4
+unlock_cost = 60

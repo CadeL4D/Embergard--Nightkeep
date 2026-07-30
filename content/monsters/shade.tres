@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/shade.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"shade"
+display_name = "MONSTER_SHADE"
+sprite = ExtResource("2_tex")
+max_health = 28.0
+move_speed = 22.0
+damage = 8.0
+attack_range = 1.4
+attack_cooldown = 1.2
+structure_damage_scale = 0.2
+faith_on_death = 3.2
+threat_cost = 3.0
+min_night = 6
+weight = 0.7
+burn_per_second = 0.0
+burn_threshold = 255
+tunnels = false

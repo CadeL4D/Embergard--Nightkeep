@@ -15,8 +15,38 @@ extends RefCounted
 ##   4. place nests in a ring, far enough out that day one is survivable
 ##   5. clear a safe radius around the keep
 
-const KEEP_CLEAR_RADIUS := 7        ## tiles around the keep guaranteed flat and empty
-const NEST_MIN_DIST := 34           ## nests never spawn closer than this to the keep
+const KEEP_CLEAR_RADIUS := 7        ## tiles around the keep guaranteed empty of features
+## Tiles around the keep guaranteed to be dry, buildable land.
+##
+## Smaller than KEEP_CLEAR_RADIUS on purpose. Flattening the full seven tiles converted
+## every water cell in range to dirt, so a player who deliberately chose a lakeside site
+## had the lake filled in underneath them — and once villagers need to drink, that turns
+## the most attractive spot on the map into a death sentence.
+##
+## Five rather than three because the smoke test requires an 11x11 box around the keep to
+## be almost entirely walkable ("the player spawns walled in by water and the run is
+## unwinnable"), and five is exactly the radius that keeps that promise. Water from six
+## tiles out survives, which is comfortably close enough for a shore or a well to matter.
+const KEEP_PAD_RADIUS := 5
+## Nests never spawn closer than this to the keep.
+##
+## 30 on a 112 map. Deliberately NOT the proportional equivalent of the old 34 on 128 (that would be
+## 30 too, as it happens — but for the wrong reason). What this number actually controls is the
+## horde's APPROACH TIME, which is the entire warning the player gets before a wave lands, and it is
+## bounded from both sides: below ~28 the monsters arrive too fast to answer, above the island's land
+## radius the ring falls in open water and every nest bunches onto the fallback position. See
+## World.MAP_WIDTH for the arithmetic and for the two ways a 96 map broke.
+##
+## It is also the distance that decides how soon a forward Watchtower can reach a nest, which is the
+## only way clearing one is achievable before Consecrate exists.
+const NEST_MIN_DIST := 30
+
+## How much further out than the minimum a nest may be jittered.
+##
+## Tightened from 18 with the smaller map: 30-48 would have put the far end of the range past the
+## coastline of a 112 grid, where `_find_nest_site_near` fails and the fallback bunches every nest
+## that missed onto the same mid-ring position.
+const NEST_DIST_SPAN := 8.0
 const NEST_COUNT := 4
 
 class Result extends RefCounted:
@@ -26,7 +56,16 @@ class Result extends RefCounted:
 	var nest_cells: PackedInt32Array = PackedInt32Array()
 
 
-static func generate(grid: Grid, seed_value: int) -> Result:
+## Generate a map.
+##
+## `keep_override` lets the caller dictate the keep site instead of having one scored.
+## The site picker uses this by generating once to show the player the land, then
+## regenerating with their chosen cell — everything downstream of the keep (the flatten
+## pad, the nest ring, the cleared start area) has to be rebuilt around it, and running
+## generation twice is far simpler and less fragile than trying to unpick and redo those
+## three passes in place. It stays perfectly deterministic because the result is a pure
+## function of (seed, keep).
+static func generate(grid: Grid, seed_value: int, keep_override: int = -1) -> Result:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 
@@ -37,7 +76,11 @@ static func generate(grid: Grid, seed_value: int) -> Result:
 	res.feature.resize(grid.cell_count)
 
 	_fill_terrain(grid, res, seed_value)
-	res.keep_cell = _choose_keep(grid, res, rng)
+	# Score a site even when one was handed to us, so the rng advances identically either
+	# way. Skipping the call would give the same seed two different feature scatters
+	# depending on whether the player picked, and the save format assumes it cannot.
+	var scored := _choose_keep(grid, res, rng)
+	res.keep_cell = keep_override if grid.is_valid_index(keep_override) else scored
 	_flatten_keep(grid, res, res.keep_cell)
 	_scatter_features(grid, res, seed_value, rng)
 	res.nest_cells = _place_nests(grid, res, rng)
@@ -128,10 +171,15 @@ static func _score_keep_site(grid: Grid, res: Result, x: int, y: int) -> int:
 	return score
 
 
+## Guarantee dry ground immediately under the keep, and no further.
+##
+## Only KEEP_PAD_RADIUS, not KEEP_CLEAR_RADIUS: the promise this has to keep is "the
+## Hearth can be placed here", not "there is no water anywhere nearby". Water in view
+## of the colony is a feature, not a defect.
 static func _flatten_keep(grid: Grid, res: Result, keep: int) -> void:
 	var c := grid.coord(keep)
-	for dy in range(-KEEP_CLEAR_RADIUS, KEEP_CLEAR_RADIUS + 1):
-		for dx in range(-KEEP_CLEAR_RADIUS, KEEP_CLEAR_RADIUS + 1):
+	for dy in range(-KEEP_PAD_RADIUS, KEEP_PAD_RADIUS + 1):
+		for dx in range(-KEEP_PAD_RADIUS, KEEP_PAD_RADIUS + 1):
 			var nx := c.x + dx
 			var ny := c.y + dy
 			if not grid.is_valid(nx, ny):
@@ -160,7 +208,10 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: Ran
 			Terrain.Type.GRASS:
 				if n > 0.58 and rng.randf() < 0.55:
 					res.feature[i] = Terrain.Feature.TREE
-				elif rng.randf() < 0.012:
+				# Raised from 0.012. Berries are the only food on the map before a farm
+				# exists, and at just over one percent of grass tiles the opening of every
+				# run was the same scramble regardless of where the player settled.
+				elif rng.randf() < 0.035:
 					res.feature[i] = Terrain.Feature.BERRIES
 			Terrain.Type.ROCK:
 				if n > 0.5 and rng.randf() < 0.4:
@@ -189,7 +240,7 @@ static func _place_nests(grid: Grid, res: Result, rng: RandomNumberGenerator) ->
 
 		# Try the ideal ring position first, jittering the distance.
 		for _attempt in 24:
-			var dist := rng.randf_range(NEST_MIN_DIST, NEST_MIN_DIST + 18.0)
+			var dist := rng.randf_range(NEST_MIN_DIST, NEST_MIN_DIST + NEST_DIST_SPAN)
 			var x := keep.x + int(cos(base_angle) * dist)
 			var y := keep.y + int(sin(base_angle) * dist)
 			if not grid.is_valid(x, y):
@@ -204,7 +255,7 @@ static func _place_nests(grid: Grid, res: Result, rng: RandomNumberGenerator) ->
 		# which quietly halves the Blight's spread rate and leaves one side of the
 		# map with nothing to push back against.
 		if cell == -1:
-			var mid := NEST_MIN_DIST + 9.0
+			var mid := NEST_MIN_DIST + NEST_DIST_SPAN * 0.5
 			var tx := keep.x + int(cos(base_angle) * mid)
 			var ty := keep.y + int(sin(base_angle) * mid)
 			cell = _find_nest_site_near(grid, res, tx, ty, keep)
@@ -247,6 +298,11 @@ static func _find_nest_site_near(grid: Grid, res: Result, tx: int, ty: int, keep
 ## The player must be able to place their first buildings without fighting the map.
 ## Clear features from the immediate keep area, but leave a couple of trees just
 ## outside it so woodcutting has a target on day one.
+##
+## BERRIES are spared. They are the only food on the map before a farm exists, they do
+## not block placement or movement, and they were previously deleted wholesale here —
+## which quietly stripped the starting area of the one thing that makes day one
+## survivable and made every run open with the same scramble.
 static func _clear_around_keep(grid: Grid, res: Result, keep: int) -> void:
 	var c := grid.coord(keep)
 	for dy in range(-KEEP_CLEAR_RADIUS, KEEP_CLEAR_RADIUS + 1):
@@ -255,4 +311,7 @@ static func _clear_around_keep(grid: Grid, res: Result, keep: int) -> void:
 				continue
 			if dx * dx + dy * dy > KEEP_CLEAR_RADIUS * KEEP_CLEAR_RADIUS:
 				continue
-			res.feature[grid.index(c.x + dx, c.y + dy)] = Terrain.Feature.NONE
+			var i := grid.index(c.x + dx, c.y + dy)
+			if res.feature[i] == Terrain.Feature.BERRIES:
+				continue
+			res.feature[i] = Terrain.Feature.NONE

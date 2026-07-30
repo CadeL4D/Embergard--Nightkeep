@@ -25,6 +25,13 @@ var _path_cursor: int = 0
 var _step_target: Vector2 = Vector2.ZERO
 var _has_step: bool = false
 
+## Speed multiplier for the tile currently being crossed — 1.0 on bare ground, higher on a road.
+##
+## Sampled once per tile in _advance_path rather than per frame in _process. Pathing already
+## prefers a road because it lowers move_cost, but without this the road only changed which way
+## villagers WENT and not how long they took, which reads as the feature having done nothing.
+var _step_speed: float = 1.0
+
 ## Facing, kept as a unit vector for sprite flipping and attack direction.
 var facing: Vector2 = Vector2.DOWN
 
@@ -45,7 +52,7 @@ func _process(delta: float) -> void:
 		return
 	var to_target := _step_target - position
 	var dist := to_target.length()
-	var step := move_speed * delta * Sim.time_scale
+	var step := move_speed * _step_speed * delta * Sim.speed_scale()
 	if dist <= step:
 		position = _step_target
 		_advance_path()
@@ -61,9 +68,11 @@ func _advance_path() -> void:
 		_path = PackedInt32Array()
 		_path_cursor = 0
 		_has_step = false
+		_step_speed = 1.0
 		on_path_finished()
 		return
 	_step_target = World.grid.to_world_index(_path[_path_cursor])
+	_step_speed = _surface_speed(_path[_path_cursor])
 
 
 # --- Path control -------------------------------------------------------------------
@@ -92,13 +101,21 @@ func follow_path(path: PackedInt32Array) -> void:
 	_path_cursor = mini(start, path.size() - 1)
 
 	_step_target = World.grid.to_world_index(_path[_path_cursor])
+	_step_speed = _surface_speed(_path[_path_cursor])
 	_has_step = true
+
+
+## How much faster this agent moves over the given tile. Overridable so monsters can be denied
+## the full benefit of the player's roads — see Monster.
+func _surface_speed(cell_index: int) -> float:
+	return World.speed_at(cell_index)
 
 
 func stop() -> void:
 	_path = PackedInt32Array()
 	_path_cursor = 0
 	_has_step = false
+	_step_speed = 1.0
 
 
 func is_moving() -> bool:

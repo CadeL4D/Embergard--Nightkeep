@@ -20,6 +20,19 @@ extends Resource
 ## not, so they route around rather than chewing through.
 @export var structure_damage_scale: float = 1.0
 
+@export_group("Reward")
+## Faith granted for destroying one of these.
+##
+## The reward for fighting WELL. Before this, monsters dropped nothing and every survivor
+## burned off at dawn anyway, so a night spent slaughtering a wave and a night spent barely
+## holding on were mechanically identical — the only difference was how many villagers you
+## buried. Feeding kills into Faith makes an aggressive, well-lit, well-towered defence pay for
+## the miracles that made it possible.
+##
+## Scaled off threat_cost by convention: a Spitter costs the director twice a Shambler and is
+## worth roughly twice as much to kill.
+@export var faith_on_death: float = 1.0
+
 @export_group("Director")
 ## What one of these costs out of a night's threat budget.
 @export var threat_cost: float = 1.0
@@ -27,6 +40,17 @@ extends Resource
 @export var min_night: int = 1
 ## Relative likelihood of being picked once eligible.
 @export var weight: float = 1.0
+
+## Ignores walls entirely — comes up through the ground instead of walking round.
+##
+## Implemented as "does not read the flow field" rather than as a second, wall-free field. The
+## shared field is the reason a hundred monsters cost almost nothing, and adding a per-creature
+## cost function would either double that work or fork it. A tunneller has no use for pathfinding
+## anyway: it goes straight at the colony, which is both cheaper and exactly what it should look
+## like.
+##
+## This is the answer to a player who thinks a closed wall is a solution.
+@export var tunnels: bool = false
 
 @export_group("Light")
 ## Damage per second taken while standing in bright light. This is what makes

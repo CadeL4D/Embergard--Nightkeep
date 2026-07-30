@@ -11,13 +11,15 @@ config_version=5
 [application]
 
 config/name="Embergard: Nightkeep"
-run/main_scene="res://scenes/run/run.tscn"
+run/main_scene="res://scenes/ui/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 run/max_fps=60
 config/icon="res://icon.svg"
 
 [autoload]
 
+; Locale first: everything below may want to translate a string while starting up.
+Locale="*res://scripts/core/locale.gd"
 Events="*res://scripts/core/events.gd"
 Sim="*res://scripts/core/sim.gd"
 World="*res://scripts/world/world.gd"
@@ -25,12 +27,21 @@ Colony="*res://scripts/colony/colony.gd"
 Divine="*res://scripts/divine/divine.gd"
 Threat="*res://scripts/threat/threat.gd"
 Meta="*res://scripts/meta/meta.gd"
+Audio="*res://scripts/audio/audio.gd"
+Ui="*res://scripts/ui/ui.gd"
 
 [display]
 
-window/size/viewport_width=640
+; 20:9 — a modern phone held sideways. 16:9 (640x360) was both wrong for the target device and
+; too narrow for the HUD: the resource readout and the phase clock together needed most of the
+; width, so the top of the screen was permanently crowded. The extra 160 logical pixels go
+; straight into breathing room.
+;
+; stretch/aspect is "expand", so phones that are not exactly 20:9 show slightly more or less
+; world rather than letterboxing.
+window/size/viewport_width=800
 window/size/viewport_height=360
-window/size/window_width_override=1280
+window/size/window_width_override=1600
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
@@ -62,14 +73,15 @@ debug_speed_down={
 
 pointing/emulate_touch_from_mouse=true
 
+[internationalization]
+
+; Translations are NOT registered here. The CSV is parsed at runtime by the Locale autoload and
+; handed to TranslationServer directly — see scripts/core/locale.gd for why.
+locale/test=""
+
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
-
-; iOS GPUs cannot decode the desktop BC/S3TC texture formats, so Godot refuses to
-; export to iOS at all unless textures are imported as ETC2/ASTC. Without this the
-; export fails with an EMPTY configuration error on the command line — the actual
-; explanation only ever appears in the editor's export dialog.
 textures/vram_compression/import_etc2_astc=true

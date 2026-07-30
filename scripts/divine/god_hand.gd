@@ -35,6 +35,15 @@ signal armed_changed(power: PowerDef)
 
 var selected: Villager = null
 
+## The building the player has tapped, if any. Mutually exclusive with `selected` — one selection,
+## one card, so the bottom of a phone screen is never fighting itself.
+##
+## Buildings are selectable because there is nowhere else upgrading and demolishing could live.
+## They are also the safe thing to add: unlike a villager they do not move, so a tap that lands on
+## one was unambiguously meant for it. Empty ground still sends the Ember, which is the verb the
+## player uses constantly and must not be taken away.
+var selected_building: Building = null
+
 ## The power waiting for a target, if any. While armed, a tap casts instead of
 ## doing anything else — the arm-then-tap flow exists because casting on the first
 ## tap would make every misplaced thumb an expensive mistake.
@@ -183,11 +192,20 @@ func _handle_tap(world_pos: Vector2) -> bool:
 	if cell == -1:
 		return false
 
+	# A move order outranks selecting a building: with someone selected, the next tap is a
+	# destination, and "walk over there" must not turn into "inspect that hut" because the
+	# destination happened to have a stockpile on it.
 	if selected != null and is_instance_valid(selected):
 		selected.command_to(cell)
 		_select(null)
 		return true
 
+	var structure := _pick_building(cell)
+	if structure != null:
+		_select_building(structure)
+		return true
+
+	_select_building(null)
 	Divine.tween_ember_to(cell)
 	return true
 
@@ -209,12 +227,40 @@ func _pick_villager(world_pos: Vector2) -> Villager:
 	return best
 
 
+## The building standing on a cell, via the claim layer.
+##
+## Asks `claimed` rather than sweeping Colony.buildings and testing footprints: that layer is
+## already an exact cell → building-instance map maintained from the moment a blueprint goes down,
+## which is precisely the question being asked. No touch padding either — a building is at least a
+## whole tile and it does not move, so tile precision is honest here in a way it is not for a 12px
+## villager.
+func _pick_building(cell: int) -> Building:
+	if not World.grid.is_valid_index(cell):
+		return null
+	var id := World.claimed[cell]
+	if id == 0:
+		return null
+	var node := instance_from_id(id)
+	return node if node is Building else null
+
+
 func _select(v: Villager) -> void:
 	if selected != null and is_instance_valid(selected):
 		selected.selected = false
 	selected = v
 	if v != null:
 		v.selected = true
+		_select_building(null)
+
+
+func _select_building(b: Building) -> void:
+	selected_building = b
+
+
+## Called by the HUD after a demolition or an upgrade, so the card cannot keep offering actions on
+## a building that is now a blueprint or gone.
+func clear_building_selection() -> void:
+	selected_building = null
 
 
 # --- Helpers ----------------------------------------------------------------------------

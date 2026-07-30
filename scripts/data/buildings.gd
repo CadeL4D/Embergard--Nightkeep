@@ -21,17 +21,84 @@ static func all() -> Array[BuildingDef]:
 	return _ordered
 
 
-## Buildings the player may place right now. The Hearth is excluded — it is placed
-## once by the run itself and cannot be built again — as is anything still locked
-## behind Relic Shards.
-static func placeable() -> Array[BuildingDef]:
+## Buildings that can EVER appear in the build menu, before in-run gates.
+##
+## Two things are filtered out, both derived from properties rather than from an id:
+##   * the founding Village Center — a centre with no `upgrades_from` is the one the run itself
+##     places, and it cannot be built a second time
+##   * upgrade targets — those are reached by tapping the building they replace, so listing them
+##     as separate cards would offer the player a Great Hall they cannot place anywhere
+## and anything still behind Relic Shards.
+static func in_menu() -> Array[BuildingDef]:
 	var out: Array[BuildingDef] = []
 	for def: BuildingDef in all():
-		if def.id == &"hearth":
+		if def.center_tier > 0 and def.upgrades_from.is_empty():
+			continue
+		if not def.upgrades_from.is_empty():
 			continue
 		if def.unlock_cost > 0 and not Meta.is_unlocked(def.id):
 			continue
 		out.append(def)
+	return out
+
+
+## Buildings the player may place right now — the menu list, minus anything the colony has not
+## yet earned. Kept separate from in_menu() because a locked-by-tier card is still SHOWN, just
+## disabled: a player has to be able to see that a Smelter exists and what it needs.
+static func placeable() -> Array[BuildingDef]:
+	var out: Array[BuildingDef] = []
+	for def: BuildingDef in in_menu():
+		if not unlocked_in_run(def):
+			continue
+		out.append(def)
+	return out
+
+
+## Whether the colony has met this building's in-run gates: Village Center tier and headcount.
+static func unlocked_in_run(def: BuildingDef) -> bool:
+	if def == null:
+		return false
+	return def.tier <= Colony.center_tier() and def.min_population <= Colony.population()
+
+
+## The definition that upgrades in place from `id`, or null. At most one per building by
+## convention — a branching upgrade tree would need the player to choose, which is a whole
+## second UI for very little.
+static func upgrade_for(id: StringName) -> BuildingDef:
+	if id.is_empty():
+		return null
+	for def: BuildingDef in all():
+		if def.upgrades_from == id:
+			return def
+	return null
+
+
+## Tab names in menu order, derived from the content rather than declared.
+##
+## Ordered by the lowest `order` in each category, so the same single number that sorts cards
+## inside a tab also sorts the tabs themselves. Nothing to keep in step, and dropping in a
+## building with a new category grows the tab strip on its own.
+static func categories() -> Array[StringName]:
+	var first: Dictionary = {}
+	var out: Array[StringName] = []
+	for def: BuildingDef in in_menu():
+		var key := def.category if not def.category.is_empty() else &"logistics"
+		if not first.has(key):
+			first[key] = def.order
+			out.append(key)
+		else:
+			first[key] = mini(first[key], def.order)
+	out.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return int(first[a]) < int(first[b]))
+	return out
+
+
+static func in_category(category: StringName) -> Array[BuildingDef]:
+	var out: Array[BuildingDef] = []
+	for def: BuildingDef in in_menu():
+		var key := def.category if not def.category.is_empty() else &"logistics"
+		if key == category:
+			out.append(def)
 	return out
 
 

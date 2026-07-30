@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/gate.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"gate"
+display_name = "BUILDING_GATE"
+description = "BUILDING_GATE_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 1
+footprint = Vector2i(1, 1)
+blocks_movement = false
+blocks_monsters_only = true
+max_blight = 70
+cost = {
+&"wood": 12
+}
+build_work = 8.0
+max_hp = 110.0
+light_radius = 2
+is_stockpile = false
+influence_radius = 3
+sleep_slots = 0
+worker_slots = 0
+order = 31
+color = Color(0.68, 0.62, 0.52, 1)

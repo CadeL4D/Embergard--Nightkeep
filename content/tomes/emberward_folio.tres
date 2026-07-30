@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TomeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/tome_def.gd" id="1_tome_def"]
+
+[resource]
+script = ExtResource("1_tome_def")
+id = &"emberward_folio"
+display_name = "TOME_EMBERWARD_FOLIO"
+description = "TOME_EMBERWARD_FOLIO_DESC"
+faith_rate = 0.24
+tier_scale = 1.85
+toughness_bias = -0.15
+color = Color(1, 0.8, 0.5, 1)
+order = 4

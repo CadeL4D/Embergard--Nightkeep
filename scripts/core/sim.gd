@@ -23,11 +23,23 @@ enum Phase { DAY, DUSK, NIGHT, DAWN }
 
 ## Real seconds each phase lasts. Day is deliberately short — the pitch's failure
 ## mode is dead air, and a 4-minute day forces decisions to matter.
+##
+## Retuned to attack that failure mode directly. The old split was 240/90/180/15 = 525s, and
+## because is_dark() trips 60% of the way through dusk, work stopped at t=294 and did not resume
+## until t=525: **216 seconds of every cycle, 41% of the game, with the entire colony standing
+## in a circle**. On a night where the wave died early that was minutes of nothing.
+##
+## Now 240/60/120/45 = 465s, with 144s dark — 31%. Night is shorter and denser, and dawn is a
+## real 45-second morning for hauling and repair rather than a 15-second beat.
+##
+## The rest of that 31% is not a timing problem: it is that EVERYONE guards. The proper fix is
+## the Warrior job (warriors fight, everyone else keeps working in lit territory), which needs
+## Phase 2's job additions. This is the half that can be had from data alone.
 const PHASE_DURATION := {
 	Phase.DAY: 240.0,
-	Phase.DUSK: 90.0,
-	Phase.NIGHT: 180.0,
-	Phase.DAWN: 15.0,
+	Phase.DUSK: 60.0,
+	Phase.NIGHT: 120.0,
+	Phase.DAWN: 45.0,
 }
 
 # --- Clock state -------------------------------------------------------------------
@@ -37,7 +49,23 @@ var phase: Phase = Phase.DAY
 var phase_elapsed: float = 0.0
 var day: int = 1
 var tick: int = 0
-var time_scale: float = 1.0           ## debug only; ships locked at 1.0
+
+## Player-facing speed control.
+##
+## `paused` is a separate flag rather than time_scale == 0 because not everything that
+## moves reads time_scale: watchtowers count their reload in raw frame delta, and the
+## Ember glides on a Tween that the sim does not drive at all. A colony frozen mid-frame
+## while its towers kept shooting was the first thing this got wrong.
+##
+## Anything that animates the world should scale by `speed_scale()`, which folds both
+## values into one number, and anything that acts on its own clock should check `paused`.
+var paused: bool = false
+var time_scale: float = 1.0
+
+## The speeds the player can cycle through. Capped at 3x: past that a 10 Hz tick starts
+## resolving several ticks per frame and the catch-up clamp in _process begins dropping
+## simulation instead of accelerating it.
+const SPEEDS: Array[float] = [1.0, 2.0, 3.0]
 
 var _accum: float = 0.0
 
@@ -54,7 +82,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if not running:
+	if not running or paused:
 		return
 	var scaled := delta * time_scale
 	_advance_phase(scaled)
@@ -129,8 +157,48 @@ func seconds_remaining() -> float:
 	return maxf(PHASE_DURATION[phase] - phase_elapsed, 0.0)
 
 
+## Real seconds in one full day → dusk → night → dawn cycle.
+##
+## Summed rather than written down as a constant so retuning a phase cannot silently
+## invalidate everything that reasons in days — the food-supply gate on migration divides by
+## this, and a stale 525 would quietly mis-scale the colony's whole growth curve.
+func cycle_seconds() -> float:
+	var total := 0.0
+	for p in PHASE_DURATION:
+		total += float(PHASE_DURATION[p])
+	return total
+
+
 func is_dark() -> bool:
 	return phase == Phase.NIGHT or (phase == Phase.DUSK and phase_progress() > 0.6)
+
+
+# --- Speed control -----------------------------------------------------------------------
+
+## The single multiplier anything animating the world should use. Zero while paused.
+func speed_scale() -> float:
+	return 0.0 if paused else time_scale
+
+
+func set_paused(value: bool) -> void:
+	if paused == value:
+		return
+	paused = value
+	Events.speed_changed.emit(speed_scale(), paused)
+
+
+func toggle_pause() -> void:
+	set_paused(not paused)
+
+
+## Step to the next speed, wrapping. Unpauses — a player reaching for the speed button
+## while paused means "get going", and making them press two buttons for that is friction
+## for no reason.
+func cycle_speed() -> void:
+	var i := SPEEDS.find(time_scale)
+	time_scale = SPEEDS[(i + 1) % SPEEDS.size()] if i != -1 else SPEEDS[0]
+	paused = false
+	Events.speed_changed.emit(speed_scale(), paused)
 
 
 # --- Registry ----------------------------------------------------------------------
@@ -156,7 +224,12 @@ func start_run() -> void:
 	phase = Phase.DAY
 	phase_elapsed = 0.0
 	_accum = 0.0
+	# Speed is per-run state, not a preference. A player who paused to read the summary
+	# card would otherwise start their next run frozen and wonder what broke.
+	paused = false
+	time_scale = 1.0
 	running = true
+	Events.speed_changed.emit(speed_scale(), paused)
 
 
 ## Halt the clock and drop the registry. Deliberately does NOT free the agent nodes:

@@ -75,6 +75,14 @@ const FEATURE_YIELD := {
 	Feature.BERRIES: {&"food": 8},
 }
 
+## Hit points of a Blight nest.
+##
+## Sized as a deliberate project rather than a fight: about seven casts of Wrath, or
+## four of Ward, or roughly twenty-five seconds of sustained fire from a watchtower
+## built forward of the colony. Killing one is meant to be a campaign the player
+## commits Faith or territory to, not something that happens in passing.
+const NEST_HP := 260.0
+
 ## Villager-seconds required to fully harvest a feature.
 const FEATURE_WORK := {
 	Feature.TREE: 6.0,

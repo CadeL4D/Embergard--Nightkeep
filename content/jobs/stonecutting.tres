@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"stonecutting"
+display_name = "JOB_STONECUTTING"
+target_features = Array[int]([])
+workplace = &"stonecutter"
+cycle_yield = {
+&"cut_stone": 1
+}
+cycle_cost = {
+&"stone": 3
+}
+cycle_work = 13.0
+work_rate = 1.0
+carry_capacity = 6
+priority = 3
+default_quota = 0
+color = Color(0.62, 0.66, 0.72, 1)

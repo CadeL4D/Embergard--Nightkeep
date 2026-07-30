@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"sawing"
+display_name = "JOB_SAWING"
+target_features = Array[int]([])
+workplace = &"sawmill"
+cycle_yield = {
+&"boards": 1
+}
+cycle_cost = {
+&"wood": 3
+}
+cycle_work = 10.0
+work_rate = 1.0
+carry_capacity = 6
+priority = 3
+default_quota = 0
+color = Color(0.72, 0.58, 0.38, 1)

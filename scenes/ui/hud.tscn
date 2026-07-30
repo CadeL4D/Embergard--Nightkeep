@@ -1,6 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://scripts/ui/notice_log.gd" id="2_notice"]
+[ext_resource type="Script" path="res://scripts/ui/breach_markers.gd" id="3_breach"]
+[ext_resource type="Script" path="res://scripts/ui/breakdown_panel.gd" id="4_breakdown"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar"]
 content_margin_left = 10.0
@@ -28,6 +31,13 @@ corner_radius_bottom_left = 5
 layer = 50
 script = ExtResource("1_hud")
 
+[node name="BreachMarkers" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("3_breach")
+
 [node name="SafeArea" type="MarginContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
@@ -47,27 +57,97 @@ layout_mode = 2
 size_flags_horizontal = 8
 mouse_filter = 2
 
-[node name="ResourceBar" type="PanelContainer" parent="SafeArea/Layout/TopRow"]
+[node name="ResourceColumn" type="VBoxContainer" parent="SafeArea/Layout/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 8
+theme_override_constants/separation = 4
+
+[node name="ResourceBar" type="PanelContainer" parent="SafeArea/Layout/TopRow/ResourceColumn"]
 layout_mode = 2
 size_flags_horizontal = 8
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
-[node name="Resources" type="Label" parent="SafeArea/Layout/TopRow/ResourceBar"]
+[node name="Resources" type="Label" parent="SafeArea/Layout/TopRow/ResourceColumn/ResourceBar"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_colors/font_color = Color(0.898039, 0.882353, 0.788235, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 9
 text = "wood 0    stone 0    food 0"
+
+[node name="Breakdown" type="PanelContainer" parent="SafeArea/Layout/TopRow/ResourceColumn"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 8
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+script = ExtResource("4_breakdown")
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/TopRow/ResourceColumn/Breakdown"]
+layout_mode = 2
+theme_override_constants/separation = 1
 
 [node name="PhaseBar" type="PanelContainer" parent="SafeArea/Layout"]
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
-[node name="Phase" type="Label" parent="SafeArea/Layout/PhaseBar"]
+[node name="Row" type="HBoxContainer" parent="SafeArea/Layout/PhaseBar"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 13
-text = "DAY"
+theme_override_constants/separation = 8
+
+[node name="Phase" type="Label" parent="SafeArea/Layout/PhaseBar/Row"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "PHASE_DAY"
 horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PauseButton" type="Button" parent="SafeArea/Layout/PhaseBar/Row"]
+custom_minimum_size = Vector2(42, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+toggle_mode = true
+text = "UI_PAUSE"
+
+[node name="SpeedButton" type="Button" parent="SafeArea/Layout/PhaseBar/Row"]
+custom_minimum_size = Vector2(30, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "1x"
+
+[node name="MigrantPrompt" type="PanelContainer" parent="SafeArea/Layout"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Row" type="HBoxContainer" parent="SafeArea/Layout/MigrantPrompt"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Ask" type="Label" parent="SafeArea/Layout/MigrantPrompt/Row"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "MIGRANTS_ASK"
+vertical_alignment = 1
+
+[node name="AcceptButton" type="Button" parent="SafeArea/Layout/MigrantPrompt/Row"]
+custom_minimum_size = Vector2(58, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "MIGRANTS_LET_IN"
+
+[node name="RefuseButton" type="Button" parent="SafeArea/Layout/MigrantPrompt/Row"]
+custom_minimum_size = Vector2(64, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "MIGRANTS_TURN_AWAY"
+
+[node name="NoticeLog" type="VBoxContainer" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
+theme_override_constants/separation = 2
+script = ExtResource("2_notice")
 
 [node name="Spacer" type="Control" parent="SafeArea/Layout"]
 layout_mode = 2
@@ -78,6 +158,32 @@ mouse_filter = 2
 layout_mode = 2
 size_flags_horizontal = 0
 theme_override_constants/separation = 4
+
+[node name="SelectionCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
+visible = false
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/SelectionCard"]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Who" type="Label" parent="SafeArea/Layout/BottomRow/SelectionCard/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "villager"
+
+[node name="Doing" type="Label" parent="SafeArea/Layout/BottomRow/SelectionCard/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "idle"
+
+[node name="Needs" type="Label" parent="SafeArea/Layout/BottomRow/SelectionCard/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "food 80  rest 80  mood 70"
 
 [node name="JobPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
@@ -93,8 +199,47 @@ theme_override_constants/separation = 2
 [node name="Hint" type="Label" parent="SafeArea/Layout/BottomRow/JobPanel/Rows"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
-theme_override_font_sizes/font_size = 10
-text = "assign survivors — unassigned drift to the lowest job"
+theme_override_font_sizes/font_size = 8
+text = "UI_JOB_BOARD_HINT"
+
+[node name="BuildingCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
+visible = false
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/BuildingCard"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="What" type="Label" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "building"
+
+[node name="Detail" type="Label" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
+theme_override_font_sizes/font_size = 8
+text = ""
+
+[node name="Actions" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="UpgradeButton" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions"]
+custom_minimum_size = Vector2(78, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "UI_UPGRADE"
+
+[node name="DemolishButton" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions"]
+custom_minimum_size = Vector2(78, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.960784, 0.6, 0.552941, 1)
+theme_override_font_sizes/font_size = 9
+text = "UI_DEMOLISH"
 
 [node name="BuildPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
@@ -102,7 +247,15 @@ layout_mode = 2
 size_flags_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel"]
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Tabs" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
@@ -117,24 +270,24 @@ layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="CancelButton" type="Button" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
-custom_minimum_size = Vector2(76, 44)
+custom_minimum_size = Vector2(58, 28)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.960784, 0.6, 0.552941, 1)
-theme_override_font_sizes/font_size = 13
-text = "Cancel"
+theme_override_font_sizes/font_size = 9
+text = "UI_CANCEL"
 
 [node name="Status" type="Label" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
-custom_minimum_size = Vector2(150, 0)
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-theme_override_font_sizes/font_size = 11
-text = "drag to move · tap to build"
+theme_override_font_sizes/font_size = 9
+text = "UI_PLACEMENT_HINT"
 vertical_alignment = 1
 
 [node name="ConfirmButton" type="Button" parent="SafeArea/Layout/BottomRow/PlacementBar/Row"]
-custom_minimum_size = Vector2(96, 44)
+custom_minimum_size = Vector2(70, 28)
 layout_mode = 2
-theme_override_font_sizes/font_size = 13
-text = "Build"
+theme_override_font_sizes/font_size = 9
+text = "UI_BUILD"
 
 [node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout/BottomRow"]
 layout_mode = 2
@@ -146,22 +299,22 @@ layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="JobsButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
-custom_minimum_size = Vector2(80, 26)
+custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 toggle_mode = true
-text = "Jobs"
+text = "UI_JOBS"
 
 [node name="BuildButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
-custom_minimum_size = Vector2(80, 26)
+custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 toggle_mode = true
-text = "Build"
+text = "UI_BUILD"
 
 [node name="AscendButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
-custom_minimum_size = Vector2(80, 26)
+custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
-theme_override_font_sizes/font_size = 12
-text = "Ascend"
+theme_override_font_sizes/font_size = 10
+text = "UI_ASCEND"

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TomeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/tome_def.gd" id="1_tome_def"]
+
+[resource]
+script = ExtResource("1_tome_def")
+id = &"vigil_psalter"
+display_name = "TOME_VIGIL_PSALTER"
+description = "TOME_VIGIL_PSALTER_DESC"
+faith_rate = 0.12
+tier_scale = 1.7
+toughness_bias = 0.75
+color = Color(0.7, 0.8, 0.86, 1)
+order = 1

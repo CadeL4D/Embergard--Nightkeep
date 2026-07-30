@@ -12,7 +12,7 @@ extends Agent
 ## doubling the state count.
 
 enum State { IDLE, SEEKING, WORKING, HAULING, BUILDING, FETCHING, DELIVERING,
-	EATING, SLEEPING, RESTING, GUARDING, FLEEING, COMMANDED }
+	EATING, SLEEPING, RESTING, GUARDING, FLEEING, COMMANDED, DRINKING }
 
 ## Combat. Villagers are not soldiers — one alone loses to a Shambler. They win by
 ## standing together under a tower and inside the light, which is exactly the
@@ -36,19 +36,84 @@ const NEED_MAX := 100.0
 ## takes roughly two days to empty out.
 const HUNGER_RATE := 0.22
 const REST_RATE := 0.28
-const MOOD_DRIFT := 2.5
+## Mood points per second toward the target.
+##
+## Was 2.5, which crossed the entire 0-100 range in forty seconds. Because the target is a step
+## function — it jumps the instant a villager crosses the hunger or thirst threshold — mood
+## chased every one of those steps and the colony average visibly jittered. Morale is supposed
+## to be the slowest-moving number in the game: something you steer over days, not seconds.
+##
+## At 0.5 a full swing takes most of a day cycle, so the average reads as a trend.
+const MOOD_DRIFT := 0.5
+
+## Mood falls at this fraction of the rise rate.
+##
+## Deliberately asymmetric. A colony that is being looked after should hold its morale through
+## the ordinary rhythm of people getting hungry and going to eat; only a sustained failure should
+## grind it down. Symmetric drift meant every routine trip to the water dragged the average with
+## it, so the number fell faster than the colony was actually deteriorating.
+const MOOD_FALL_SCALE := 0.5
+
+# --- Mood contributions -------------------------------------------------------------------
+# Baseline is CONTENT, not mediocre: a fed, watered, housed villager with nothing wrong should
+# sit comfortably above the middle, so a dip means something. Penalties for transient states
+# (walking to water, walking to a meal) are small — those are the system working, not failing.
+# The heavy penalties are for structural failures the player has to fix: no roof, standing in
+# Blight.
+const MOOD_BASE := 62.0
+const MOOD_HUNGRY := -20.0
+const MOOD_THIRSTY := -12.0
+const MOOD_TIRED := -12.0
+const MOOD_ROUGH := -18.0
+const MOOD_EMBER := 25.0
+const MOOD_BLIGHTED := -18.0
+
+## Thirst runs faster than hunger and is answered by WALKING somewhere rather than by
+## spending a stored resource. That asymmetry is the point: food is a logistics problem you
+## solve with farms and stockpiles, water is a geography problem you solve by choosing where
+## to settle and by sinking a well inside your walls.
+const THIRST_RATE := 0.30
 
 const HUNGER_URGENT := 35.0
 const REST_URGENT := 20.0
+const THIRST_URGENT := 40.0
+## Thirst bad enough to break guard duty for. Set above zero so the run is made before the
+## damage starts, not after.
+const THIRST_DESPERATE := 12.0
+
+## Drinking is quick and free — the cost was the walk.
+const DRINK_RESTORE := 85.0
+
+## Health lost per second with an empty canteen. Harsher than starving: you can last days
+## without food and not without water, and it makes losing water access an emergency rather
+## than a slow decline.
+const DEHYDRATE_DAMAGE := 0.6
 
 ## Units of stored food one meal costs, and how much of the need it restores.
 const MEAL_COST := 6
 const MEAL_RESTORE := 70.0
 
-## Rest recovered per second in a bed versus sleeping rough on the ground. The gap
-## is what makes huts worth their wood rather than a decoration.
-const REST_IN_BED := 16.0
-const REST_ROUGH := 4.0
+## Rest recovered per second in a bed versus sleeping rough on the ground.
+##
+## Retuned hard. At 16.0 a full night's sleep took 4.7 SECONDS, and sleeping rough took 19 —
+## so a 24-wood hut bought about fifteen seconds per villager per five minutes, a roughly 5%
+## productivity gain. Rest was not a decision and huts were very nearly decoration, whatever
+## the old comment here claimed.
+##
+## At 6.0 a bed is worth about forty seconds of work per villager per cycle, and rough sleep
+## is slow enough to actually hurt. Combined with ROUGH_REST_CAP below, huts are now the
+## colony's growth lever as well — beds gate migration (see Colony.beds_free), so this is the
+## number that decides how fast the settlement can grow at all.
+const REST_IN_BED := 6.0
+const REST_ROUGH := 1.2
+
+## Sleeping on the ground never gets a villager past this. A roof is the only way to be
+## properly rested, which is what stops a colony of six people and no huts running forever.
+const ROUGH_REST_CAP := 60.0
+
+## Mood penalty applied while sleeping rough, so the cost of no housing shows up in Faith
+## generation and migration appeal rather than only in walking speed.
+const ROUGH_MOOD_PENALTY := 18.0
 
 ## Health lost per second at zero food. At 0.35 an empty-bellied villager has most
 ## of a day left before they die, so a famine gives the player time to react — and
@@ -75,11 +140,19 @@ var job: StringName = &""
 var state: State = State.IDLE
 
 var food: float = 80.0
+var water: float = 80.0
 var rest: float = 80.0
 var mood: float = 70.0
 
 var carry_kind: StringName = &""
 var carry_amount: int = 0
+
+## Temporary divine boosts, from a Rally or anything else with a BUFF power. Held as two plain
+## multipliers and one timer rather than as a list of effects: there are two things a buff can do
+## and a general effect system would be several hundred lines paying for flexibility nothing needs.
+var boost_speed: float = 0.0
+var boost_damage: float = 0.0
+var boost_time: float = 0.0
 
 var selected: bool = false:
 	set(value):
@@ -149,6 +222,23 @@ func is_player_commanded() -> bool:
 	return state == State.COMMANDED
 
 
+## Take a divine boost. Refreshes rather than stacks — the answer to a breach is casting Rally
+## once, not learning that four overlapping casts make a villager unkillable.
+func apply_boost(speed: float, damage: float, duration: float) -> void:
+	boost_speed = maxf(boost_speed, speed)
+	boost_damage = maxf(boost_damage, damage)
+	boost_time = maxf(boost_time, duration)
+
+
+## Boosted villagers move faster over whatever they are standing on.
+##
+## Layered on top of the road multiplier rather than replacing it, via the hook Agent exposes for
+## exactly this. A rallied villager on a paved road gets both, which is the correct answer to
+## "monsters are through the gate and my warriors are on the far side of the village".
+func _surface_speed(cell_index: int) -> float:
+	return World.speed_at(cell_index) * (1.0 + boost_speed)
+
+
 # --- Decisions ----------------------------------------------------------------------
 
 func think(delta: float) -> void:
@@ -163,9 +253,18 @@ func think(delta: float) -> void:
 	if _awaiting_path:
 		return
 
-	# Needs preempt work, but never interrupt themselves. Hunger outranks tiredness:
-	# a starving villager who lies down to sleep dies in bed.
-	if state not in [State.EATING, State.SLEEPING, State.RESTING]:
+	# Needs preempt work, but never interrupt themselves. The order is thirst, hunger, rest:
+	# dehydration kills fastest, and a villager who lies down to sleep while starving or
+	# parched dies in bed.
+	if state not in [State.EATING, State.DRINKING, State.SLEEPING, State.RESTING]:
+		# Water is the one need that can be a long way from home, and walking to a shore in
+		# the dark is how a villager dies. So thirst is only allowed to pull someone off
+		# guard duty when it has become genuinely lethal — otherwise they hold the line and
+		# drink at first light. Food does not need this guard: meals come from a stockpile,
+		# which is by definition inside the colony.
+		if water <= THIRST_URGENT and (not Sim.is_dark() or water <= THIRST_DESPERATE):
+			_begin_drink()
+			return
 		if food <= HUNGER_URGENT and Colony.has_food():
 			_begin_eat()
 			return
@@ -173,10 +272,18 @@ func think(delta: float) -> void:
 			_begin_sleep()
 			return
 
-	# Nightfall IS the recall. Rather than a separate dusk-recall system that
-	# re-roles everyone, work simply stops being an option once it is dark: anyone
-	# not eating or asleep falls through to guard duty and heads for the light.
-	if Sim.is_dark():
+	# Nightfall is a recall for the people it needs to be, and no longer for everybody.
+	#
+	# The old rule sent every villager to guard duty at dusk, which meant 31% of the game was a
+	# colony standing in a circle watching. Now:
+	#
+	#   * WARRIORS always defend. That is the job.
+	#   * Everyone else keeps working IF the ground they are on is lit. Light already gates the
+	#     blight and burns monsters; this makes it gate the working day too, which turns Ember
+	#     placement into an economic decision after dark instead of a purely defensive one.
+	#   * Anyone caught in the dark falls back to the light, because a villager alone outside it
+	#     is a villager who dies.
+	if Sim.is_dark() and not _works_after_dark():
 		_tick_guard(delta)
 		return
 
@@ -200,14 +307,39 @@ func think(delta: float) -> void:
 			_tick_hauling()
 		State.EATING:
 			_tick_eating()
+		State.DRINKING:
+			_tick_drinking()
 		State.SLEEPING:
 			_tick_sleeping(delta)
 		State.RESTING:
-			rest = minf(rest + REST_ROUGH * delta, NEED_MAX)
-			if rest >= NEED_MAX * 0.85:
+			# Capped below full: a villager with no bed tops out tired, gets back up, and
+			# keeps working at a penalty rather than lying on the ground indefinitely
+			# waiting for a recovery that will never arrive.
+			rest = minf(rest + REST_ROUGH * delta, ROUGH_REST_CAP)
+			if rest >= ROUGH_REST_CAP - 0.5:
 				state = State.IDLE
 		_:
 			pass
+
+
+## Light level a villager needs under them to keep working after dark.
+##
+## Below the Ember's own strength on purpose: a torch-lit watchtower should be enough to work by,
+## not just the Ember itself, or the colony can only ever have one productive night shift.
+const NIGHT_WORK_LIGHT := 110
+
+## Whether this villager carries on working once it is dark.
+##
+## Warriors never do — they fight. Everyone else needs light where they stand, and needs a monster
+## not to be breathing down their neck: a woodcutter who keeps chopping while a Shambler closes on
+## them is not brave, they are a bug.
+func _works_after_dark() -> bool:
+	var def := Jobs.get_job(job)
+	if def != null and def.defends:
+		return false
+	if World.light_at(cell()) < NIGHT_WORK_LIGHT:
+		return false
+	return _nearest_monster(GUARD_RANGE * 3.0 * Grid.TILE_SIZE) == null
 
 
 # --- Guard duty --------------------------------------------------------------------------
@@ -232,7 +364,7 @@ func _tick_guard(delta: float) -> void:
 		facing = (enemy.position - position).normalized()
 		if _work_progress <= 0.0:
 			_work_progress = GUARD_COOLDOWN
-			enemy.take_damage(GUARD_DAMAGE, self)
+			enemy.take_damage(GUARD_DAMAGE * (1.0 + boost_damage), self)
 		return
 
 	if is_moving():
@@ -244,6 +376,39 @@ func _tick_guard(delta: float) -> void:
 	if World.grid.dist_sq(cell(), post) <= 4:
 		return
 	_request_path(post, State.GUARDING)
+
+
+## Cell of the villager currently in the most danger, for a warrior to run to.
+##
+## Measured as "a colonist with a monster near them", nearest to this warrior. Falls back to the
+## nearest monster when nobody is being menaced yet, so warriors intercept rather than waiting for
+## someone to be attacked first.
+func _nearest_threatened() -> int:
+	const DANGER := 5.0                       # tiles between a villager and a monster to count
+	var danger_sq := (DANGER * Grid.TILE_SIZE) * (DANGER * Grid.TILE_SIZE)
+
+	var best := -1
+	var best_dist := INF
+	for v in Colony.villagers:
+		if not is_instance_valid(v) or not v.alive or v == self:
+			continue
+		var near := false
+		for m in Threat.monsters:
+			if is_instance_valid(m) and m.alive \
+					and m.position.distance_squared_to(v.position) <= danger_sq:
+				near = true
+				break
+		if not near:
+			continue
+		var d := position.distance_squared_to(v.position)
+		if d < best_dist:
+			best_dist = d
+			best = v.cell()
+	if best != -1:
+		return best
+
+	var hunt := _nearest_monster(INF)
+	return World.nearest_walkable(hunt.cell()) if hunt != null else -1
 
 
 func _nearest_monster(reach: float) -> Node:
@@ -262,6 +427,18 @@ func _nearest_monster(reach: float) -> Node:
 ## Where to stand at night: under a watchtower if one exists, otherwise beside the
 ## Ember, otherwise the keep. All three are light sources, which is the point.
 func _guard_post() -> int:
+	# A warrior goes to the trouble; everyone else goes to the light.
+	#
+	# This is the difference between the two roles. Untrained villagers survive the night by
+	# huddling somewhere bright, which is what the light mechanic teaches. Warriors exist to break
+	# that rule — they walk toward whoever is being attacked, which is the only way a colony spread
+	# across several work sites can be defended at all.
+	var def := Jobs.get_job(job)
+	if def != null and def.defends:
+		var threatened := _nearest_threatened()
+		if threatened != -1:
+			return threatened
+
 	var best := -1
 	var best_dist := 0x7FFFFFFF
 	for b in Colony.buildings:
@@ -276,6 +453,34 @@ func _guard_post() -> int:
 	if Divine.ember_cell != -1:
 		return World.nearest_walkable(Divine.ember_cell)
 	return World.keep_cell
+
+
+# --- Drinking -----------------------------------------------------------------------------
+
+## Head for the nearest well or shore.
+##
+## Unlike eating, this cannot be refused for lack of stock — there is no water resource to run
+## out of. It can only fail because there is nowhere to drink, which on a normal map means the
+## player has walled themselves off from the water without sinking a well.
+func _begin_drink() -> void:
+	var source := Colony.nearest_water_source(cell())
+	if source == -1:
+		return
+	stop()
+	_release_target()
+	_target_cell = source
+	_request_path(source, State.DRINKING)
+
+
+func _tick_drinking() -> void:
+	if is_moving():
+		return
+	if _target_cell == -1 or not _within_reach(_target_cell):
+		state = State.IDLE
+		return
+	water = minf(water + DRINK_RESTORE, NEED_MAX)
+	_target_cell = -1
+	state = State.IDLE
 
 
 # --- Eating and sleeping ------------------------------------------------------------------
@@ -353,6 +558,16 @@ func _seek_work() -> void:
 	# the load is carried around forever and quietly lost when the villager dies.
 	if carry_amount > 0:
 		_begin_haul()
+		return
+
+	# Mid-teardown. Go back to the building rather than looking for fresh work, because salvage
+	# comes out one armful at a time and each trip ends here.
+	#
+	# Reached through `_site` rather than through nearest_build_site because the walk back is not a
+	# new decision — this worker already owns that job, and asking the colony for the nearest site
+	# again could hand them a different one halfway through pulling a wall down.
+	if _site != null and is_instance_valid(_site) and _site.is_demolishing():
+		_request_path(_site.work_cell(), State.BUILDING)
 		return
 
 	# Construction outranks gathering. Only one villager can claim a site, so this
@@ -614,12 +829,47 @@ func _tick_building(delta: float) -> void:
 		state = State.IDLE
 		return
 
+	if _site.is_demolishing():
+		_tick_demolish(delta)
+		return
+
 	# The Ember speeds construction just as it speeds gathering, so parking it over
 	# the builders is a real way to get a wall up before dusk.
 	if _site.add_work(delta * Divine.work_bonus(cell())):
 		_release_target()
 		_site = null
 		state = State.IDLE
+
+
+## Construction in reverse: prise the frame apart, then carry the salvage off load by load.
+##
+## Runs inside _tick_building rather than in a state of its own — the villager is standing at a
+## site applying effort and then hauling, which is what BUILDING and HAULING already mean. This
+## class's header is explicit that new behaviour should not become a new state, and demolition is
+## the case that proves the rule: it reuses add_work, _begin_haul and the haul return path whole.
+func _tick_demolish(delta: float) -> void:
+	# The Ember helps here too. Clearing a burnt-out district under the light is one of the few
+	# things worth doing with it during the day.
+	if not _site.add_work(delta * Divine.work_bonus(cell())):
+		return
+
+	# Explicitly typed, not inferred. `_site` is a plain Node, so anything it returns arrives as a
+	# Variant and the parser refuses to infer from it — and `load` would have shadowed the global
+	# load() function into the bargain.
+	var armful: Array = _site.take_salvage_load(CARRY_PER_TRIP)
+	if armful.is_empty():
+		# Frame down, nothing left to carry. Only NOW does the building actually go away, so a
+		# demolition that is abandoned partway leaves a visible half-torn ruin rather than
+		# silently vanishing.
+		_site.destroy()
+		_release_target()
+		_site = null
+		state = State.IDLE
+		return
+
+	carry_kind = armful[0]
+	carry_amount = armful[1]
+	_begin_haul()
 
 
 func _tick_workplace(def: JobDef, delta: float) -> void:
@@ -634,13 +884,38 @@ func _tick_workplace(def: JobDef, delta: float) -> void:
 		state = State.IDLE
 		return
 
+	# A processing job with nothing to process idles at its post rather than working for free.
+	# Checked before effort accrues, so a sawmill with no timber does not bank progress it has
+	# not earned and then dump a board the instant one log arrives.
+	if not Colony.can_afford(def.cycle_cost):
+		_work_progress = 0.0
+		return
+
 	# Crops grow no faster in the dark than anything else does — the Ember's aura
 	# applies here exactly as it does to felling trees.
 	_work_progress += def.work_rate * Divine.work_bonus(cell()) * delta
 	if _work_progress < def.cycle_work:
 		return
 
+	# Inputs are taken HERE, on completion. Consuming them at the start would quietly destroy
+	# materials whenever a worker was interrupted by nightfall or hunger, and reserving them
+	# would need a second reservation ledger beside the one construction already keeps.
+	if not Colony.spend(def.cycle_cost):
+		_work_progress = 0.0
+		return
+
 	_work_progress = 0.0
+
+	# A scribe's output is an object, not a stock. It is handed to the Temple rather than carried to
+	# a stockpile, so this is the skip-the-haul branch — and it is the same branch any future
+	# non-haulable output will use.
+	#
+	# The priest COUNT is read at completion rather than remembered, because it is what shifts the
+	# tier odds and the player may have staffed or emptied the Temple mid-cycle.
+	if def.scribes:
+		Divine.priest_cycle(Colony.headcount_of(job))
+		return
+
 	for kind: StringName in def.cycle_yield:
 		carry_kind = kind
 		carry_amount = mini(int(def.cycle_yield[kind]), def.carry_capacity)
@@ -682,8 +957,22 @@ func _enter_rest() -> void:
 
 
 func _decay_needs(delta: float) -> void:
-	food = maxf(food - HUNGER_RATE * delta, 0.0)
-	rest = maxf(rest - REST_RATE * delta, 0.0)
+	# Difficulty scales the decay, not the thresholds. Moving the thresholds would change
+	# WHEN a villager decides to eat relative to how full they are, which quietly rewrites
+	# the whole preemption model; scaling the rate just makes the same clock run faster.
+	# Divine boosts expire here rather than in _process: they are decisions, not animation, and
+	# think() is where every other timed decision on this class already lives.
+	if boost_time > 0.0:
+		boost_time -= delta
+		if boost_time <= 0.0:
+			boost_time = 0.0
+			boost_speed = 0.0
+			boost_damage = 0.0
+
+	var wear := Difficulties.needs_mult()
+	food = maxf(food - HUNGER_RATE * wear * delta, 0.0)
+	water = maxf(water - THIRST_RATE * wear * delta, 0.0)
+	rest = maxf(rest - REST_RATE * wear * delta, 0.0)
 
 	# Empty stomach and nothing to eat: this is the only way a villager dies of
 	# neglect, and it is what gives the food economy actual stakes rather than
@@ -692,20 +981,37 @@ func _decay_needs(delta: float) -> void:
 		take_damage(STARVE_DAMAGE * delta)
 		if not alive:
 			return
+	if water <= 0.0:
+		take_damage(DEHYDRATE_DAMAGE * delta)
+		if not alive:
+			return
 
 	# Mood drifts toward a target set by how well the villager is looked after and
 	# by whether the Ember is on them — which makes Ember placement a morale
 	# decision as well as a productivity one.
-	var target := 50.0
+	var target := MOOD_BASE
 	if food < HUNGER_URGENT:
-		target -= 30.0
+		target += MOOD_HUNGRY
+	if water < THIRST_URGENT:
+		target += MOOD_THIRSTY
 	if rest < REST_URGENT:
-		target -= 20.0
+		target += MOOD_TIRED
+	if state == State.RESTING:
+		# Sleeping in the dirt. Pushes the cost of no housing into Faith generation and
+		# migration appeal, not just into a slower walk.
+		target += MOOD_ROUGH
 	if Divine.is_within_ember(cell()):
-		target += 35.0
+		target += MOOD_EMBER
 	if World.is_blighted(cell()):
-		target -= 25.0
-	mood = move_toward(mood, clampf(target, 0.0, NEED_MAX), MOOD_DRIFT * delta)
+		target += MOOD_BLIGHTED
+	# The weight of an austere library. A tome bought with the colony's cheer partly eats its own
+	# Faith output, since mood is what generates Faith in the first place — which is the point of
+	# giving some tomes a real cost instead of pure upside.
+	target -= Divine.tome_mood_penalty()
+
+	target = clampf(target, 0.0, NEED_MAX)
+	var rate := MOOD_DRIFT if target > mood else MOOD_DRIFT * MOOD_FALL_SCALE
+	mood = move_toward(mood, target, rate * delta)
 
 
 func _wander() -> void:
@@ -855,8 +1161,14 @@ func _animate(delta: float) -> void:
 
 
 func describe() -> String:
-	var names := ["idle", "seeking", "working", "hauling", "building",
-		"fetching", "delivering", "eating", "sleeping", "resting",
-		"guarding", "fleeing", "commanded"]
-	var carry := " carrying %d %s" % [carry_amount, carry_kind] if carry_amount > 0 else ""
-	return "%s (%s)%s" % [names[state], job if job != &"" else "unassigned", carry]
+	var names: Array[StringName] = [&"STATE_IDLE", &"STATE_SEEKING", &"STATE_WORKING",
+		&"STATE_HAULING", &"STATE_BUILDING", &"STATE_FETCHING", &"STATE_DELIVERING",
+		&"STATE_EATING", &"STATE_SLEEPING", &"STATE_RESTING", &"STATE_GUARDING",
+		&"STATE_FLEEING", &"STATE_COMMANDED", &"STATE_DRINKING"]
+	var carry := L10n.t(&"STATE_CARRYING",
+		[carry_amount, L10n.resource(carry_kind)]) if carry_amount > 0 else ""
+	var role := tr(&"STATE_UNASSIGNED")
+	if job != &"":
+		var def := Jobs.get_job(job)
+		role = tr(def.display_name) if def != null else String(job)
+	return L10n.t(&"STATE_DESCRIBE", [tr(names[state]), role, carry])

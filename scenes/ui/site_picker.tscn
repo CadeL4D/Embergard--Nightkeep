@@ -1,0 +1,90 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/site_picker.gd" id="1_picker"]
+[ext_resource type="Script" path="res://scripts/ui/site_marker.gd" id="2_marker"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.88)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="SitePicker" type="CanvasLayer"]
+layer = 60
+script = ExtResource("1_picker")
+
+[node name="Marker" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("2_marker")
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Panel" type="PanelContainer" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="SafeArea/Layout/Panel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "SITE_TITLE"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="SafeArea/Layout/Panel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "some wood  ·  some stone  ·  little water"
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="SafeArea/Layout/Panel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "SITE_HINT"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 8
+
+[node name="SuggestButton" type="Button" parent="SafeArea/Layout/Buttons"]
+custom_minimum_size = Vector2(96, 30)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "SITE_SUGGEST"
+
+[node name="ConfirmButton" type="Button" parent="SafeArea/Layout/Buttons"]
+custom_minimum_size = Vector2(96, 30)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "SITE_SETTLE"

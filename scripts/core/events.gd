@@ -15,26 +15,47 @@ signal run_started(seed_value: int)
 signal run_ended(victory: bool, shards: int)
 signal day_advanced(day: int)
 signal phase_changed(phase: int, duration: float)   ## phase is Sim.Phase
+signal speed_changed(scale: float, paused: bool)
 
 # --- World -----------------------------------------------------------------------
 signal map_generated()
 signal light_grid_changed(dirty_rect: Rect2i)
 signal blight_changed(cell: int, blighted: bool)
 signal terrain_changed(cell: int)
+signal nest_destroyed(cell: int)
+## The Blight raised or lost one of its own buildings. The view spawns and frees sprites from these
+## rather than polling World.blight_structures, which changes a handful of times a night.
+signal blight_structure_raised(cell: int, kind: StringName)
+signal blight_structure_razed(cell: int)
 
 # --- Colony ----------------------------------------------------------------------
 signal resources_changed(kind: StringName, amount: int)
 signal villager_spawned(villager: Node)
 signal villager_died(villager: Node, cause: StringName)
+signal migrant_arrived(cell: int)
+## A band is waiting at the edge for an answer.
+signal migrants_arrived(count: int)
+## Accepted, refused, or gave up waiting.
+signal migrants_resolved()
 signal job_quotas_changed()
 signal building_placed(building: Node)
 signal building_completed(building: Node)
 signal building_destroyed(building: Node)
+## Workers have started tearing something down. Separate from building_destroyed, which fires
+## when it is actually gone — the two are a long way apart in time now that salvage is hauled.
+signal building_demolishing(building: Node)
+## The buildable sphere was recomputed. The overlay redraws from this rather than polling a
+## 16k-cell array every frame looking for a change that happens a few times a run.
+signal influence_changed()
 
 # --- Divine ----------------------------------------------------------------------
 signal faith_changed(amount: float)
 signal ember_moved(world_pos: Vector2)
 signal power_cast(power_id: StringName, world_pos: Vector2)
+## An ability was taken up or given back, so the power bar and the Faith panel have to rebuild.
+signal powers_changed()
+## A priest finished a Tome, by writing or by combining. Carries the tier so a stinger can scale.
+signal tome_written(tier: int)
 
 # --- Threat ----------------------------------------------------------------------
 signal wave_incoming(size: int, composition: Dictionary)
@@ -45,4 +66,8 @@ signal breach_detected(world_pos: Vector2)
 
 # --- Meta / UI -------------------------------------------------------------------
 signal storyteller_event(event_id: StringName, payload: Dictionary)
+## The player has entered or left building placement. The sphere-of-influence boundary is only
+## DRAWN during placement: it is a placement aid, and a permanent glowing ring around the village
+## would be six hours of decoration nobody asked for.
+signal placement_mode_changed(active: bool)
 signal notice(text: String, urgency: int)           ## 0 info, 1 warning, 2 alarm

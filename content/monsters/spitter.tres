@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_def")
 id = &"spitter"
-display_name = "Spitter"
+display_name = "MONSTER_SPITTER"
 sprite = ExtResource("2_tex")
 max_health = 18.0
 move_speed = 20.0
@@ -14,6 +14,7 @@ damage = 5.0
 attack_range = 4.5
 attack_cooldown = 2.0
 structure_damage_scale = 0.3
+faith_on_death = 2.4
 threat_cost = 2.0
 min_night = 2
 weight = 0.8

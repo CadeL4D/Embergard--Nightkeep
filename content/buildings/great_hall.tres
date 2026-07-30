@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/great_hall.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"great_hall"
+display_name = "BUILDING_GREAT_HALL"
+description = "BUILDING_GREAT_HALL_DESC"
+sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 1
+center_tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = false
+max_blight = 255
+cost = {
+&"wood": 40,
+&"boards": 12,
+&"cut_stone": 8
+}
+build_work = 48.0
+max_hp = 650.0
+upgrades_from = &"hearth"
+min_population = 10
+light_radius = 6
+is_stockpile = true
+faith_capacity = 110.0
+influence_radius = 20
+sleep_slots = 0
+worker_slots = 0
+order = 1
+color = Color(1, 0.72, 0.38, 1)

@@ -51,6 +51,19 @@ func _exit_tree() -> void:
 	Threat.unregister(self)
 
 
+## Fraction of a road's speed bonus the Blight gets to keep.
+##
+## Your roads ARE invasion highways, and that stays true — it is a genuinely good tradeoff and it
+## is what makes gate and wall placement matter. But it must favour you on net, or paving is a
+## trap and the only correct play is never to build a road at all. Half the bonus, plus the flow
+## field's own road penalty, leaves a paved approach faster for the horde than open marsh and
+## slower than it is for the people who built it.
+const ROAD_BENEFIT := 0.5
+
+func _surface_speed(cell_index: int) -> float:
+	return 1.0 + (World.speed_at(cell_index) - 1.0) * ROAD_BENEFIT
+
+
 # --- Decisions --------------------------------------------------------------------------
 
 func think(delta: float) -> void:
@@ -89,6 +102,9 @@ func _burn(delta: float) -> void:
 func _advance() -> void:
 	if is_moving():
 		return
+	if def.tunnels:
+		_tunnel()
+		return
 	var field: FlowField = Threat.threat_field
 	if field == null:
 		return
@@ -96,6 +112,50 @@ func _advance() -> void:
 	if path.is_empty():
 		return
 	follow_path(path)
+
+
+## Straight at the nearest thing worth destroying, through whatever is in the way.
+##
+## Walks a plain line of cells rather than consulting the flow field, so walls, gates and water
+## are all equally irrelevant. Cheap — no pathfinding at all — and it reads correctly: the
+## creature does not detour, it surfaces where it wants to be.
+func _tunnel() -> void:
+	var target := _tunnel_target()
+	if target == -1:
+		return
+	var grid: Grid = World.grid
+	var from := grid.coord(cell())
+	var to := grid.coord(target)
+	if from == to:
+		return
+
+	# Normalised step, so diagonal approaches advance on both axes.
+	var step := Vector2(to - from).normalized()
+	var path := PackedInt32Array()
+	for i in range(1, PATH_LOOKAHEAD + 1):
+		var at := Vector2(from) + step * float(i)
+		var c := Vector2i(roundi(at.x), roundi(at.y))
+		if not grid.is_valid_v(c):
+			break
+		var idx := grid.index_v(c)
+		if path.is_empty() or path[path.size() - 1] != idx:
+			path.append(idx)
+	if not path.is_empty():
+		follow_path(path)
+
+
+## Nearest colony structure, or the keep if nothing has been built yet.
+func _tunnel_target() -> int:
+	var best := -1
+	var best_dist := 0x7FFFFFFF
+	for b in Colony.buildings:
+		if not is_instance_valid(b) or b.is_site():
+			continue
+		var d := World.grid.dist_sq(cell(), b.anchor)
+		if d < best_dist:
+			best_dist = d
+			best = b.anchor
+	return best if best != -1 else World.keep_cell
 
 
 ## Nearest thing worth hitting inside attack range: a villager first, then whatever
@@ -122,7 +182,13 @@ func _find_target() -> Node:
 	if def.structure_damage_scale < 0.5:
 		return null
 	for b in Colony.buildings:
-		if not is_instance_valid(b) or b.is_site() or not b.def.blocks_movement:
+		if not is_instance_valid(b) or b.is_site():
+			continue
+		# Gates count as things in the way even though they are walkable ground: the
+		# flow field charges the horde wall-price to cross one, so they have to be able
+		# to break it. Without this a gate would be an invisible, indestructible barrier
+		# that monsters queued up against forever.
+		if not (b.def.blocks_movement or b.def.blocks_monsters_only):
 			continue
 		var d := position.distance_squared_to(b.centre_position())
 		if d <= best_dist:
@@ -184,5 +250,10 @@ func _apply_tint() -> void:
 		_sprite.modulate = tint
 
 
-func on_death(_cause: StringName) -> void:
+func on_death(cause: StringName) -> void:
 	state = State.DYING
+	# Only a kill pays. Creatures that burn off at sunrise were not defeated, they left — and
+	# paying for dawn would make the reward a function of the clock rather than of how the
+	# player fought.
+	if cause != &"dawn" and def != null:
+		Divine.reward_kill(def.faith_on_death)

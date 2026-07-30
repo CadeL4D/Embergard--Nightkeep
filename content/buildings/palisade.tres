@@ -6,9 +6,11 @@
 [resource]
 script = ExtResource("1_def")
 id = &"palisade"
-display_name = "Palisade"
-description = "A stake wall. Blocks the way — and monsters will break it rather than walk around."
+display_name = "BUILDING_PALISADE"
+description = "BUILDING_PALISADE_DESC"
 sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 1
 footprint = Vector2i(1, 1)
 blocks_movement = true
 max_blight = 80
@@ -19,6 +21,8 @@ build_work = 4.0
 max_hp = 90.0
 light_radius = 0
 is_stockpile = false
+influence_radius = 2
 sleep_slots = 0
-order = 3
+worker_slots = 0
+order = 30
 color = Color(0.62, 0.5, 0.34, 1)

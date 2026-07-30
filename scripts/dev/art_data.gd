@@ -245,6 +245,88 @@ const BERRIES := [
 
 
 # =========================================================================================
+# DENSE FEATURE INTERIORS — the inside of a wood, a rock field, a thicket
+# =========================================================================================
+# Resources are generated in clumps, and a clump of individually-outlined sprites reads as a
+# lattice of objects rather than as a MASS. So a cell whose four neighbours share its feature is
+# painted with one of these instead: full-bleed texture, no outline, no transparency, tiling
+# seamlessly with its neighbours. The outlined sprites are kept for the rim.
+#
+# Two states rather than the sixteen a full neighbour-mask autotile would need, which would have
+# been 48 new tiles across three features. Interior-versus-edge captures what actually matters —
+# solid middle, ragged border — for three.
+
+## 16x16. The INTERIOR of a wood — canopy only, no silhouette, no outline, no transparency.
+##
+## Four of these side by side merge into one unbroken mass, which is the whole point: a forest
+## should read as a solid thing the colony eats into, not as a lattice of individual trees. All the
+## shape lives in the ordinary TREE tiles, which the renderer keeps for the RIM of the mass.
+##
+## It maintains itself as the wood is felled: clearing an interior cell turns its neighbours into
+## edges on the next repaint, so the hole the player cuts has a ragged border for free.
+const TREE_DENSE := [
+	"GgGMGGgGMGgGGMgG",
+	"gGgGMGgGGMgGGgGM",
+	"GMGgGGMgGgGGMGgG",
+	"MGgGGgGMGGgGgGGM",
+	"GgGMGgGGMGgGMGgG",
+	"gGGgGMGgGGMGgGGM",
+	"GMGgGGgGMGGgGMgG",
+	"gGgGMGGgGgGMGgGG",
+	"GgGGgGMGgGGMGGgM",
+	"MGgGMGgGGMgGgGGG",
+	"GgGGgGGMGgGMGgGM",
+	"gGMGgGMgGGgGGMgG",
+	"GGgGGgGGMGgGgGGM",
+	"MGgGMGgGMGGMGgGg",
+	"GgGGgGMGgGGgGMGG",
+	"gGMGgGGgGMGgGGgM",
+]
+
+
+## 16x16. The interior of a rock field. Same idea as TREE_DENSE — see there for why.
+const STONE_DENSE := [
+	"SLSSLSSLLSSLSSLS",
+	"LSSLLSSLSSLLSSLL",
+	"SSLSSLLSSLSSLSSL",
+	"LLSSLSSLSSLLSSLS",
+	"SLSSLLSSLLSSLSSL",
+	"SSLLSSLSSLSSLLSS",
+	"LSSLSSLLSSLLSSLS",
+	"SLLSSLSSLSSLSSLL",
+	"SSLSSLLSSLLSSLSS",
+	"LSSLLSSLSSLSSLLS",
+	"SLSSLSSLLSSLLSSL",
+	"LLSSLLSSLSSLSSLS",
+	"SSLSSLSSLLSSLLSS",
+	"LSSLLSSLLSSLSSLL",
+	"SLLSSLSSLSSLLSSL",
+	"SSLSSLLSSLLSSLSS",
+]
+
+
+## 16x16. The interior of a berry thicket: the same canopy as TREE_DENSE, flecked with fruit.
+const BERRIES_DENSE := [
+	"GgGMGrGGMGgGGMgG",
+	"gGgGMGgGrMgGGgGM",
+	"GMGgGrMgGgGGMGgG",
+	"MGgGGgGMGGgGrGGM",
+	"GgGMGgGrMGgGMGgG",
+	"gGGgGMGgGGMGrGGM",
+	"GrGgGGgGMGGgGMgG",
+	"gGgGMGGgGgGMGgGr",
+	"GgGGgGrGgGGMGGgM",
+	"MGgGMGgGGMgGgGGG",
+	"GgGGgGGMGrGMGgGM",
+	"gGMGgGMgGGgGGMgG",
+	"GGgGGgGrMGgGgGGM",
+	"MGgGMGgGMGGMGgGg",
+	"GgGGgGMGgGGgGMGG",
+	"gGMGrGGgGMGgGGgM",
+]
+
+
+# =========================================================================================
 # BUILDINGS — anchored bottom-left, drawn to fill their footprint in tiles
 # =========================================================================================
 # Lit windows and fires use the firelight ramp (o/O/Y) so that at night the colony
@@ -266,6 +348,51 @@ const PALISADE := [
 	"..DED.DED.DED.D.",
 	"..DED.DED.DED.D.",
 	"..eee.eee.eee.e.",
+	"................",
+	"................",
+	"................",
+]
+
+## 1x1. Slots into a palisade run, so it has to read as a GATE at a glance rather than
+## as another stretch of wall — a player who cannot see where their gate is cannot
+## defend it. Palisade is vertical stakes in bare wood; this is deliberately the
+## opposite: heavy stone posts either side, horizontal banded timber between them.
+const GATE := [
+	"................",
+	".LL..........LL.",
+	".LSL........LSL.",
+	".LSL.DDDDDD.LSL.",
+	".LSL.DeeeeD.LSL.",
+	".LSLDDDDDDDDLSL.",
+	".LSL.DeeeeD.LSL.",
+	".LSLDDDDDDDDLSL.",
+	".LSL.DeeeeD.LSL.",
+	".LSL.DDDDDD.LSL.",
+	".LSL........LSL.",
+	".LSL........LSL.",
+	".LsL........LsL.",
+	"..ee........ee..",
+	"................",
+	"................",
+]
+
+## 1x1. Stone ring with a dark shaft and a timber winch. Walkable, so villagers can stand
+## on it to drink, and it has to read as water at a glance against the stockpile beside it —
+## hence the cool blue in the shaft where every other building is wood and stone.
+const WELL := [
+	"................",
+	"................",
+	"....LSSSSL......",
+	"...LSwwwwSL.....",
+	"...LSwAAwSL.....",
+	"...LSwwwwSL.....",
+	"...LSSSSSSL.....",
+	"....LLSSLL......",
+	"....D....D......",
+	"....D....D......",
+	"....DDDDDD......",
+	".....E..E.......",
+	"................",
 	"................",
 	"................",
 	"................",
@@ -441,14 +568,504 @@ const FARM := [
 ]
 
 
+# =========================================================================================
+# PROCESSING BUILDINGS — deliberately NOT square
+# =========================================================================================
+#
+# Every building was 2x2, which made the colony a grid-packing exercise with one piece shape.
+# Long rectangles are what make layout an actual puzzle: a 3x2 sawmill does not slot into the
+# gap a 2x3 stonecutter leaves, so a colony has to be planned rather than tiled.
+#
+# They also read better. A sawmill is a long shed with a saw pit; a stonecutter is a tall yard
+# with a crane. Shape carries function at a glance, which matters more than usual here because
+# every building shares one muted palette.
+
+## 3x2 = 48x32. Long low shed, open front, saw pit and a stack of cut boards.
+const SAWMILL := [
+	"................................................",
+	"..........DDDDDDDDDDDDDDDDDDDDDDDD..............",
+	".........DEEEEEEEEEEEEEEEEEEEEEEEED.............",
+	"........DEEDDDDDDDDDDDDDDDDDDDDDEEED............",
+	".......DEEDeeeeeeeeeeeeeeeeeeeeeeDEEED..........",
+	"......DEEDeeDDDDDDDDDDDDDDDDDDDDeeDEEED.........",
+	"DDDDDDEEDeeDEEEEEEEEEEEEEEEEEEEEDeeDEEDDDDDDDDD.",
+	"DEEEEEEEDeeDEEDDDDDDDDDDDDDDDDEEDeeDEEEEEEEEEED.",
+	"DEEDDDDDDeeDEEDeeeeeeeeeeeeeeDEEDeeDDDDDDDDDEED.",
+	"DEEDeeeeeeeeDEEDeeLLLLLLLLLLeeDEEDeeeeeeeeeeEED.",
+	"DEEDeeDDDDDDDEEDeeLSSSSSSSSLeeDEEDDDDDDDDDDDEED.",
+	"DEEDeeDEEEEEEEEDeeLSsssssssLeeDEEEEEEEEEEEEDEED.",
+	"DEEDeeDEEDDDDDDDeeLSsssssssLeeDDDDDDDDDDDEEDEED.",
+	"DEEDeeDEEDeeeeeeeeLSsssssssLeeeeeeeeeeeeDEEDEED.",
+	"DEEDeeDEEDeeDDDDDDLSSSSSSSSLDDDDDDDDDDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEEEELLLLLLLLLLEEEEEEEEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDDDDDDDDDDDDDDDDDDDDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeeeeeeeeeeeeeeeeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDDDDDDDDDDDDDDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDEEEEEEEEEEEEDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDEEDDDDDDDDEEDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDEEDeeeeeeDEEDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDEEDeeeeeeDEEDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDEEDeeeeeeDEEDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDEEDDDDDDDDEEDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDEEEEEEEEEEEEDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeDDDDDDDDDDDDDDeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDeeeeeeeeeeeeeeeeeeDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEDDDDDDDDDDDDDDDDDDDDEEDeeDEEDEED.",
+	"DEEDeeDEEDeeDEEEEEEEEEEEEEEEEEEEEEEEEDeeDEEDEED.",
+	"DeeDeeDeeDeeDDDDDDDDDDDDDDDDDDDDDDDDDDeeDeeDeeD.",
+	"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk.",
+]
+
+## 2x3 = 32x48. Tall stone yard: a crane frame over a cutting floor with dressed blocks stacked.
+const STONECUTTER := [
+	"................................",
+	".........LLLLLLLLLLLLLL.........",
+	"........LSSSSSSSSSSSSSSL........",
+	"........LSssssssssssssSL........",
+	"........LSsLLLLLLLLLLsSL........",
+	"........LSsLSSSSSSSSLsSL........",
+	"........LSsLSssssssSLsSL........",
+	"........LSsLSsLLLLsSLsSL........",
+	"........LSsLSsLssLsSLsSL........",
+	"........LSsLSsLssLsSLsSL........",
+	"........LSsLSsLLLLsSLsSL........",
+	"........LSsLSssssssSLsSL........",
+	"........LSsLSSSSSSSSLsSL........",
+	"........LSsLLLLLLLLLLsSL........",
+	"........LSssssssssssssSL........",
+	"........LSSSSSSSSSSSSSSL........",
+	"........LLLLLLLLLLLLLLLL........",
+	"..........L..........L..........",
+	"..........L..........L..........",
+	"..........L..........L..........",
+	"..LLLLLLLLLLLLLLLLLLLLLLLLLLLL..",
+	".LSSSSSSSSSSSSSSSSSSSSSSSSSSSSL.",
+	".LSsssssssssssssssssssssssssssL.",
+	".LSsLLLLLLLLLLLLLLLLLLLLLLLLsSL.",
+	".LSsLSSSSSSSSSSSSSSSSSSSSSSLsSL.",
+	".LSsLSssssssssssssssssssssSLsSL.",
+	".LSsLSsLLLLLLLLLLLLLLLLLLsSLsSL.",
+	".LSsLSsLSSSSSSSSSSSSSSSSLsSLsSL.",
+	".LSsLSsLSssssssssssssssSLsSLsSL.",
+	".LSsLSsLSsLLLLLLLLLLLLsSLsSLsSL.",
+	".LSsLSsLSsLSSSSSSSSSSLsSLsSLsSL.",
+	".LSsLSsLSsLSssssssssSLsSLsSLsSL.",
+	".LSsLSsLSsLSssssssssSLsSLsSLsSL.",
+	".LSsLSsLSsLSSSSSSSSSSLsSLsSLsSL.",
+	".LSsLSsLSsLLLLLLLLLLLLsSLsSLsSL.",
+	".LSsLSsLSssssssssssssssSLsSLsSL.",
+	".LSsLSsLSSSSSSSSSSSSSSSSLsSLsSL.",
+	".LSsLSsLLLLLLLLLLLLLLLLLLsSLsSL.",
+	".LSsLSssssssssssssssssssssSLsSL.",
+	".LSsLSSSSSSSSSSSSSSSSSSSSSSLsSL.",
+	".LSsLLLLLLLLLLLLLLLLLLLLLLLLsSL.",
+	".LSssssssssssssssssssssssssssSL.",
+	".LSSSSSSSSSSSSSSSSSSSSSSSSSSSSL.",
+	".LLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.",
+	".ss..ss..ss..ss..ss..ss..ss..ss.",
+	".LL..LL..LL..LL..LL..LL..LL..LL.",
+	"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk.",
+	"................................",
+]
+
+## 3x2 = 48x32. Workshop with a lit forge mouth, an anvil, and a rack of finished tools.
+const TOOLSMITH := [
+	"................................................",
+	"................................................",
+	"................................................",
+	"................................................",
+	"....DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD....",
+	"....DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED....",
+	"...DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED...",
+	"..DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED..",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DEEEEEEEEEEooooooooooooooooooooooEEEEEEEEEED...",
+	".DEEEEEEEEEEoOoOoOoOoOoOoOoOoOoOoOEEEEEEEEEED...",
+	".DEEEEEEEEEEoOYYYYYYYYYYYYYYYYYYOoEEEEEEEEEED...",
+	".DEEEEEEEEEEoOYYYYYYYYYYYYYYYYYYOoEEEEEEEEEED...",
+	".DEEEEEEEEEEoOoOoOoOoOoOoOoOoOoOoOEEEEEEEEEED...",
+	".DEEEEEEEEEEooooooooooooooooooooooEEEEEEEEEED...",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED.",
+	".DeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD.",
+	".DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD.",
+	"........LLLLLLLLLL..............................",
+	"........LSSSSSSSSL..............................",
+	"........LSssssssSL..............................",
+	"........LSSSSSSSSL..............................",
+	"........LLLLLLLLLL..............................",
+	"..........................LssLssLssL............",
+	"..........................LL..LL..LL............",
+	"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+]
+
+
+# =========================================================================================
+# PHASE 2 STRUCTURES — upgrade tiers, the Temple line, and road surfaces
+# =========================================================================================
+# The three Village Center tiers and the three Temple tiers each share a footprint, because
+# upgrading in place requires it (see Building.begin_upgrade). So the progression is carried by
+# silhouette and by LIGHT — every tier throws more of it — rather than by getting wider.
+
+## 1x1. A trodden dirt track. Lowers move cost, so villagers prefer it exactly as much as
+## it saves them — see World.PATH_COST.
+const PATH := [
+	"NnNNnNnnNNnNNnNn",
+	"nNNnNNnNnNnNNnNN",
+	"NnNxNnNNnNxNnNnN",
+	"nNNnNnxNNnNnNNnN",
+	"NNnNNnNnNxNNnNNn",
+	"nNxNnNNnNNnNnNxN",
+	"NnNNnNxNnNnNNnNN",
+	"nNnNNnNnNNxNnNnN",
+	"NNnNxNnNNnNnNNnN",
+	"nNnNnNNnNxNNnNxN",
+	"NnNNnNnNnNnNNnNN",
+	"nNxNnNxNNnNnNnNn",
+	"NnNnNNnNnNxNNnNN",
+	"nNNnNnNNnNnNnNxN",
+	"NnNNnNxNnNNnNNnN",
+	"nNnNnNNnNxNnNnNn",
+]
+
+
+## 1x1. Dressed stone, laid in courses. The fastest surface in the game.
+const ROAD := [
+	"LSSLSSLSSLSSLSSL",
+	"LSSLSSLSSLSSLSSL",
+	"ssssssssssssssss",
+	"SLSSLSSLSSLSSLSS",
+	"SLSSLSSLSSLSSLSS",
+	"ssssssssssssssss",
+	"LSSLSSLSSLSSLSSL",
+	"LSSLSSLSSLSSLSSL",
+	"ssssssssssssssss",
+	"SLSSLSSLSSLSSLSS",
+	"SLSSLSSLSSLSSLSS",
+	"ssssssssssssssss",
+	"LSSLSSLSSLSSLSSL",
+	"LSSLSSLSSLSSLSSL",
+	"ssssssssssssssss",
+	"SLSSLSSLSSLSSLSS",
+]
+
+
+## 2x2. Village Center tier 2, upgraded in place from the Hearth.
+##
+## Deliberately the Hearth grown rather than a different building: same firelight core, same
+## stone footing, now with a raised roof and a doorway. An upgrade that changes silhouette
+## entirely reads as the old building being replaced, which is not what happened.
+const GREAT_HALL := [
+	"................................",
+	"..............kk................",
+	".............kOOk...............",
+	"............kYOOYk..............",
+	"...........kkYOYkk..............",
+	".........kkkkkkkkkkk............",
+	".......kkDDDDDDDDDDDkk..........",
+	"....kkkDDEEEEEEEEEEEDDkkk.......",
+	"..kkDDDEEEeeeeeeeeeEEEDDDkk.....",
+	".kDDDEEEeeeEEEEEEEeeeEEEDDDk....",
+	"kDDEEEeeeEEEDDDDDEEEeeeEEEDDk...",
+	"kDEEeeeEEEDDDDDDDDDEEEeeeEEDDk..",
+	"kEEeeEEEDDDDDDDDDDDDDEEEeeEEDk..",
+	"kDDDDDDDDDDDDDDDDDDDDDDDDDDDDk..",
+	"kEDDDDDDDDDDDDDDDDDDDDDDDDDDEk..",
+	"kEDDDDDDDDDDDDDDDDDDDDDDDDDDEk..",
+	".kEEDDDDDDDDDDDDDDDDDDDDDDDEEk..",
+	".kSSSSSSSSSSSSSSSSSSSSSSSSSSSk..",
+	".kSLLSSSSSSSSSSSSSSSSSSSSLLSSk..",
+	".kSLYLSSSSSkkkkkkkkSSSSSLYLSSk..",
+	".kSLOLSSSSkDDDDDDDDkSSSSLOLSSk..",
+	".kSLOLSSSSkDeeeeeeDkSSSSLOLSSk..",
+	".kSLoLSSSSkDeYYYYeDkSSSSLoLSSk..",
+	".kSSSSSSSSkDeYOOYeDkSSSSSSSSSk..",
+	".kSSSSSSSSkDeYOOYeDkSSSSSSSSSk..",
+	".kSSSSSSSSkDeeOOeeDkSSSSSSSSSk..",
+	".kSsSSSSSSkDDeooeDDkSSSSSSSsSk..",
+	".kSsSSSSSSSkDeooeDkSSSSSSSSsSk..",
+	".kSsSSSSSSSkkeooekkSSSSSSSSsSk..",
+	".kssssssssssseooesssssssssssSk..",
+	"..kkkkkkkkkkkkeekkkkkkkkkkkkk...",
+	"................................",
+]
+
+
+## 2x2. Village Center tier 3. Battlements, corner braziers, a barred gate.
+##
+## The keep is the one building the player will look at for six hours, so it carries the most
+## firelight of anything in the colony — four lit points plus the gate, which at night makes the
+## centre of the settlement read as the safest place on the map.
+const STONE_KEEP := [
+	"................................",
+	"...kk......................kk...",
+	"..kOOk....................kOOk..",
+	"..kYYk....................kYYk..",
+	".kkSSkk..................kkSSkk.",
+	".kSLLSk..................kSLLSk.",
+	".kSLLSkkkkkkkkkkkkkkkkkkkkSLLSk.",
+	".kSLLSSLLSSLLSSLLSSLLSSLLSSLLSk.",
+	".kSLLSSLLSSLLSSLLSSLLSSLLSSLLSk.",
+	".kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk.",
+	".kSssSSSSSSSSSSSSSSSSSSSSSSssSk.",
+	".kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk.",
+	".kSLLSSSkkkkSSSSSSSSkkkkSSSLLSk.",
+	".kSLYLSSkOOkSSSSSSSSkOOkSSSLYLk.",
+	".kSLOLSSkYYkSSSSSSSSkYYkSSSLOLk.",
+	".kSLOLSSkooKSSSSSSSSkooKSSSLOLk.",
+	".kSLoLSSSkkSSSSSSSSSSkkSSSSLoLk.",
+	".kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk.",
+	".kSssSSSSSSSSSSSSSSSSSSSSSSssSk.",
+	".kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk.",
+	".kSSSSSSSSSSkkkkkkkkSSSSSSSSSSk.",
+	".kSSSSSSSSSkSSSSSSSSkSSSSSSSSSk.",
+	".kSLLSSSSSkSSLLLLLLSSkSSSSSLLSk.",
+	".kSLYLSSSSkSLYYYYYYLSkSSSSLYLSk.",
+	".kSLOLSSSSkSLYOOOOYLSkSSSSLOLSk.",
+	".kSLOLSSSSkSLYOOOOYLSkSSSSLOLSk.",
+	".kSLoLSSSSkSLLOOOOLLSkSSSSLoLSk.",
+	".kSSSSSSSSkSSLLooLLSSkSSSSSSSSk.",
+	".kSssSSSSSkSSSLooLSSSkSSSSSssSk.",
+	".kSSSSSSSSkSSSeooeSSSkSSSSSSSSk.",
+	".kssssssssssssseeesssssssssssssk",
+	"..kkkkkkkkkkkkkkkkkkkkkkkkkkkk..",
+]
+
+
+## 2x2. Housing tier 2, upgraded in place from a Hut. Twice the beds.
+##
+## Three lit windows instead of the Hut's one, which is the whole point of it: at night the
+## difference between a colony that has housed its people and one that has not should be
+## visible from across the map without opening a panel.
+const LONGHOUSE := [
+	"................................",
+	"................................",
+	"..............kk................",
+	".............kEEk...............",
+	"...........kkkEEkkk.............",
+	"........kkkDDDDDDDDDkkk.........",
+	".....kkkDDDEEEEEEEEEDDDkkk......",
+	"...kkDDDEEEeeeeeeeeeEEEDDDkk....",
+	"..kDDDEEEeeEEEEEEEEEeeEEEDDDk...",
+	"..kDEEEeeEEEDDDDDDDEEEeeEEEDk...",
+	"..kEEeeEEEDDDDDDDDDDDEEEeeEEk...",
+	"..kDDDDDDDDDDDDDDDDDDDDDDDDDk...",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDEk...",
+	"..kEEDDDDDDDDDDDDDDDDDDDDDEEk...",
+	"..kEEEDDDDDDDDDDDDDDDDDDDEEEk...",
+	"..kEEEEEEEEEEEEEEEEEEEEEEEEEk...",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDEk...",
+	"..kEDkkkkDDDkkkkDDDkkkkDDDDEk...",
+	"..kEDkYYkDDDkYYkDDDkYYkDDDDEk...",
+	"..kEDkOOkDDDkOOkDDDkOOkDDDDEk...",
+	"..kEDkooKDDDkooKDDDkooKDDDDEk...",
+	"..kEDkkkkDDDkkkkDDDkkkkDDDDEk...",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDEk...",
+	"..kEDDDDDDDkkkkkkDDDDDDDDDDEk...",
+	"..kEDDDDDDDkEEEEkDDDDDDDDDDEk...",
+	"..kEDDDDDDDkeYYekDDDDDDDDDDEk...",
+	"..kEEDDDDDDkeOOekDDDDDDDDDEEk...",
+	"..kEEEDDDDDkeOOekDDDDDDDDEEEk...",
+	"..kSSSSSSSSSeooeSSSSSSSSSSSSk...",
+	"..kSsSsSsSsSeooeSsSsSsSsSsSSk...",
+	"..kssssssssseeesssssssssssssk...",
+	"...kkkkkkkkkkkkkkkkkkkkkkkkk....",
+]
+
+
+## 2x3. Temple tier 1 — the Shrine. One priest, one Tome slot.
+##
+## Tall and narrow rather than square, both because the divine buildings should not look like
+## workshops and because a 2x3 is genuinely awkward to pack, which is the point of having
+## non-square footprints at all.
+const SHRINE := [
+	"................................",
+	"................................",
+	"................................",
+	"................................",
+	"................................",
+	"................................",
+	"................................",
+	"................................",
+	"................................",
+	"..............kk................",
+	".............kYYk...............",
+	".............kOOk...............",
+	"............kkooKk..............",
+	"...........kkSSSSkk.............",
+	"..........kSSLLLLSSk............",
+	".........kSSLLLLLLSSk...........",
+	"........kSSLLSSSSLLSSk..........",
+	"........kSLLSSSSSSLLSk..........",
+	"........kSLSSSSSSSSLSk..........",
+	"........kSSSSSSSSSSSSk..........",
+	"........kSsSSSSSSSSsSk..........",
+	"........kSSSSSSSSSSSSk..........",
+	".......kkSSSSSSSSSSSSkk.........",
+	"......kSSLLSSSSSSSSLLSSk........",
+	".....kSSLLLLSSSSSSLLLLSSk.......",
+	"....kSSLLSSLLSSSSLLSSLLSSk......",
+	"....kSLLSSSSLLSSLLSSSSLLSk......",
+	"....kSLSSSSSSLLLLSSSSSSLSk......",
+	"....kSSSSSSSSSSSSSSSSSSSSk......",
+	"....kSsSSSSSSSSSSSSSSSSsSk......",
+	"....kSSSSSSSSSSSSSSSSSSSSk......",
+	"....kSSSSSSkkkkkkkkSSSSSSk......",
+	"....kSSSSSkSLLLLLLSkSSSSSk......",
+	"....kSSSSSkSLYYYYLSkSSSSSk......",
+	"....kSLLSSkSLYOOYLSkSSLLSk......",
+	"....kSLYLSkSLYOOYLSkSLYLSk......",
+	"....kSLOLSkSLLOOLLSkSLOLSk......",
+	"....kSLoLSkSSLOOLSSkSLoLSk......",
+	"....kSSSSSSkSLooLSkSSSSSSk......",
+	"....kSsSSSSkSLooLSkSSSSsSk......",
+	"....kSSSSSSSkeooekSSSSSSSk......",
+	"....kSSSSSSSkeooekSSSSSSSk......",
+	"....kSsSsSsSSeooeSSsSsSsSk......",
+	"....kSSSSSSSSeooeSSSSSSSSk......",
+	"....ksssssssseeeessssssssk......",
+	"....kkkkkkkkkkkkkkkkkkkkkk......",
+	"................................",
+	"................................",
+]
+
+
+## 2x3. Temple tier 2. Three priests, two Tome slots, a taller spire and four lit windows.
+const TEMPLE := [
+	"................................",
+	"................................",
+	"..............kk................",
+	".............kYYk...............",
+	".............kOOk...............",
+	".............kOOk...............",
+	"............kkooKk..............",
+	"...........kSSSSSSk.............",
+	"..........kSSLLLLSSk............",
+	".........kSSLLLLLLSSk...........",
+	"........kSSLLSSSSLLSSk..........",
+	".......kSSLLSSSSSSLLSSk.........",
+	"......kSSLLSSSSSSSSLLSSk........",
+	".....kSSLLSSSSSSSSSSLLSSk.......",
+	"....kSSLLSSSSSSSSSSSSLLSSk......",
+	"...kSSLLSSSSSSSSSSSSSSLLSSk.....",
+	"..kSSLLSSSSSSSSSSSSSSSSLLSSk....",
+	"..kSSSSSSSSSSSSSSSSSSSSSSSSk....",
+	"..kSsSSSSSSSSSSSSSSSSSSSSsSk....",
+	"..kSSSSSSSSSSSSSSSSSSSSSSSSk....",
+	"..kSSSSSSSSSSSSSSSSSSSSSSSSk....",
+	"..kSLLSSLLSSSSSSSSSSLLSSLLSk....",
+	"..kSLYLSLYLSSSSSSSSSLYLSLYLk....",
+	"..kSLOLSLOLSSSSSSSSSLOLSLOLk....",
+	"..kSLOLSLOLSSSSSSSSSLOLSLOLk....",
+	"..kSLoLSLoLSSSSSSSSSLoLSLoLk....",
+	"..kSSSSSSSSSSSSSSSSSSSSSSSSk....",
+	"..kSsSSSSSSSSSSSSSSSSSSSSsSk....",
+	"..kSSSSSSSSSSSSSSSSSSSSSSSSk....",
+	"..kSSSSSSSSSkkkkkkSSSSSSSSSk....",
+	"..kSSSSSSSSkSLLLLSkSSSSSSSSk....",
+	"..kSSSSSSSSkSLYYLSkSSSSSSSSk....",
+	"..kSLLSSSSSkSLYOLSkSSSSSLLSk....",
+	"..kSLYLSSSSkSLYOLSkSSSSLYLSk....",
+	"..kSLOLSSSSkSLLOLLSkSSSLOLSk....",
+	"..kSLOLSSSSkSSLOOLSkSSSLOLSk....",
+	"..kSLoLSSSSSkSLOOLSkSSSLoLSk....",
+	"..kSSSSSSSSSkSLooLSkSSSSSSSk....",
+	"..kSsSSSSSSSkSLooLSkSSSSsSSk....",
+	"..kSSSSSSSSSSkeooekSSSSSSSSk....",
+	"..kSSSSSSSSSSkeooekSSSSSSSSk....",
+	"..kSsSsSsSsSSSeooeSSsSsSsSsk....",
+	"..kSSSSSSSSSSSeooeSSSSSSSSSk....",
+	"..kSSSSSSSSSSSeooeSSSSSSSSSk....",
+	"..ksssssssssssseeesssssssssk....",
+	"..kkkkkkkkkkkkkkkkkkkkkkkkkk....",
+	"................................",
+	"................................",
+]
+
+
+## 2x3. Temple tier 3 — the Sanctum. Five priests, three Tome slots.
+##
+## Seven lit windows plus the spire flame. By the time a colony can raise this, the Sanctum
+## should be the brightest thing on the map that is not the Ember itself.
+const SANCTUM := [
+	"..............kk................",
+	".............kYYk...............",
+	".............kOYk...............",
+	".............kOOk...............",
+	".............kOOk...............",
+	"............kkooKk..............",
+	"...........kSSSSSSk.............",
+	"..........kSSLYYLSSk............",
+	"..........kSLYOOYLSk............",
+	".........kSSLLOOLLSSk...........",
+	"........kSSLLSSSSLLSSk..........",
+	".......kSSLLSSSSSSLLSSk.........",
+	"......kSSLLSSSSSSSSLLSSk........",
+	".....kSSLLSSSSSSSSSSLLSSk.......",
+	"....kSSLLSSSSSSSSSSSSLLSSk......",
+	"...kSSLLSSSSSSSSSSSSSSLLSSk.....",
+	"..kSSLLSSSSSSSSSSSSSSSSLLSSk....",
+	".kSSLLSSSSSSSSSSSSSSSSSSLLSSk...",
+	"kSSLLSSSSSSSSSSSSSSSSSSSSLLSSk..",
+	"kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk..",
+	"kSsSSSSSSSSSSSSSSSSSSSSSSSSsSk..",
+	"kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk..",
+	"kSLLSSLLSSLLSSSSSSLLSSLLSSLLSk..",
+	"kSLYLSLYLSLYLSSSSSLYLSLYLSLYLk..",
+	"kSLOLSLOLSLOLSSSSSLOLSLOLSLOLk..",
+	"kSLOLSLOLSLOLSSSSSLOLSLOLSLOLk..",
+	"kSLoLSLoLSLoLSSSSSLoLSLoLSLoLk..",
+	"kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk..",
+	"kSsSSSSSSSSSSSSSSSSSSSSSSSSsSk..",
+	"kSSSSSSSSSSSSSSSSSSSSSSSSSSSSk..",
+	"kSSSSSSSSSSSSkkkkkkSSSSSSSSSSk..",
+	"kSSSSSSSSSSSkSLLLLSkSSSSSSSSSk..",
+	"kSLLSSSSSSSSkSLYYLSkSSSSSSLLSk..",
+	"kSLYLSSSSSSSkSLYOLSkSSSSSLYLSk..",
+	"kSLOLSSSSSSSkSLYOLSkSSSSSLOLSk..",
+	"kSLOLSSSSSSSkSLLOLLSkSSSSLOLSk..",
+	"kSLoLSSSSSSSkSSLOOLSkSSSSLoLSk..",
+	"kSSSSSSSSSSSSkSLOOLSkSSSSSSSSk..",
+	"kSsSSSSSSSSSSkSLooLSkSSSSSsSSk..",
+	"kSSSSSSSSSSSSkSLooLSkSSSSSSSSk..",
+	"kSSSSSSSSSSSSSkeooekSSSSSSSSSk..",
+	"kSsSsSsSsSsSSSkeooekSsSsSsSsSk..",
+	"kSSSSSSSSSSSSSSeooeSSSSSSSSSSk..",
+	"kSSSSSSSSSSSSSSeooeSSSSSSSSSSk..",
+	"kSsSsSsSsSsSsSSeooeSSsSsSsSsSk..",
+	"kssssssssssssssseeessssssssssk..",
+	"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk..",
+	"................................",
+]
+
+
 static func building_maps() -> Dictionary:
 	return {
 		&"palisade": {"map": PALISADE, "size": 16},
+		&"gate": {"map": GATE, "size": 16},
+		&"well": {"map": WELL, "size": 16},
 		&"stockpile": {"map": STOCKPILE, "size": 16},
 		&"hearth": {"map": HEARTH, "size": 32},
 		&"hut": {"map": HUT, "size": 32},
 		&"watchtower": {"map": WATCHTOWER, "size": 32},
 		&"farm": {"map": FARM, "size": 32},
+		# Rectangular. `size` is the SQUARE cases only; these carry explicit w/h.
+		&"sawmill": {"map": SAWMILL, "w": 48, "h": 32},
+		&"stonecutter": {"map": STONECUTTER, "w": 32, "h": 48},
+		&"toolsmith": {"map": TOOLSMITH, "w": 48, "h": 32},
+		&"great_hall": {"map": GREAT_HALL, "w": 32, "h": 32},
+		&"stone_keep": {"map": STONE_KEEP, "w": 32, "h": 32},
+		&"longhouse": {"map": LONGHOUSE, "w": 32, "h": 32},
+		&"shrine": {"map": SHRINE, "w": 32, "h": 48},
+		&"temple": {"map": TEMPLE, "w": 32, "h": 48},
+		&"sanctum": {"map": SANCTUM, "w": 32, "h": 48},
+		&"path": {"map": PATH, "w": 16, "h": 16},
+		&"road": {"map": ROAD, "w": 16, "h": 16},
 	}
 
 
@@ -755,20 +1372,343 @@ const CARRY_FOOD := [
 ]
 
 
+## Sawn boards, seen end-on: a neat stack rather than the raw log's ring banding.
+##
+## The processed goods have to be distinguishable from their inputs at seven pixels, because the
+## whole point of watching a haul is knowing whether the sawmill is actually producing. So boards
+## are lighter and squarer than wood, cut stone is pale and regular where rough stone is a lumpy
+## grey mass, and tools are the only icon in the set with a metal highlight.
+const CARRY_BOARDS := [
+	".......",
+	".kkkkk.",
+	".kNNNk.",
+	".kkkkk.",
+	".kNNNk.",
+	".kkkkk.",
+	".......",
+]
+
+## Dressed blocks — square, pale, mortared. Reads as masonry against rough stone's boulder.
+const CARRY_CUT_STONE := [
+	".......",
+	"kkkkkkk",
+	"kLLkLLk",
+	"kkkkkkk",
+	"kLLkLLk",
+	"kkkkkkk",
+	".......",
+]
+
+## A hammer. The only carried good with a bright metal head, because tools are the gate to the
+## upper half of the build list and a player should be able to see one crossing the village.
+const CARRY_TOOLS := [
+	".......",
+	".kkkk..",
+	".kLYLk.",
+	".kkEkk.",
+	"...E...",
+	"...E...",
+	"...k...",
+]
+
+
 ## Keyed by resource kind. The baker lays these out in Colony.KINDS order so the
 ## villager can pick its frame with a single array lookup instead of a match block.
+##
+## Must cover every entry in Colony.KINDS. The baker prints a loud warning for any it cannot find
+## and leaves that slot blank, which is how the three processed goods were caught — a blank frame
+## makes a haul of boards indistinguishable from a villager carrying nothing at all.
 static func carry_frames() -> Dictionary:
 	return {
 		&"wood": CARRY_WOOD,
 		&"stone": CARRY_STONE,
 		&"food": CARRY_FOOD,
+		&"boards": CARRY_BOARDS,
+		&"cut_stone": CARRY_CUT_STONE,
+		&"tools": CARRY_TOOLS,
 	}
+
+
+# =========================================================================================
+# MORE OF THE BLIGHT — 12x14, two frames each, same conventions as the Shambler
+# =========================================================================================
+#
+# Every one of these has to be identifiable by SILHOUETTE alone. At gameplay zoom on a phone,
+# in the dark, colour is nearly useless — the whole roster shares the same three blight tones —
+# so the shape has to carry the read. The design rule is one distinct outline per threat:
+#
+#   Shambler   hunched and top-heavy      the baseline melee
+#   Spitter    small bulbous sac          fragile, ranged
+#   Brute      wide, squat, armoured      breaks walls; you must not ignore it
+#   Shade      tall, thin, legless        immune to light; punishes Ember reliance
+#   Swarmling  tiny, barely there         arrives in numbers; rewards AoE
+#   Burrower   low and flat with a maw    ignores walls; punishes pure turtling
+#
+# If two of these are ever confusable in a night fight the fix is the outline, not the palette.
+
+## Wide and heavy, with slab shoulders and a small sunken head. Reads as a battering ram, which
+## is exactly what it is — the answer to a player who thinks a wall is a solution.
+const BRUTE_0 := [
+	"............",
+	"..bb....bb..",
+	".bBBb..bBBb.",
+	".bBBbbbbBBb.",
+	"bBBBBPPBBBBb",
+	"bBBBPPPPBBBb",
+	"bBBBBPPBBBBb",
+	"bBBBBBBBBBBb",
+	".bBBBBBBBBb.",
+	".bBB.bb.BBb.",
+	".bB..bb..Bb.",
+	".bb..bb..bb.",
+	"kk...bb...kk",
+	"......bb....",
+]
+
+const BRUTE_1 := [
+	"............",
+	"...bb..bb...",
+	"..bBBbbBBb..",
+	".bBBbbbbBBb.",
+	"bBBBBPPBBBBb",
+	"bBBBPPPPBBBb",
+	"bBBBBPPBBBBb",
+	"bBBBBBBBBBBb",
+	".bBBBBBBBBb.",
+	"..bB.bb.Bb..",
+	"..bB.bb.Bb..",
+	"..bb.bb.bb..",
+	".kk..bb..kk.",
+	"......bb....",
+]
+
+## Tall, narrow, and trailing off into nothing at the base — no legs, so it reads as drifting.
+## Deliberately the least solid shape on the roster: the thing light cannot burn should not look
+## like it is standing on the ground.
+const SHADE_0 := [
+	"....bbbb....",
+	"...bBPPBb...",
+	"...bPPPPb...",
+	"...bBPPBb...",
+	"...bBBBBb...",
+	"....bBBb....",
+	"....bBBb....",
+	"...bBBBBb...",
+	"...bB..Bb...",
+	"..bB....Bb..",
+	"..b......b..",
+	"...b....b...",
+	"....b..b....",
+	".....bb.....",
+]
+
+const SHADE_1 := [
+	"....bbbb....",
+	"...bBPPBb...",
+	"...bPPPPb...",
+	"...bBPPBb...",
+	"...bBBBBb...",
+	"....bBBb....",
+	"....bBBb....",
+	"...bBBBBb...",
+	"...bB..Bb...",
+	"..bB....Bb..",
+	"...b....b...",
+	"....b..b....",
+	".....bb.....",
+	"............",
+]
+
+## Barely a creature. Small enough that a dozen on screen still reads as a swarm rather than a
+## wall of sprites, which is what makes Wrath feel good against them.
+const SWARMLING_0 := [
+	"............",
+	"............",
+	"............",
+	"............",
+	"....bbb.....",
+	"...bBPBb....",
+	"...bBBBb....",
+	"....bbb.....",
+	"...b...b....",
+	"..k.....k...",
+	"............",
+	"............",
+	"............",
+	"............",
+]
+
+const SWARMLING_1 := [
+	"............",
+	"............",
+	"............",
+	"............",
+	"....bbb.....",
+	"...bBPBb....",
+	"...bBBBb....",
+	"....bbb.....",
+	"....b.b.....",
+	"...k...k....",
+	"............",
+	"............",
+	"............",
+	"............",
+]
+
+## Low, flat and almost all mouth. Sits close to the ground so it reads as something that came up
+## through it — the visual promise that a wall will not stop this one.
+const BURROWER_0 := [
+	"............",
+	"............",
+	"............",
+	"............",
+	"............",
+	"..bbb..bbb..",
+	".bBBBbbBBBb.",
+	"bBPPPPPPPPBb",
+	"bBPkkkkkkPBb",
+	"bBBPPPPPPBBb",
+	".bBBBBBBBBb.",
+	"..bb.bb.bb..",
+	"...k.....k..",
+	"............",
+]
+
+const BURROWER_1 := [
+	"............",
+	"............",
+	"............",
+	"............",
+	"..bbb..bbb..",
+	".bBBBbbBBBb.",
+	"bBPPPPPPPPBb",
+	"bBPkkkkkkPBb",
+	"bBPkkkkkkPBb",
+	"bBBPPPPPPBBb",
+	".bBBBBBBBBb.",
+	"..bb.bb.bb..",
+	"...k.....k..",
+	"............",
+]
+
+
+# =========================================================================================
+# BLIGHT STRUCTURES — what the corruption builds around its nests
+# =========================================================================================
+#
+# The Blight should look like it is SETTLING, not just spawning. A nest ringed by growths reads as
+# a place with intent behind it — somewhere the player has to go and destroy — rather than a spawn
+# marker sitting on the ground.
+#
+# All three are anchored bottom-left like the player's buildings, so they Y-sort against villagers
+# the same way, and all three are built from the same three blight tones as the creatures that come
+# out of them.
+
+## 16x32. A tall barbed growth — the silhouette that tells the player from across the map that a
+## nest has taken root here.
+const BLIGHT_SPIRE := [
+	".......PP.......",
+	"......bPPb......",
+	"......bPPb......",
+	".....bBPPBb.....",
+	".....bBPPBb.....",
+	"....bBBPPBBb....",
+	"...bBBBPPBBBb...",
+	"...bBB.PP.BBb...",
+	"..bBB..PP..BBb..",
+	"..bB...PP...Bb..",
+	".bB..bBPPBb..Bb.",
+	".b..bBBPPBBb..b.",
+	"...bBBBPPBBBb...",
+	"..bBBB.PP.BBBb..",
+	"..bBB..PP..BBb..",
+	".bBB...PP...BBb.",
+	".bB....PP....Bb.",
+	"bB....bPPb....Bb",
+	"bB...bBPPBb...Bb",
+	"bB..bBBPPBBb..Bb",
+	"bB.bBBBPPBBBb.Bb",
+	"bBbBBBBPPBBBBbBb",
+	"bBBBBBB..BBBBBBb",
+	"bBBBBB....BBBBBb",
+	".bBBBB....BBBBb.",
+	".bBBBBB..BBBBBb.",
+	"..bBBBBBBBBBBb..",
+	"..bbBBBBBBBBbb..",
+	"...bbBBBBBBbb...",
+	"....bbbBBbbb....",
+	"......bbbb......",
+	".....kkkkkk.....",
+]
+
+## 16x16. A squat fleshy dwelling. Where the lesser creatures come from — low, wide, and clearly
+## something that houses rather than something that grows.
+const BLIGHT_HOVEL := [
+	"................",
+	"................",
+	".....bbbbb......",
+	"...bbBBBBBbb....",
+	"..bBBBPPPBBBb...",
+	".bBBPPPPPPPBBb..",
+	".bBPPPBBBPPPBb..",
+	"bBBPPBBBBBPPBBb.",
+	"bBPPBBkkkBBPPBb.",
+	"bBPBBBkkkBBBPBb.",
+	"bBBBBBkkkBBBBBb.",
+	"bBBBBBkkkBBBBBb.",
+	".bBBBBkkkBBBBb..",
+	".bbBBBBBBBBBbb..",
+	"..bbbbbbbbbbb...",
+	"...kkkkkkkkk....",
+]
+
+## 16x24. A bone-and-sinew marker. Cheap for the Blight to raise, so it is what spreads first —
+## and a visual warning that a nest is expanding in this direction.
+const BLIGHT_TOTEM := [
+	"......bb........",
+	".....bPPb.......",
+	".....bPPb.......",
+	"....bBPPBb......",
+	"...bBB..BBb.....",
+	"..bBB....BBb....",
+	"..bB......Bb....",
+	"..b...bb...b....",
+	"......bPPb......",
+	"......bPPb......",
+	".....bBPPBb.....",
+	"....bBBPPBBb....",
+	"...bBB.PP.BBb...",
+	"...bB..PP..Bb...",
+	"...b...PP...b...",
+	".......PP.......",
+	"......bPPb......",
+	"......bPPb......",
+	".....bBPPBb.....",
+	".....bBBBBb.....",
+	"....bBBBBBBb....",
+	"....bbBBBBbb....",
+	".....bbbbbb.....",
+	"......kkkk......",
+]
 
 
 static func monster_frames() -> Dictionary:
 	return {
 		&"shambler": [SHAMBLER_0, SHAMBLER_1],
 		&"spitter": [SPITTER_0, SPITTER_1],
+		&"brute": [BRUTE_0, BRUTE_1],
+		&"shade": [SHADE_0, SHADE_1],
+		&"swarmling": [SWARMLING_0, SWARMLING_1],
+		&"burrower": [BURROWER_0, BURROWER_1],
+	}
+
+
+## Structures the Blight raises around its nests. Static, so one frame each.
+static func blight_structure_maps() -> Dictionary:
+	return {
+		&"spire": {"map": BLIGHT_SPIRE, "w": 16, "h": 32},
+		&"hovel": {"map": BLIGHT_HOVEL, "w": 16, "h": 16},
+		&"totem": {"map": BLIGHT_TOTEM, "w": 16, "h": 24},
 	}
 
 

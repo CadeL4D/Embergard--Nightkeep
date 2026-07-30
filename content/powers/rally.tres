@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_power_def"]
+
+[resource]
+script = ExtResource("1_power_def")
+id = &"rally"
+display_name = "POWER_RALLY"
+description = "POWER_RALLY_DESC"
+kind = 3
+faith_cost = 22.0
+cooldown = 18.0
+radius = 5
+amount = 0.0
+duration = 0.0
+speed_boost = 0.6
+damage_boost = 1.2
+boost_duration = 14.0
+required_temple_tier = 1
+burden = 0.14
+color = Color(1, 0.72, 0.5, 1)
+order = 3
+unlock_cost = 40

@@ -1,0 +1,301 @@
+keys,en
+UI_CONTINUE,Continue
+UI_NEW_WORLD,New World
+UI_OPTIONS,Options
+UI_CREDITS,Credits
+UI_QUIT,Quit
+UI_BACK,Back
+UI_CANCEL,Cancel
+UI_BUILD,Build
+UI_JOBS,Jobs
+UI_ASCEND,Ascend
+UI_ASCEND_CONFIRM,Sure?
+UI_PAUSE,Pause
+UI_RESUME,Resume
+UI_MAIN_MENU,Main menu
+UI_BEGIN_AGAIN,Begin again
+UI_ROLL,Roll
+UI_SEED,seed
+UI_CARRY_THE_EMBER,Carry the Ember
+UI_CHOOSE_WHERE_TO_SETTLE,Choose where to settle
+UI_BEST_RUN,best: day {0}   ·   {1} shards
+UI_MASTER,Master
+UI_MUSIC,Music
+UI_SOUND,Sound
+UI_AUDIO_PENDING,Sound design is not in yet — these are wired and waiting.
+UI_JOB_BOARD_HINT,assign survivors — unassigned drift to the lowest job
+UI_PLACEMENT_HINT,drag to move · tap to build
+UI_PLACEMENT_TAP_TO_BUILD,{0} · tap to build
+UI_SPEED,{0}x
+UI_CREDITS_BODY,"Embergard: Nightkeep
+
+Design, code and art by CadeL4D.
+Built with Godot.
+
+All sprites and tiles are generated from
+ArtData and baked at build time."
+PHASE_DAY,DAY
+PHASE_DUSK,DUSK
+PHASE_NIGHT,NIGHT
+PHASE_DAWN,DAWN
+HUD_CLOCK,Day {0}   {1}   {2}s{3}
+HUD_HOSTILES,"   {0} hostile"
+HUD_RESOURCES_TOP,wood {0}   stone {1}   food {2} {3}
+HUD_RESOURCES_BOTTOM,pop {0}{1}   water {2}{3}   mood {4}{5}   faith {6}{7}
+HUD_PER_DAY,{0}/day
+HUD_HEADCOUNT,{0}/{1}
+POWER_ON_COOLDOWN,{0} {1}s
+POWER_COST,"{0}  {1}"
+HUD_GROWTH_BLOCKED," ({0})"
+BLOCK_NO_BEDS,no beds
+BLOCK_NO_WATER,no water
+BLOCK_LITTLE_FOOD,little food
+BLOCK_UNHAPPY,unhappy
+SELECT_SURVIVOR,Survivor
+SELECT_NEEDS,food {0}  water {1}  rest {2}  mood {3}
+MIGRANTS_ASK,{0} survivors ask for shelter{1}
+MIGRANTS_ASK_ONE,{0} survivor asks for shelter{1}
+MIGRANTS_BEDS_WARNING,"  ·  only {0} beds"
+MIGRANTS_BEDS_WARNING_ONE,"  ·  only {0} bed"
+MIGRANTS_FOOD_WARNING,"  ·  food is short"
+MIGRANTS_LET_IN,Let in
+MIGRANTS_TURN_AWAY,Turn away
+SITE_TITLE,Choose where to raise the Hearth
+SITE_HINT,tap the land to choose · forest is wood, rock is stone, water is drink
+SITE_SUGGEST,Suggest a site
+SITE_SETTLE,Settle here
+SITE_OFF_MAP,off the map
+SITE_UNBUILDABLE,cannot build on water or rock
+SITE_TOO_CLOSE_TO_EDGE,too close to the edge
+SITE_PLENTIFUL,plentiful
+SITE_SOME,some
+SITE_LITTLE,little
+SITE_WOOD,{0} wood
+SITE_STONE,{0} stone
+SITE_WATER,{0} water
+SITE_BERRIES,{0} berries
+LEDGER_FOOD,Food
+LEDGER_WATER,Water
+LEDGER_MOOD,Mood
+LEDGER_FAITH,Faith
+LEDGER_PER_DAY,{0} per day
+LEDGER_PER_SECOND,{0} per second
+LEDGER_AVERAGE,{0} average
+LEDGER_DRIFTING_TO,drifting to {0}
+LEDGER_NOW,now {0}
+LEDGER_GATHERED,gathered and farmed
+LEDGER_EATEN,eaten
+LEDGER_IN_STORE_HOLDING,{0} in store · holding
+LEDGER_IN_STORE_DAYS,{0} in store · {1} days left
+LEDGER_IN_STORE,{0} in store
+LEDGER_NO_WATER,no reachable water — sink a well
+LEDGER_THIRSTY_NOW,thirsty right now
+LEDGER_TILES_TO_WATER,tiles to nearest water
+LEDGER_WELL_HINT,a well inside the walls saves every one of those trips, twice a day each
+LEDGER_BASELINE,baseline
+LEDGER_HUNGRY,hungry
+LEDGER_THIRSTY,thirsty
+LEDGER_EXHAUSTED,exhausted
+LEDGER_SLEEPING_ROUGH,sleeping rough
+LEDGER_IN_EMBER,in the Ember's light
+LEDGER_IN_BLIGHT,standing in Blight
+LEDGER_FAITH_BASE,base
+LEDGER_FAITH_MOOD,colony mood
+LEDGER_FAITH_WORSHIPPERS,worshippers
+LEDGER_FAITH_FULL,full at {0} — spend it
+LEDGER_FAITH_FILLING,{0} / {1} · full in {2}s
+SUMMARY_ASCENDED,You carry the Ember onward
+SUMMARY_FALLEN,The keep has fallen
+SUMMARY_STATS,Survived to day {0}\n{1} survivors remained
+SUMMARY_SHARDS,+{0} Relic Shards   ({1} total)
+SUMMARY_SHARDS_REMAINING,{0} Relic Shards remaining
+SUMMARY_ALL_UNLOCKED,Everything is unlocked.
+SUMMARY_UNLOCK,Unlock
+SUMMARY_UNLOCK_OFFER,Unlock {0}  —  {1} shards
+SUMMARY_UNLOCK_SHORT,{0} more shards for the {1}.
+NOTICE_KEEP_ENDURES,The keep endures. Day {0}.
+NOTICE_HEARTH_BROKEN,The Hearth is broken. The light goes out.
+NOTICE_LAST_FALLEN,The last of them has fallen.
+NOTICE_ASCEND,You carry the Ember onward.
+NOTICE_BLIGHT_STIRS,The Blight stirs — night {0}
+NOTICE_NIGHT_HOLDS,The night holds.
+NOTICE_NIGHT_BROKEN,The night is broken. {0} faith from the fallen.
+NOTICE_DAWN_SCATTERS,Dawn scatters the rest. {0} faith earned.
+NOTICE_NEST_BURNED,A nest is burned out. The Blight recoils.
+NOTICE_CHILD_BORN,A child is born at the Hearth.
+NOTICE_SURVIVOR_ARRIVES,A survivor reaches the light.
+NOTICE_MIGRANTS_WAITING,{0} survivors at the edge of the light.
+NOTICE_MIGRANTS_WAITING_ONE,{0} survivor at the edge of the light.
+NOTICE_MIGRANTS_LEAVE,The survivors move on into the dark.
+NOTICE_MIGRANTS_JOINED,{0} joined the keep.
+NOTICE_MIGRANTS_REFUSED,You turn them away. Your people saw.
+GROUP_RAW,raw
+GROUP_PROCESSED,worked
+GROUP_MADE,made
+RESOURCE_BOARDS,boards
+RESOURCE_CUT_STONE,cut stone
+RESOURCE_TOOLS,tools
+JOB_WARRIOR,Warrior
+JOB_SAWING,Sawing
+JOB_STONECUTTING,Stonecutting
+JOB_TOOLMAKING,Toolmaking
+BUILDING_SAWMILL,Sawmill
+BUILDING_SAWMILL_DESC,Turns three logs into a board. Boards go further than timber — anything you mean to keep wants them.
+BUILDING_STONECUTTER,Stonecutter
+BUILDING_STONECUTTER_DESC,Dresses rough stone into blocks. Slow work, and the only source of cut stone.
+BUILDING_TOOLSMITH,Toolsmith
+BUILDING_TOOLSMITH_DESC,Boards and cut stone become tools. Nothing in the upper half of the build list can be raised without them.
+JOB_WOODCUTTING,Woodcutting
+JOB_QUARRYING,Quarrying
+JOB_FORAGING,Foraging
+JOB_FARMING,Farming
+BUILDING_HEARTH,Hearth
+BUILDING_HEARTH_DESC,"The colony's heart. Goods are stored here, and its fire never goes out."
+BUILDING_HUT,Hut
+BUILDING_HUT_DESC,Shelter for four. Villagers recover far faster under a roof.
+BUILDING_FARM,Farm
+BUILDING_FARM_DESC,Tilled beds. The only food that does not run out — assign farmers to work it.
+BUILDING_STOCKPILE,Stockpile
+BUILDING_STOCKPILE_DESC,"A drop-off point. Build these near the work, not near the keep."
+BUILDING_WELL,Well
+BUILDING_WELL_DESC,Water inside the walls. Without one your people walk to the shore and back all day — and once you have gated the palisade, they walk a great deal further.
+BUILDING_PALISADE,Palisade
+BUILDING_PALISADE_DESC,A stake wall. Blocks the way — and monsters will break it rather than walk around.
+BUILDING_GATE,Gate
+BUILDING_GATE_DESC,Your people pass; the Blight does not. A wall without one of these is a cage — and monsters would rather break the gate than walk the long way round, so put your towers where it stands.
+BUILDING_WATCHTOWER,Watchtower
+BUILDING_WATCHTOWER_DESC,A guard post with a standing brazier. Its light reaches well past its walls.
+POWER_EMBERFALL,Emberfall
+POWER_EMBERFALL_DESC,Drops a lasting light. Monsters route around it and burn if they push through.
+POWER_WRATH,Wrath
+POWER_WRATH_DESC,A burst of holy fire. Hurts everything corrupted standing in it.
+POWER_WARD,Ward
+POWER_WARD_DESC,"Consecrates the ground. Burns the Blight out of the soil, and what is cleansed stays clean for a while."
+MONSTER_SHAMBLER,Shambler
+MONSTER_BRUTE,Brute
+MONSTER_SWARMLING,Swarmling
+MONSTER_BURROWER,Burrower
+MONSTER_SHADE,Shade
+MONSTER_SPITTER,Spitter
+DIFFICULTY_SHELTERED,Sheltered
+DIFFICULTY_SHELTERED_DESC,The dark keeps its distance. Room to learn what everything does before it starts costing you people.
+DIFFICULTY_HARRIED,Harried
+DIFFICULTY_HARRIED_DESC,"The game as intended. You will lose people, and you are meant to."
+DIFFICULTY_BESIEGED,Besieged
+DIFFICULTY_BESIEGED_DESC,The Blight comes faster than you can clear it. Every wall has to earn its wood.
+DIFFICULTY_FORSAKEN,Forsaken
+DIFFICULTY_FORSAKEN_DESC,"One survivor short, everything arriving early, and nothing forgiven. Most runs end in the first week."
+DIFFICULTY_SHARD_MULT,{0}\n\nshards ×{1}
+STATE_IDLE,idle
+STATE_SEEKING,seeking
+STATE_WORKING,working
+STATE_HAULING,hauling
+STATE_BUILDING,building
+STATE_FETCHING,fetching
+STATE_DELIVERING,delivering
+STATE_EATING,eating
+STATE_SLEEPING,sleeping
+STATE_RESTING,resting
+STATE_GUARDING,guarding
+STATE_FLEEING,fleeing
+STATE_COMMANDED,commanded
+STATE_DRINKING,drinking
+STATE_CARRYING," carrying {0} {1}"
+STATE_UNASSIGNED,unassigned
+STATE_DESCRIBE,{0} ({1}){2}
+COST_FREE,free
+COST_ENTRY,{0} {1}
+PLACE_OFF_MAP,off the map
+PLACE_BLOCKED,blocked ground
+PLACE_OCCUPIED,already built here
+PLACE_NEED,need {0}
+RESOURCE_WOOD,wood
+RESOURCE_STONE,stone
+RESOURCE_FOOD,food
+RESOURCE_WATER,water
+TAB_LOGISTICS,stores
+TAB_HOUSING,homes
+TAB_PRODUCTION,works
+TAB_DEFENCE,walls
+TAB_DIVINE,faith
+HUD_RESOURCE_ENTRY,{0} {1}
+HUD_RESOURCE_GROUP,{0}  {1}
+PLACE_NO_INFLUENCE,outside your reach
+PLACE_NEEDS_CENTER,needs a village centre of tier {0}
+PLACE_NEEDS_TIER,needs tier {0} and {1} survivors
+GATE_NEEDS_CENTER,centre {0}
+GATE_NEEDS_POP,{0} souls
+UI_UPGRADE,improve
+UI_UPGRADE_TO,raise to {0}
+UI_DEMOLISH,tear down
+UI_DEMOLISH_CONFIRM,sure?
+UPGRADE_NONE,nothing further to build here
+UPGRADE_NEEDS_TIER,needs a village centre of tier {0}
+UPGRADE_NEEDS_POP,needs {0} survivors
+BLD_INTACT,{0}% intact
+BLD_AWAITING_MATERIALS,waiting on materials
+BLD_UNDER_CONSTRUCTION,under construction
+BLD_TEARING_DOWN,"coming apart, {0}%"
+LEDGER_ABILITIES,ABILITIES
+LEDGER_FAITH_PASSIVE,the colony's faith
+LEDGER_TOME,{0}  {1}%
+LEDGER_BURDEN,burden of {0}
+LEDGER_FAITH_DRAINING,{0} left — dark in {1}m {2}s
+UI_TAKE_UP,take up
+UI_GIVE_BACK,give back
+UI_GIVE_BACK_COST,costs {0} faith to give back
+POWER_NO_TEMPLE,{0} — no temple
+TOME_LABEL,{0} T{1}
+NOTICE_POWER_TAKEN,{0} is yours to call. Its burden: {1} faith each second.
+NOTICE_POWER_GIVEN_BACK,{0} is set aside. Its burden lifts.
+NOTICE_TOME_WRITTEN,The priests finish {0}.
+NOTICE_TOME_COMBINED,Three works are bound into {0}.
+NOTICE_TOME_CRUMBLED,{0} falls to dust.
+NOTICE_TEMPLE_RAISED,The temple stands. Tier {0} rites are open to you.
+JOB_WORKER,workers
+JOB_PRIEST,priests
+BUILDING_GREAT_HALL,great hall
+BUILDING_GREAT_HALL_DESC,"The heart of the colony, raised. Tier 2: opens the upper half of the build list."
+BUILDING_STONE_KEEP,stone keep
+BUILDING_STONE_KEEP_DESC,"Walls, braziers and a barred gate. Tier 3, and the safest ground on the map."
+BUILDING_LONGHOUSE,longhouse
+BUILDING_LONGHOUSE_DESC,Nine beds under one roof. Beds are how a colony grows.
+BUILDING_PATH,path
+BUILDING_PATH_DESC,Trodden earth. Quicker to walk — and quicker for whatever walks in.
+BUILDING_ROAD,road
+BUILDING_ROAD_DESC,"Laid stone. The fastest ground there is, for everyone."
+BUILDING_SHRINE,shrine
+BUILDING_SHRINE_DESC,"One priest, one work shelved. Opens the first rites."
+BUILDING_TEMPLE,temple
+BUILDING_TEMPLE_DESC,"Three priests, two works. Opens the second rites."
+BUILDING_SANCTUM,sanctum
+BUILDING_SANCTUM_DESC,"Five priests, three works. Opens the last rites."
+POWER_RALLY,rally
+POWER_RALLY_DESC,Your people move and strike harder for a while. The answer to a breach.
+POWER_BLESSING,blessing
+POWER_BLESSING_DESC,Lifts the spirits of everyone nearby — and spirits make faith.
+POWER_DAWNBREAK,dawnbreak
+POWER_DAWNBREAK_DESC,"A false morning. Vast light, vast cost."
+POWER_CONSECRATE,consecrate
+POWER_CONSECRATE_DESC,"Burns the blight out of a wide stretch of ground, and out of a nest."
+POWER_ASCENSION,ascension
+POWER_ASCENSION_DESC,Everything near the Ember is quickened and steadied at once.
+TOME_ASHEN_CODEX,Ashen Codex
+TOME_ASHEN_CODEX_DESC,"Plain work, honestly done."
+TOME_VIGIL_PSALTER,Vigil Psalter
+TOME_VIGIL_PSALTER_DESC,"A modest thing, bound to outlast its writers."
+TOME_NIGHTWATCH_LITANY,Nightwatch Litany
+TOME_NIGHTWATCH_LITANY_DESC,Silent by day. In the dark it gives a great deal.
+TOME_PENITENT_ROLLS,Penitent Rolls
+TOME_PENITENT_ROLLS_DESC,Faith bought with the colony's cheer.
+TOME_EMBERWARD_FOLIO,Emberward Folio
+TOME_EMBERWARD_FOLIO_DESC,Written close to the flame. It does not keep well.
+BLIGHT_HOVEL,blight hovel
+BLIGHT_HOVEL_DESC,A crude shelter. More of them means more of the horde each night.
+BLIGHT_SPIRE,blight spire
+BLIGHT_SPIRE_DESC,It bleeds corruption into the ground around it.
+BLIGHT_TOTEM,blight totem
+BLIGHT_TOTEM_DESC,It glows, and everything that comes past it is stronger for having.
+NOTICE_BLIGHT_BUILDS,They have raised a {0} out past your reach.
+NOTICE_BLIGHT_RAZED,One of their works is levelled.
+UPGRADE_LOCKED,sealed to you — {0} shards

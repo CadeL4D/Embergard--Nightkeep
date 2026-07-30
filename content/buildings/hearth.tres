@@ -6,9 +6,12 @@
 [resource]
 script = ExtResource("1_def")
 id = &"hearth"
-display_name = "Hearth"
-description = "The colony's heart. Goods are stored here, and its fire never goes out."
+display_name = "BUILDING_HEARTH"
+description = "BUILDING_HEARTH_DESC"
 sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 1
+center_tier = 1
 footprint = Vector2i(2, 2)
 blocks_movement = false
 max_blight = 255
@@ -17,6 +20,9 @@ build_work = 0.0
 max_hp = 400.0
 light_radius = 5
 is_stockpile = true
+faith_capacity = 60.0
+influence_radius = 14
 sleep_slots = 0
+worker_slots = 0
 order = 0
 color = Color(1, 0.65, 0.32, 1)

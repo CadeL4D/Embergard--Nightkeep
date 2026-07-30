@@ -5,14 +5,15 @@
 [resource]
 script = ExtResource("1_job_def")
 id = &"farming"
-display_name = "Farming"
+display_name = "JOB_FARMING"
 target_features = Array[int]([])
 workplace = &"farm"
 cycle_yield = {
-&"food": 10
+&"food": 6
 }
-cycle_work = 9.0
+cycle_work = 18.0
 work_rate = 1.0
 carry_capacity = 10
 priority = 1
+default_quota = 0
 color = Color(0.55, 0.72, 0.36, 1)

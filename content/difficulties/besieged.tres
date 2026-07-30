@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="DifficultyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/difficulty_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"besieged"
+display_name = "DIFFICULTY_BESIEGED"
+description = "DIFFICULTY_BESIEGED_DESC"
+threat_mult = 1.4
+blight_mult = 1.5
+monster_night_shift = 1
+needs_mult = 1.15
+migration_mult = 0.8
+start_pop_bonus = 0
+shard_mult = 1.4
+order = 2
+color = Color(0.9, 0.7, 0.42, 1)

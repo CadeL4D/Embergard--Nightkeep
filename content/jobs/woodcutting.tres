@@ -5,9 +5,10 @@
 [resource]
 script = ExtResource("1_job_def")
 id = &"woodcutting"
-display_name = "Woodcutting"
+display_name = "JOB_WOODCUTTING"
 target_features = Array[int]([1])
 work_rate = 1.0
 carry_capacity = 12
 priority = 0
+default_quota = 2
 color = Color(0.42, 0.65, 0.36, 1)

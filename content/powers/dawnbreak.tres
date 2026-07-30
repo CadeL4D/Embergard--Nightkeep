@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_power_def"]
+
+[resource]
+script = ExtResource("1_power_def")
+id = &"dawnbreak"
+display_name = "POWER_DAWNBREAK"
+description = "POWER_DAWNBREAK_DESC"
+kind = 0
+faith_cost = 70.0
+cooldown = 90.0
+radius = 11
+amount = 255.0
+duration = 30.0
+required_temple_tier = 2
+burden = 0.32
+color = Color(1, 0.94, 0.72, 1)
+order = 5
+unlock_cost = 170

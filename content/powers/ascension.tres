@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_power_def"]
+
+[resource]
+script = ExtResource("1_power_def")
+id = &"ascension"
+display_name = "POWER_ASCENSION"
+description = "POWER_ASCENSION_DESC"
+kind = 3
+faith_cost = 80.0
+cooldown = 120.0
+radius = 7
+amount = 0.0
+duration = 0.0
+mood_boost = 30.0
+speed_boost = 0.45
+damage_boost = 0.8
+boost_duration = 40.0
+required_temple_tier = 3
+burden = 0.23
+color = Color(1, 0.88, 0.62, 1)
+order = 7
+unlock_cost = 250

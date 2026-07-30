@@ -6,9 +6,11 @@
 [resource]
 script = ExtResource("1_def")
 id = &"stockpile"
-display_name = "Stockpile"
-description = "A drop-off point. Build these near the work, not near the keep."
+display_name = "BUILDING_STOCKPILE"
+description = "BUILDING_STOCKPILE_DESC"
 sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 1
 footprint = Vector2i(1, 1)
 blocks_movement = false
 max_blight = 60
@@ -19,6 +21,8 @@ build_work = 6.0
 max_hp = 60.0
 light_radius = 0
 is_stockpile = true
+influence_radius = 3
 sleep_slots = 0
-order = 2
+worker_slots = 0
+order = 3
 color = Color(0.7, 0.62, 0.45, 1)

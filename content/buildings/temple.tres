@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/temple.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"temple"
+display_name = "BUILDING_TEMPLE"
+description = "BUILDING_TEMPLE_DESC"
+sprite = ExtResource("2_tex")
+category = &"divine"
+tier = 2
+footprint = Vector2i(2, 3)
+blocks_movement = true
+max_blight = 30
+cost = {
+&"cut_stone": 14,
+&"boards": 10,
+&"tools": 3
+}
+build_work = 56.0
+max_hp = 340.0
+upgrades_from = &"shrine"
+min_population = 14
+light_radius = 6
+is_stockpile = false
+faith_capacity = 140.0
+influence_radius = 11
+temple_tier = 2
+tome_slots = 2
+sleep_slots = 0
+worker_slots = 3
+order = 41
+color = Color(0.84, 0.78, 0.96, 1)

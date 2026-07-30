@@ -73,12 +73,61 @@ const GROUND := {
 }
 
 
+# =========================================================================================
+# CORRUPTED GROUND — the same materials after the Blight has taken them
+# =========================================================================================
+#
+# Real tiles, not a wash. Corruption used to be drawn entirely by a shader over the top of
+# clean terrain, which is why it read as something floating rather than as ground that had
+# turned. These replace the tile outright once intensity passes TileAtlas.CORRUPT_THRESHOLD.
+#
+# Each one keeps a TRACE of what it used to be — a little sand in corrupted sand, dead
+# stems in corrupted grass, stone chips in corrupted rock. That is what makes the boundary
+# legible: the player can still tell which ground they lost, and rock still reads as
+# harder going than soil. Painting one generic purple mud over everything would flatten
+# the map's whole read.
+#
+# Only walkable materials appear here. Water cannot be blighted, so it has no corrupted form.
+
+const CORRUPT_GROUND := {
+	Terrain.Type.GRASS: {
+		"base": "b",
+		"speck": {"B": 34, "P": 9, "m": 10, "k": 6},
+		# Filaments. Thin, branching, and wrapped by the baker so they tile seamlessly.
+		"motifs": [{"map": ["P.", ".P", "P."], "count": 4}, {"map": ["BPB"], "count": 3}],
+	},
+	Terrain.Type.DIRT: {
+		"base": "b",
+		"speck": {"B": 30, "P": 8, "e": 12, "k": 5},
+		"motifs": [{"map": [".P", "P."], "count": 5}, {"map": ["BB"], "count": 4}],
+	},
+	Terrain.Type.SAND: {
+		"base": "b",
+		"speck": {"B": 28, "P": 7, "n": 14, "x": 5},
+		"motifs": [{"map": ["PP"], "count": 4}, {"map": ["B.", ".B"], "count": 4}],
+	},
+	Terrain.Type.ROCK: {
+		# Darker base than the others: corrupted stone should still read as the hardest,
+		# least inviting ground on the map.
+		"base": "K",
+		"speck": {"b": 32, "B": 20, "P": 6, "s": 12},
+		"motifs": [{"map": ["Bs", "sB"], "count": 5}, {"map": ["P"], "count": 4}],
+	},
+	Terrain.Type.RUBBLE: {
+		"base": "b",
+		"speck": {"B": 26, "P": 8, "s": 12, "K": 8},
+		"motifs": [{"map": ["sB", "Bs"], "count": 5}, {"map": ["PP"], "count": 3}],
+	},
+}
+
+
 func _ready() -> void:
 	_ensure_dirs()
 	_bake_tileset()
 	_bake_villager()
 	_bake_carry_icons()
 	_bake_monsters()
+	_bake_blight_structures()
 	_bake_buildings()
 	_bake_ember()
 	_bake_light_falloff()
@@ -162,6 +211,11 @@ func _bake_tileset() -> void:
 		for v in TileAtlas.VARIANTS:
 			_paint_ground(img, TileAtlas.terrain_coords(t, v), GROUND[t], rng)
 
+	# Corrupted forms of the same materials, in the mirrored rows below.
+	for t: int in CORRUPT_GROUND:
+		for v in TileAtlas.VARIANTS:
+			_paint_ground(img, TileAtlas.corrupt_terrain_coords(t, v), CORRUPT_GROUND[t], rng)
+
 	var variants: Dictionary = ArtData.feature_variants()
 	for f: int in ArtData.feature_maps():
 		# A feature either has a list of alternate silhouettes or just its one map.
@@ -172,6 +226,16 @@ func _bake_tileset() -> void:
 				continue
 			var coords := TileAtlas.feature_coords(f, v)
 			_stamp(img, map, coords.x * TileAtlas.TILE, coords.y * TileAtlas.TILE)
+
+	# Dense interiors, in the row below. Only the clustering features have one — see
+	# TileAtlas.DENSE_FEATURES and ArtData's note on why this is two states and not sixteen.
+	var dense: Dictionary = ArtData.dense_feature_maps()
+	for f: int in dense:
+		var map: Array = dense[f]
+		if not _check_map("dense feature %d" % f, map, TileAtlas.TILE, TileAtlas.TILE):
+			continue
+		var coords := TileAtlas.dense_coords(f)
+		_stamp(img, map, coords.x * TileAtlas.TILE, coords.y * TileAtlas.TILE)
 
 	_save(img, TILESET_PATH)
 
@@ -281,6 +345,23 @@ func _bake_monsters() -> void:
 			_save(img, "res://assets/sprites/monsters/%s.png" % id)
 
 
+## The Blight's own structures. One PNG each, like the player's buildings and for the same reason:
+## they are few, they are large, and atlasing them would cost authoring friction for no batching
+## win. Sizes vary — the spire is 16x32 and the totem 16x24 — so each entry carries its own.
+func _bake_blight_structures() -> void:
+	DirAccess.make_dir_recursive_absolute("res://assets/sprites/blight")
+	for id: StringName in ArtData.blight_structure_maps():
+		var entry: Dictionary = ArtData.blight_structure_maps()[id]
+		var w: int = entry["w"]
+		var h: int = entry["h"]
+		if not _check_map("blight structure %s" % id, entry["map"], w, h):
+			continue
+		var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+		img.fill(Color(0, 0, 0, 0))
+		_stamp(img, entry["map"], 0, 0)
+		_save(img, "res://assets/sprites/blight/%s.png" % id)
+
+
 ## One PNG per building, named by id, so a BuildingDef .tres can point straight at
 ## its art without an atlas lookup. Buildings are few and large — the batching win
 ## from atlasing them would be negligible next to the authoring friction.
@@ -289,10 +370,14 @@ func _bake_buildings() -> void:
 	for id: StringName in ArtData.building_maps():
 		var entry: Dictionary = ArtData.building_maps()[id]
 		var map: Array = entry["map"]
-		var size: int = entry["size"]
-		if not _check_map("building %s" % id, map, size, size):
+		# Square entries carry one `size`; rectangular ones carry explicit `w`/`h`. Buildings
+		# stopped being uniformly 2x2 once long footprints arrived — a 3x2 sawmill is 48x32 — and
+		# assuming square silently truncated anything that was not.
+		var w: int = entry.get("w", entry.get("size", 16))
+		var h: int = entry.get("h", entry.get("size", 16))
+		if not _check_map("building %s" % id, map, w, h):
 			continue
-		var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+		var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 		img.fill(Color(0, 0, 0, 0))
 		_stamp(img, map, 0, 0)
 		_save(img, "res://assets/sprites/buildings/%s.png" % id)

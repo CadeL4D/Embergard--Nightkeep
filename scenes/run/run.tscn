@@ -1,25 +1,39 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/run/run.gd" id="1_run"]
 [ext_resource type="Script" path="res://scripts/divine/god_hand.gd" id="8_god_hand"]
 [ext_resource type="Script" path="res://scripts/world/world_view.gd" id="2_world_view"]
 [ext_resource type="TileSet" path="res://assets/tilesets/terrain_tiles.tres" id="3_tileset"]
 [ext_resource type="Shader" path="res://assets/shaders/blight_overlay.gdshader" id="4_blight"]
+[ext_resource type="Shader" path="res://assets/shaders/influence_overlay.gdshader" id="13_influence"]
+[ext_resource type="Script" path="res://scripts/world/blight_structure_view.gd" id="14_blight_view"]
 [ext_resource type="PackedScene" path="res://scenes/entities/ember.tscn" id="5_ember"]
 [ext_resource type="Script" path="res://scripts/ui/camera_rig.gd" id="6_camera"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_overlay.tscn" id="7_debug"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="9_hud"]
 [ext_resource type="Script" path="res://scripts/ui/placement_controller.gd" id="10_placement"]
 [ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="11_summary"]
+[ext_resource type="PackedScene" path="res://scenes/ui/site_picker.tscn" id="12_picker"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_blight"]
 shader = ExtResource("4_blight")
-shader_parameter/grid_size = Vector2(128, 128)
-shader_parameter/warp_speed = 0.08
-shader_parameter/warp_strength = 0.7
-shader_parameter/deep_color = Color(0.29, 0.05, 0.18, 1)
-shader_parameter/raw_color = Color(0.62, 0.13, 0.36, 1)
-shader_parameter/rim_color = Color(0.55, 0.18, 0.3, 1)
+shader_parameter/grid_size = Vector2(112, 112)
+shader_parameter/tile_px = 16.0
+shader_parameter/soil_deep = Color(0.18, 0.039, 0.11, 1)
+shader_parameter/soil_mid = Color(0.345, 0.086, 0.227, 1)
+shader_parameter/flesh = Color(0.561, 0.141, 0.337, 1)
+shader_parameter/take_hold = 0.87
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_influence"]
+shader = ExtResource("13_influence")
+shader_parameter/grid_size = Vector2(112, 112)
+shader_parameter/tile_px = 16.0
+shader_parameter/threshold = 0.157
+shader_parameter/rim = 0.1
+shader_parameter/edge_color = Color(0.996078, 0.831373, 0.494118, 1)
+shader_parameter/fill_color = Color(0.996078, 0.788235, 0.450980, 1)
+shader_parameter/fill_strength = 0.055
+shader_parameter/edge_strength = 0.42
 
 [node name="Run" type="Node2D"]
 script = ExtResource("1_run")
@@ -43,10 +57,23 @@ tile_set = ExtResource("3_tileset")
 [node name="Entities" type="Node2D" parent="WorldView/Sorted"]
 y_sort_enabled = true
 
+[node name="BlightStructures" type="Node2D" parent="WorldView/Sorted"]
+y_sort_enabled = true
+script = ExtResource("14_blight_view")
+
 [node name="BlightOverlay" type="ColorRect" parent="WorldView"]
+z_index = -1
 material = SubResource("ShaderMaterial_blight")
-offset_right = 2048.0
-offset_bottom = 2048.0
+offset_right = 1792.0
+offset_bottom = 1792.0
+mouse_filter = 2
+
+[node name="InfluenceOverlay" type="ColorRect" parent="WorldView"]
+visible = false
+z_index = -1
+material = SubResource("ShaderMaterial_influence")
+offset_right = 1792.0
+offset_bottom = 1792.0
 mouse_filter = 2
 
 [node name="Ember" parent="." instance = ExtResource("5_ember")]
@@ -66,6 +93,8 @@ visible = false
 centered = false
 
 [node name="Hud" parent="." instance = ExtResource("9_hud")]
+
+[node name="SitePicker" parent="." instance = ExtResource("12_picker")]
 
 [node name="RunSummary" parent="." instance = ExtResource("11_summary")]
 

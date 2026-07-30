@@ -11,7 +11,11 @@ extends Node
 ## Exit code is non-zero if any check fails, so this can gate a commit.
 
 const SEEDS: Array[int] = [1, 7, 424242, 99999]
-## Long enough to cover a full day/dusk/night/dawn cycle (525s) and tip into day 2,
+## The tier every assertion in this file is calibrated against. Must be the neutral
+## one — all of its multipliers are 1.0, so the numbers here are the real tuning
+## numbers rather than a tier's view of them.
+const TEST_DIFFICULTY := &"harried"
+## Long enough to cover a full day/dusk/night/dawn cycle (465s) and tip into day 2,
 ## so the phase machine and the night-side blight multiplier are both exercised.
 const SIM_SECONDS := 600.0
 const STEP := 0.05                   ## fixed feed into Sim, independent of real fps
@@ -28,8 +32,17 @@ const LIVE_FRAMES := 240
 
 func _ready() -> void:
 	print("=== Embergard smoke test ===")
+	# Pin the difficulty. Every balance assertion below is calibrated against the
+	# baseline tier, and a run left on whatever the developer last played would fail
+	# them for reasons that have nothing to do with the code under test.
+	Difficulties.select(TEST_DIFFICULTY)
+	print("difficulty: %s" % Difficulties.current_id())
 	for s in SEEDS:
 		_run_seed(s)
+	print("\n-- localization --")
+	_check_locale(SEEDS[0])
+	print("\n-- migration and pacing --")
+	_check_migration(SEEDS[SEEDS.size() - 1])
 	await _check_live_colony()
 	_report()
 
@@ -44,7 +57,7 @@ func _check_live_colony() -> void:
 	var run: Node2D = RUN_SCENE.instantiate()
 	add_child(run)
 	await get_tree().process_frame
-	run.start_run(2024)
+	run.start_run(2024, TEST_DIFFICULTY)
 	await get_tree().process_frame
 
 	var seed_value := 2024
@@ -226,7 +239,7 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 	_expect(guarding > 0, seed_value, "villagers switch to guard duty after dark (%d)" % guarding)
 
 	# --- Powers ------------------------------------------------------------------------
-	Divine.faith = Divine.FAITH_MAX
+	Divine.faith = Divine.faith_max()
 	var wrath := Powers.get_power(&"wrath")
 	var before_faith := Divine.faith
 	var target: Vector2 = Threat.monsters[0].position if Threat.alive_count() > 0 \
@@ -262,12 +275,34 @@ func _check_needs(seed_value: int, run: Node2D) -> void:
 	var grid: Grid = World.grid
 	var keep := grid.coord(World.keep_cell)
 
+	# --- Thirst is answered by walking, not by stock -------------------------------
+	# Run this first: it needs villagers who are not already mid-errand, and unlike food
+	# there is no resource to top up beforehand. If drinking does not work the colony dies
+	# of dehydration a good deal faster than it starves.
+	for v in Colony.villagers:
+		v.water = 5.0
+		v.food = 90.0
+	var thirst_scale := Sim.time_scale
+	Sim.time_scale = 10.0
+	for _i in 400:
+		await get_tree().process_frame
+	Sim.time_scale = thirst_scale
+
+	var drank := 0
+	for v in Colony.villagers:
+		if v.water > 40.0:
+			drank += 1
+	_expect(drank > 0, seed_value, "thirsty villagers reach water and drink (%d of %d)" % [
+		drank, Colony.villagers.size()])
+
 	# --- Eating drains the larder -------------------------------------------------
 	Colony.add(&"food", 200)
 	var food_before := Colony.amount_of(&"food")
-	# Starve everyone to just under the threshold so they all head for a meal.
+	# Starve everyone to just under the threshold so they all head for a meal. Water is
+	# topped up so thirst does not outrank hunger and invalidate the check below.
 	for v in Colony.villagers:
 		v.food = 10.0
+		v.water = 90.0
 	var previous_scale := Sim.time_scale
 	Sim.time_scale = 10.0
 	for _i in 300:
@@ -322,7 +357,10 @@ func _check_needs(seed_value: int, run: Node2D) -> void:
 		# reason. It did exactly that on the first run.
 		v.carry_amount = 0
 		v.carry_kind = &""
+		# Both needs, not just food: thirst outranks hunger and would pull farmers off the
+		# field mid-check for a reason that has nothing to do with farming.
 		v.food = 100.0
+		v.water = 100.0
 
 	Sim.time_scale = 10.0
 	var farmed := 0
@@ -382,6 +420,7 @@ func _check_building(seed_value: int, run: Node2D) -> void:
 	Colony.add(&"food", 300)
 	for v in Colony.villagers:
 		v.food = 100.0
+		v.water = 100.0
 
 	# Place it on clear ground a few tiles from the keep.
 	var grid: Grid = World.grid
@@ -540,9 +579,400 @@ func _check_ember_glide(seed_value: int) -> void:
 		"ember arrives at the tapped cell")
 
 
+## Phase 0 systems: the Ward power, destructible nests, gates, difficulty tiers, the
+## player-chosen keep site, and the two map-gen bugs that used to erase water and berries
+## from the starting area.
+func _check_phase0(seed_value: int) -> void:
+	# --- content is actually on disk -----------------------------------------------------
+	var ward := Powers.get_power(&"ward")
+	_expect(ward != null, seed_value, "the Ward power exists")
+	if ward != null:
+		_expect(ward.kind == PowerDef.Kind.PURIFY, seed_value,
+			"Ward is a PURIFY power, so _cast_purify is finally reachable")
+	_expect(Buildings.get_building(&"gate") != null, seed_value, "the Gate building exists")
+	_expect(Difficulties.all().size() >= 4, seed_value,
+		"all four difficulty tiers load (got %d)" % Difficulties.all().size())
+
+	# --- difficulty is neutral under test ------------------------------------------------
+	_expect(is_equal_approx(Difficulties.threat_mult(), 1.0), seed_value,
+		"the test tier is the neutral one, so the numbers below are the real ones")
+
+	# --- gates: villager-passable, monster-blocked ---------------------------------------
+	var gate_def := Buildings.get_building(&"gate")
+	if gate_def != null:
+		_expect(not gate_def.blocks_movement and gate_def.blocks_monsters_only, seed_value,
+			"a gate blocks monsters without blocking villagers")
+
+	# --- nests are destructible, and the reward is reachable ------------------------------
+	_expect(World.live_nest_cells().size() == World.nest_cells.size(), seed_value,
+		"every nest starts alive")
+	if not World.nest_cells.is_empty():
+		var nest: int = World.nest_cells[0]
+		_expect(World.nest_hp.has(nest), seed_value, "a live nest has hit points")
+
+		# A glancing blow wounds it but must not kill it, or NEST_HP means nothing.
+		_expect(not World.damage_nest(nest, Terrain.NEST_HP * 0.5), seed_value,
+			"half damage does not destroy a nest")
+		_expect(World.is_nest(nest), seed_value, "a wounded nest is still standing")
+
+		# The killing blow has to clear the feature, because that is what the end-of-run
+		# tally and the spawn director both read.
+		_expect(World.damage_nest(nest, Terrain.NEST_HP), seed_value,
+			"enough damage destroys a nest")
+		_expect(not World.is_nest(nest), seed_value, "a destroyed nest is gone from the map")
+		_expect(not World.nest_hp.has(nest), seed_value, "a destroyed nest drops its hit points")
+		_expect(World.live_nest_cells().size() == World.nest_cells.size() - 1, seed_value,
+			"the threat director sees one fewer nest to spawn from")
+		_expect(World.is_walkable(nest), seed_value, "the ground a nest stood on opens up")
+
+		# Regenerate, because the checks after this one assume an untouched map.
+		World.generate(seed_value)
+
+	# --- the map-gen fixes ---------------------------------------------------------------
+	# Berries used to be wiped inside KEEP_CLEAR_RADIUS, which stripped the only pre-farm
+	# food source out of the starting area on every single seed.
+	var grid: Grid = World.grid
+	var berries := 0
+	for i in grid.cell_count:
+		if World.feature_at(i) == Terrain.Feature.BERRIES:
+			berries += 1
+	_expect(berries > 0, seed_value, "the map has berries on it (%d)" % berries)
+
+	# Water used to be filled in out to radius 7, so a lakeside site had its lake paved
+	# over. Only the pad is guaranteed dry now.
+	var c := grid.coord(World.keep_cell)
+	var pad_dry := true
+	for dy in range(-MapGen.KEEP_PAD_RADIUS, MapGen.KEEP_PAD_RADIUS + 1):
+		for dx in range(-MapGen.KEEP_PAD_RADIUS, MapGen.KEEP_PAD_RADIUS + 1):
+			if not grid.is_valid(c.x + dx, c.y + dy):
+				continue
+			var t := World.terrain_at(grid.index(c.x + dx, c.y + dy))
+			if t == Terrain.Type.WATER or t == Terrain.Type.DEEP_WATER:
+				pad_dry = false
+	_expect(pad_dry, seed_value, "the keep pad is dry land")
+
+	# --- a chosen site is honoured, and deterministic ------------------------------------
+	var chosen := World.nearest_walkable(grid.index(c.x + 9, c.y + 9), 12)
+	if chosen != -1:
+		World.generate(seed_value, chosen)
+		_expect(World.keep_cell == chosen, seed_value, "a chosen keep site is used")
+		var first_nests := World.nest_cells.duplicate()
+		World.generate(seed_value, chosen)
+		_expect(World.nest_cells == first_nests, seed_value,
+			"the same seed and site regenerate an identical map")
+		World.generate(seed_value)
+
+
+## Phase 1: the migration system, and the retuned threat curve.
+##
+## Migration is the keystone — before it existed every quantity in a run only went down — so
+## it gets the most assertions of anything in this file. The gates matter as much as the
+## growth: a colony with no beds or no food must NOT grow, or huts and farms stop being
+## decisions again.
+func _check_migration(seed_value: int) -> void:
+	# Own setup and teardown: this check builds a hut, banks resources and admits a person,
+	# all of which would poison anything measured afterwards. Runs once rather than per seed
+	# because it exercises formulas, not map generation.
+	Colony.reset()
+	Colony.set_spawn_parent(self)
+	Divine.reset()
+	Divine.place_ember(World.keep_cell)
+	for i in 2:
+		var at := World.nearest_walkable(World.grid.index(
+			World.grid.coord(World.keep_cell).x + i, World.grid.coord(World.keep_cell).y))
+		if at != -1:
+			Colony.spawn_villager(at)
+	_expect(Colony.population() == 2, seed_value,
+		"migration check seeded a colony (%d)" % Colony.population())
+
+	# --- the threat curve is no longer a cliff -------------------------------------------
+	# The old curve doubled every ~2.5 nights and hit 590 by night 20, five times over the
+	# body cap. These bounds are deliberately loose — they are here to catch a return to
+	# exponential growth, not to pin the tuning.
+	Threat.pressure = 0.5
+	var n10 := Threat.budget_for_night(10)
+	var n20 := Threat.budget_for_night(20)
+	_expect(n10 > Threat.budget_for_night(5), seed_value, "nights keep getting harder")
+	_expect(n20 < n10 * 3.0, seed_value,
+		"the threat curve is not exponential (night 10 %.0f, night 20 %.0f)" % [n10, n20])
+	_expect(n20 < float(Threat.MAX_MONSTERS), seed_value,
+		"night 20 fits inside the body cap rather than overflowing into invisible stats (%.0f)"
+			% n20)
+
+	# --- dead air -------------------------------------------------------------------------
+	# is_dark() trips 60% through dusk, so the stretch where nobody works is the tail of dusk
+	# plus the whole night. It used to be 216s of a 525s cycle — 41% of the game spent watching
+	# a colony stand still. This guards the improvement; getting below ~25% needs the Warrior
+	# job so that only warriors stop working.
+	var cycle := Sim.cycle_seconds()
+	# Explicitly typed: PHASE_DURATION is a Dictionary, so indexing it yields a Variant and the
+	# parser will not infer a float from it.
+	var dark: float = float(Sim.PHASE_DURATION[Sim.Phase.NIGHT]) \
+		+ float(Sim.PHASE_DURATION[Sim.Phase.DUSK]) * 0.4
+	_expect(dark / cycle < 0.33, seed_value,
+		"the colony is idle for less than a third of the cycle (%.0f%%)" % (dark / cycle * 100.0))
+	_expect(Sim.PHASE_DURATION[Sim.Phase.DAWN] >= 30.0, seed_value,
+		"dawn is long enough to be a working morning (%.0fs)"
+			% Sim.PHASE_DURATION[Sim.Phase.DAWN])
+
+	# --- killing pays ----------------------------------------------------------------------
+	for def: MonsterDef in Monsters.all():
+		_expect(def.faith_on_death > 0.0, seed_value,
+			"%s is worth faith to kill" % def.id)
+	var faith_before := Divine.faith
+	Divine.night_faith_earned = 0.0
+	Divine.reward_kill(5.0)
+	_expect(Divine.faith > faith_before, seed_value, "a kill grants faith")
+	_expect(is_equal_approx(Divine.night_faith_earned, 5.0), seed_value,
+		"kills are tallied for the dawn report")
+
+	# --- the gates hold ------------------------------------------------------------------
+	# No beds on a fresh map: the Hearth has no sleep slots, so nothing has been built that
+	# anyone could sleep in.
+	_expect(Colony.beds_free() == 0, seed_value, "a colony with no huts has no free beds")
+	_expect(Colony.birth_blocker() != "", seed_value,
+		"births stall with nowhere to sleep (%s)" % Colony.birth_blocker())
+
+	# Give it beds but no food.
+	var hut := Buildings.get_building(&"hut")
+	if hut == null:
+		return
+	var anchor := World.nearest_walkable(World.grid.index(
+		World.grid.coord(World.keep_cell).x + 4, World.grid.coord(World.keep_cell).y))
+	Colony.add(&"wood", 500)
+	var built: Node = Colony.place_building(hut, anchor, _spawn_root())
+	_expect(built != null, seed_value, "a hut can be placed for the migration check")
+	if built == null:
+		return
+	built.complete()
+
+	_expect(Colony.beds_free() == hut.sleep_slots, seed_value,
+		"a finished hut offers its beds (%d)" % Colony.beds_free())
+
+	Colony.stock[&"food"] = 0
+	_expect(Colony.birth_blocker() != "", seed_value,
+		"births stall in a starving colony (%s)" % Colony.birth_blocker())
+
+	# --- water is the third gate ----------------------------------------------------------
+	# A generated island always has a coastline, so shore access should never be the thing
+	# that blocks a run. If this fails, the shore index is broken rather than the map.
+	_expect(World.shore_cells.size() > 0, seed_value,
+		"the map has a drinkable shoreline (%d cells)" % World.shore_cells.size())
+	_expect(Colony.has_water_access(), seed_value, "the colony can reach water")
+
+	var well := Buildings.get_building(&"well")
+	_expect(well != null, seed_value, "the Well building exists")
+	if well != null:
+		_expect(well.provides_water, seed_value, "a well provides water")
+
+	# Now feed it. This must produce a positive rate, or the colony can never grow at all.
+	Colony.add(&"food", 400)
+	_expect(Colony.food_days() >= Colony.MIGRATION_MIN_FOOD_DAYS, seed_value,
+		"400 food is more than a day's supply (%.1f days)" % Colony.food_days())
+	_expect(Colony.birth_blocker() == "", seed_value,
+		"a housed, fed, watered colony can grow (%.5f/s)" % Colony.birth_rate())
+
+	# --- and it actually admits someone ---------------------------------------------------
+	# Pushed clear of the target rather than to 0.999.
+	#
+	# Each birth needs a RANDOMISED amount of progress (0.75-1.35) so growth never lands on a beat
+	# the player can count. This test used to assume the target was 1.0, which meant it passed on
+	# whichever seeds happened to roll low and failed on the ones that rolled high — a genuinely
+	# flaky assertion, and it was the game's anti-metronome design that was right, not the test.
+	# Anything above the maximum target works on every seed, and the birth resets progress to zero
+	# regardless of how far past it went.
+	var before := Colony.population()
+	Colony.migration_progress = 2.0
+	Colony.step(1.0)
+	_expect(Colony.population() == before + 1, seed_value,
+		"completing migration progress admits exactly one survivor (%d -> %d)"
+			% [before, Colony.population()])
+	_expect(Colony.migration_progress < 0.75, seed_value,
+		"admitting a survivor consumes the progress rather than looping")
+
+	# --- rest is a real decision now -------------------------------------------------------
+	# A bed has to be meaningfully better than the ground, or huts are decoration again.
+	_expect(Villager.REST_IN_BED > Villager.REST_ROUGH * 3.0, seed_value,
+		"a bed beats the ground by a wide margin")
+	_expect(Villager.ROUGH_REST_CAP < Villager.NEED_MAX, seed_value,
+		"sleeping rough cannot fully rest a villager")
+
+	_check_ledger(seed_value)
+
+	# Teardown. Villagers and buildings deregister themselves in _exit_tree, so freeing the
+	# nodes is enough to leave the autoloads clean for the live-scene check that follows.
+	for child in get_children():
+		child.queue_free()
+	Colony.set_spawn_parent(null)
+	Colony.reset()
+
+
+## The rate ledger's honesty contract: every breakdown must add up to the number printed above
+## it.
+##
+## This is the assertion that makes the panel trustworthy. A breakdown that disagrees with its
+## own total is worse than no breakdown at all — it actively teaches the player the wrong model
+## of the game — and the terms are assembled by hand from formulas living in three other files,
+## so nothing but a test will notice when one of them is retuned and the ledger is not.
+##
+## It also guards the Phase 2 Burden system, which is unplayable if the Faith breakdown cannot
+## be trusted to explain a negative rate.
+func _check_ledger(seed_value: int) -> void:
+	# Mood: additive terms, must sum to the drift target.
+	var mood := RateLedger.mood()
+	var mood_sum := 0.0
+	for term in mood.terms:
+		mood_sum += term.value
+	_expect(absf(clampf(mood_sum, 0.0, Villager.NEED_MAX) - mood.total) < 0.01, seed_value,
+		"the mood breakdown sums to its total (%.2f vs %.2f)" % [mood_sum, mood.total])
+	_expect(mood.terms.size() > 0, seed_value, "the mood breakdown has terms to show")
+
+	# Faith is a SUM now, not a product: passive generation plus Tome bonuses minus ability Burden.
+	# Only the non-factor terms are in that sum — the factor rows annotate the term after them,
+	# explaining how the passive figure got its value. See RateLedger.faith().
+	#
+	# This is the honesty contract that matters most in the game, because a standing negative rate is
+	# unplayable unless the panel explaining it is exactly right.
+	var faith := RateLedger.faith()
+	var faith_sum := 0.0
+	var faith_factors := 0
+	for term in faith.terms:
+		if term.is_factor:
+			faith_factors += 1
+		else:
+			faith_sum += term.value
+	_expect(absf(faith_sum - faith.total) < 0.001, seed_value,
+		"the faith breakdown sums to its total (%.4f vs %.4f)" % [faith_sum, faith.total])
+	_expect(faith_factors >= 2, seed_value,
+		"the faith breakdown still explains WHY passive generation is what it is (%d factors)"
+			% faith_factors)
+	_expect(is_equal_approx(faith.total, Divine.net_faith_rate()), seed_value,
+		"the faith breakdown agrees with Divine.net_faith_rate")
+
+	# Burden has to be visible as its own line, or the player cannot tell which ability to shed.
+	# Every baseline power is taken up at run start, so there is always at least one.
+	_expect(Divine.total_burden() > 0.0, seed_value,
+		"the baseline abilities carry a real Burden (%.2f/s)" % Divine.total_burden())
+	var burden_terms := 0
+	for term in faith.terms:
+		if not term.is_factor and term.value < 0.0:
+			burden_terms += 1
+	_expect(burden_terms == Divine.taken_up.size(), seed_value,
+		"every Burden is itemised (%d lines for %d abilities)"
+			% [burden_terms, Divine.taken_up.size()])
+
+	# Taking an ability up must lower the net rate by EXACTLY its Burden, and giving it back must
+	# restore it exactly. A ratchet that leaks in either direction makes the whole system a trap.
+	var tier1: PowerDef = null
+	for def: PowerDef in Powers.all():
+		if def.required_temple_tier == 0 and not Divine.is_taken_up(def.id):
+			tier1 = def
+			break
+	if tier1 == null:
+		# Everything at tier 0 is already held, so test the round trip on one of those instead.
+		var held: StringName = Divine.taken_up[0]
+		var held_def := Powers.get_power(held)
+		var before_rate := Divine.net_faith_rate()
+		Divine.faith = maxf(Divine.faith, Divine.RELINQUISH_COST + 1.0)
+		_expect(Divine.relinquish(held), seed_value, "an ability can be given back")
+		_expect(absf((Divine.net_faith_rate() - before_rate) - held_def.burden) < 0.0001,
+			seed_value, "giving an ability back recovers exactly its Burden (%.3f)"
+				% held_def.burden)
+		_expect(Divine.take_up(held_def), seed_value, "and it can be taken up again")
+		_expect(absf(Divine.net_faith_rate() - before_rate) < 0.0001, seed_value,
+			"taking it back up costs exactly its Burden again")
+
+	# Food: supply minus demand must be the net, and demand must agree with the figure the
+	# migration gate uses. If these drift, the readout and the gate tell different stories.
+	var food := RateLedger.food()
+	var expected := (Colony.food_supply_per_second() - Colony.food_demand_per_second()) \
+		* Sim.cycle_seconds()
+	var food_sum := 0.0
+	for term in food.terms:
+		food_sum += term.value
+	_expect(absf(food_sum - expected) < 0.01, seed_value,
+		"the food breakdown sums to the net flow (%.2f vs %.2f)" % [food_sum, expected])
+	_expect(Colony.food_demand_per_second() > 0.0, seed_value,
+		"a populated colony has a positive food demand")
+
+	# Water has no stock, so its report is an average rather than a sum — assert it is at least
+	# reporting the colony that exists.
+	var water := RateLedger.water()
+	_expect(water.total >= 0.0 and water.total <= Villager.NEED_MAX, seed_value,
+		"the water report is a sane average (%.1f)" % water.total)
+
+
+## Localization: every key a content file names must exist in the table, and must translate to
+## something other than itself.
+##
+## This is the assertion that makes explicit keys safe. Their whole advantage over English-as-key
+## is that a missed string renders as `BUILDING_GATE_DESC` on screen instead of failing silently —
+## but that only helps if something notices. A typo in a .tres is otherwise invisible until a
+## player screenshots it.
+func _check_locale(seed_value: int) -> void:
+	_expect(Locale.keys.size() > 50, seed_value,
+		"the translation table loaded (%d keys)" % Locale.keys.size())
+
+	# Gather every key the content layer references, with a label for the failure message.
+	var refs: Array = []
+	for job: JobDef in Jobs.all():
+		refs.append(["job %s name" % job.id, job.display_name])
+	for def: BuildingDef in Buildings.all():
+		refs.append(["building %s name" % def.id, def.display_name])
+		refs.append(["building %s desc" % def.id, def.description])
+	for def: PowerDef in Powers.all():
+		refs.append(["power %s name" % def.id, def.display_name])
+		refs.append(["power %s desc" % def.id, def.description])
+	for def: DifficultyDef in Difficulties.all():
+		refs.append(["difficulty %s name" % def.id, def.display_name])
+		refs.append(["difficulty %s desc" % def.id, def.description])
+	for def: MonsterDef in Monsters.all():
+		refs.append(["monster %s name" % def.id, def.display_name])
+
+	var missing := 0
+	for entry in refs:
+		var label: String = entry[0]
+		var key: String = entry[1]
+		if key.is_empty():
+			continue
+		if not Locale.has_key(key):
+			missing += 1
+			_fail(seed_value, "%s references unknown key '%s'" % [label, key])
+		elif TranslationServer.translate(key) == key:
+			missing += 1
+			_fail(seed_value, "%s key '%s' has no English text" % [label, key])
+	_expect(missing == 0, seed_value,
+		"all %d content strings resolve" % refs.size())
+
+	# Formatted strings must actually substitute. A key whose placeholders were written as %s
+	# would silently render "{0}" to the player.
+	var sample := L10n.t(&"HUD_PER_DAY", ["+3"])
+	_expect(not sample.contains("{0}"), seed_value,
+		"placeholders substitute (%s)" % sample)
+
+	# And the most-seen runtime string of all.
+	if not Colony.villagers.is_empty():
+		var who: Villager = Colony.villagers[0]
+		var described := who.describe()
+		_expect(not described.contains("STATE_"), seed_value,
+			"villager status is translated (%s)" % described)
+
+
+## Where the migration check parents its test buildings and people.
+func _spawn_root() -> Node:
+	return self
+
+
 func _run_seed(seed_value: int) -> void:
 	print("\n-- seed %d --" % seed_value)
 	World.generate(seed_value)
+
+	# Before the colony exists, because these checks destroy nests and regenerate the map.
+	# Doing that after place_ember would leave Divine holding a light handle into a light
+	# field that had since been rebuilt, and every check after it would be measuring
+	# nonsense.
+	_check_phase0(seed_value)
+
 	Colony.reset()
 	Divine.reset()
 	Threat.reset()
@@ -597,7 +1027,7 @@ func _check_invariants(seed_value: int) -> void:
 	for kind in Colony.KINDS:
 		if Colony.amount_of(kind) < 0:
 			_fail(seed_value, "resource '%s' went negative" % kind)
-	if Divine.faith < 0.0 or Divine.faith > Divine.FAITH_MAX + 0.01:
+	if Divine.faith < 0.0 or Divine.faith > Divine.faith_max() + 0.01:
 		_fail(seed_value, "faith out of range (%f)" % Divine.faith)
 	if Threat.monsters.size() > Threat.MAX_MONSTERS:
 		_fail(seed_value, "monster cap exceeded (%d)" % Threat.monsters.size())
@@ -615,8 +1045,24 @@ func _check_progress(seed_value: int) -> void:
 	# swallowing the map (or the run is over before the player can respond).
 	var coverage := World.blight_field.coverage()
 	_expect(World.blight_field.frontier_size() > 0, seed_value, "blight frontier is alive")
-	_expect(coverage > 0.01, seed_value, "blight is advancing (%.1f%% by day 2)" % (coverage * 100.0))
-	_expect(coverage < 0.20, seed_value, "blight is not runaway (%.1f%% by day 2)" % (coverage * 100.0))
+	# Measured against the SEEDED area rather than against a flat percentage of the map.
+	#
+	# The old bound was a flat 0.2% by day 2, written when the Blight spread twenty times faster. It
+	# was never the right shape of test: spread is per-frontier-cell, so growth is exponential from a
+	# base of one cell per nest, and early absolute coverage is therefore tiny however the constant
+	# is tuned — four nests are 0.02% of the map before anything happens at all. A flat floor makes
+	# the test a hostage to the tuning it is supposed to be guarding.
+	#
+	# So: it must have at least doubled the ground it started on (which catches the real failure this
+	# guarded — a frontier that stalled entirely) and must be nowhere near swallowing the map by day
+	# two. Both bounds survive retuning; neither has to be revisited when BASE_SPREAD moves.
+	var seeded := float(World.nest_cells.size()) / float(World.grid.cell_count)
+	_expect(coverage > seeded * 2.0, seed_value,
+		"blight is advancing (%.3f%% by day 2, from %.3f%% seeded)"
+			% [coverage * 100.0, seeded * 100.0])
+	_expect(coverage < 0.20, seed_value,
+		"blight has not swallowed the map by day 2 (%.1f%%)" % (coverage * 100.0))
+	_expect(coverage < 0.08, seed_value, "blight is a slow siege (%.2f%% by day 2)" % (coverage * 100.0))
 
 	# The Ember must be lighting the ground it stands on — the aura is load-bearing
 	# for four separate systems, so a silent failure here breaks all of them.

@@ -46,8 +46,8 @@ theme_override_constants/separation = 8
 [node name="Title" type="Label" parent="Center/Card/Layout"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.694118, 0.376471, 1)
-theme_override_font_sizes/font_size = 20
-text = "The keep has fallen"
+theme_override_font_sizes/font_size = 16
+text = "SUMMARY_FALLEN"
 horizontal_alignment = 1
 
 [node name="Message" type="Label" parent="Center/Card/Layout"]
@@ -61,14 +61,14 @@ autowrap_mode = 3
 [node name="Stats" type="Label" parent="Center/Card/Layout"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.827451, 0.843137, 0.870588, 1)
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 10
 text = "stats"
 horizontal_alignment = 1
 
 [node name="Shards" type="Label" parent="Center/Card/Layout"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.850980, 0.501961, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 12
 text = "+0 Relic Shards"
 horizontal_alignment = 1
 
@@ -84,11 +84,17 @@ autowrap_mode = 3
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.615686, 0.858824, 0.588235, 1)
-theme_override_font_sizes/font_size = 12
-text = "Unlock"
+theme_override_font_sizes/font_size = 9
+text = "SUMMARY_UNLOCK"
 
 [node name="NewRun" type="Button" parent="Center/Card/Layout"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "Begin again"
+theme_override_font_sizes/font_size = 11
+text = "UI_BEGIN_AGAIN"
+
+[node name="MenuButton" type="Button" parent="Center/Card/Layout"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "UI_MAIN_MENU"

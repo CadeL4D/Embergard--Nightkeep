@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1_power_def"]
+
+[resource]
+script = ExtResource("1_power_def")
+id = &"ward"
+display_name = "POWER_WARD"
+description = "POWER_WARD_DESC"
+kind = 2
+faith_cost = 26.0
+cooldown = 10.0
+radius = 4
+amount = 120.0
+duration = 0.0
+required_temple_tier = 0
+burden = 0.08
+color = Color(0.62, 0.86, 0.72, 1)
+order = 1
