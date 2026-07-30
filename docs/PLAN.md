@@ -19,17 +19,86 @@ Last updated: 2026-07-30
 | **5** | Audio content, onboarding, accessibility, desktop parity, stats | ⬜ pending |
 | **6** | Biomes, storyteller events, weather | ⬜ pending |
 
+## Visual scale and presentation overhaul — done 2026-07-30
+
+This pass answered the "128 px buildings" problem without changing the simulation grid:
+
+- **Authored cells remain 16 px.** The apparent size came from a 2× camera inside the 2× display
+  stretch. The default camera is now **1×**, with curated 0.5/0.75/1/1.5/2/3/4× snap points. The
+  default view therefore shows twice as much in each direction — roughly four times the map area —
+  while pathfinding, placement, footprints and saves keep the same coordinates.
+- **Maps gained a visual-only dressing layer.** Atlas row 39 contains deterministic grass tufts,
+  weeds, stones, cracks, sand ripples, water glints, rubble and flowers. `WorldView` never writes
+  them into `World.feature`, so decoration cannot block a route, become a fake resource or enter a
+  save. Ground noise was reduced at the same time so deliberate details read instead of dissolving
+  into salt-and-pepper texture.
+- **Forests and quarries now use 16 connection-mask tiles with eight visual variants each.** Each
+  cell selects a four-bit N/E/S/W connection mask plus an independently mixed edge variant. Shared
+  edges are full-bleed; only exposed edges receive the silhouette and depth bands. Harvesting
+  repaints the changed cell and its four neighbors, so newly cut edges remain correct without adding
+  save state.
+  - The reference-matching refinement adds a near-black rounded forest perimeter, two recessed
+    canopy bands, a dark uninterrupted canopy interior, and warm taupe rock plateaus. Full-width
+    seeded edge profiles replace the old 8 px repeating wave, and dedicated corner chamfers remove
+    the pinched square turns. Tile-local interior contour stamps were deliberately removed after
+    capture review because they exposed a visible pattern at gameplay scale.
+  - **Large surface contours are a separate view-only layer.** `FeatureDetails` places a small,
+    deterministic set of irregular 3-tile-wide canopy lobes and stone shelves only where a resource
+    is solid for one or two cells around the chosen point. They therefore reproduce the reference's
+    broad interior forms without restarting in every atlas cell, never cross an exposed resource
+    edge, and rebuild after harvesting without entering pathing or save data.
+  - **Berries do not use the connected terrain system.** Three compact shrub silhouettes occupy
+    less than one 16 px cell, leave ground visible around them, and retain bright fruit accents even
+    when several berry cells are adjacent.
+  - Visual-development reference: `assets/concepts/connected_natural_features_reference.png`.
+  - Resource noise frequency was reduced from 0.06 to 0.045, core fill was raised, and a deterministic
+    cellular cleanup removes isolated tree/stone cells and closes small holes. The result is fewer,
+    larger forests and quarries rather than resources dusted evenly across the map.
+- **World art was re-keyed and re-baked.** The shared `ArtData` palette has clearer stone, timber,
+  water and foliage ramps, and every unit/building/blight sprite gets a restrained one-pixel contact
+  shadow from the baker. Existing widened building silhouettes and gameplay footprints are kept.
+  Villagers now have a stronger hood/scarf/tunic silhouette, and all six carried-resource icons were
+  redrawn at 9×9 px so raw and processed goods remain distinct at the 1× camera.
+- **The title screen now has a production backdrop** at
+  `assets/ui/nightkeep_menu_backdrop.png`, with a left-side readability gradient and a responsive
+  menu column. Root, New World, Options and Credits are captured by
+  `scenes/dev/menu_screenshot.tscn`.
+- **The shared theme now actually reaches every Control.** A plain `Node` or `CanvasLayer` breaks
+  Godot theme inheritance; the old root-window-only application silently left many buttons and
+  sliders at stock 16 px sizing. `Ui` now reapplies the same `UiTheme` wherever Control inheritance
+  restarts, including runtime-built rows and buttons.
+- **HUD drawers are mutually exclusive and clipped.** Resource breakdown, jobs, build placement and
+  the survivor prompt cannot stack into one another. Building cards and the power/action bar scroll
+  horizontally when needed; the job board scrolls vertically; selection cards yield to the active
+  drawer. The job board is now 294 px wide and 220 px tall, with a precise minus and plus button
+  around every slider. Resource and phase bars remain visible in the 800×360 safe area.
+- **All menu states and gameplay phases were visually checked at 1600×720 output.** The gameplay
+  capture set now includes the new 1× default plus jobs, building, dusk and night views.
+
+Local engine used for this workspace:
+`C:\Users\cadel\Documents\Godot\Godot_v4.7-stable_win64_console.exe`.
+
 ## Verified state
 
 Phases 0–3 are **engine-verified**: the whole project parses with zero errors, the smoke test passes
 **all checks across 4 seeds**, and the stress test shows no regression.
 
-**One caveat, stated because it is real.** Over 15 consecutive smoke runs, one run reported two
-failures and the cause was not captured; it has not reproduced in the 12 runs since. The suite is not
-fully deterministic — blight growth, Tome scribing and migrant timing all use the global RNG — so
-there is at least one assertion left whose margin depends on a roll. The migration check was already
-found to be flaky this way and fixed. Treat a single red run as worth investigating rather than as
-noise, and capture the failure text when it happens.
+**One caveat, stated because it is real.** The suite has nondeterministic timing margins. During the
+visual-overhaul verification, one run reached the farm assertion before its first yield (`0` food);
+the next reached the construction assertion at `17/22` work and consequently failed its dependent
+blocking check. The immediately following run passed every check across all four seeds. Neither
+visual code nor camera scale enters those formulas; the failures identify the existing timed waits
+that need deterministic completion conditions. Blight growth, Tome scribing and migrant timing also
+draw on the global RNG, so other roll-sensitive margins may remain.
+
+`_report()` now appends every failure to `user://smoke_failures.log`, so the next flake is captured
+whether or not anyone is watching. Run the suite in a loop and read that file rather than hunting it
+live — that is what finally identifies it.
+
+**Latest connected-terrain validation (2026-07-30):** all four seeds and the live run passed on the
+final smoke rerun. The first run hit the documented live-scene timing margin after construction
+stopped at 9/22 work; its immediate rerun exited cleanly. The iOS pack was rebuilt and
+`verify_export.py` confirmed that every runtime catalog and directly read file is present.
 
 ```
 Godot_v4.7-stable_win64_console.exe --headless --import --path .                          # 1
@@ -73,11 +142,22 @@ device: the `.import` is now `importer="keep"`, `export_presets.cfg` sets `inclu
 checks the pack for those paths *and* for their content — a path can sit in the index while the payload
 is an imported stub — plus every content catalog. Run it before any store build.
 
-**Performance:** 6.90 ms average at 60 villagers + 120 monsters, against a 5.5 ms desktop target.
-Measured against a stashed pre-Phase-2 baseline of **6.92 ms**, so the whole phase — the influence
-layer, the road cost table, per-tile speed sampling, six monster types — cost nothing detectable.
-The verdict is `OVER`, but it was `OVER` before and is a standing item rather than a regression.
-Roughly a 2.4× margin against a 60 fps frame; worth profiling before mobile, not now.
+**Performance:** post-overhaul stress is **7.74 ms** average at 60 villagers + 118 live monsters,
+against a 5.5 ms
+desktop target. Mid-phase, a stashed pre-Phase-2 baseline measured **6.92 ms** against 6.90 ms for the
+same-day Phase 2 build — i.e. the influence layer, road cost table, per-tile speed sampling and six
+monster types cost nothing detectable.
+
+The later ~1 ms rise is **not attributed**. Two candidates were measured and ruled out or fixed:
+`rebalance()`'s workplace gating costs 0.04 ms, and `_on_roster_changed` was rebuilding the entire
+tab strip and card row on *every villager spawn* (~420 card instantiations during a 60-villager
+setup) — now signature-guarded, which is worth doing regardless but landed inside noise. A clean A/B
+is no longer possible by stashing, because the work is committed; it needs a `git worktree` at
+`12e6fcf` measured back to back. **Do not assume it is drift and do not assume it is a regression** —
+measure it properly before acting.
+
+The verdict is `OVER` and was `OVER` before any of this, so it is a standing item. Roughly a 2× margin
+against a 60 fps frame; worth profiling before mobile, not before then.
 
 ---
 

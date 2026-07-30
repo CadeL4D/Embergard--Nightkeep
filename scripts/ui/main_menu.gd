@@ -39,9 +39,11 @@ enum Screen { ROOT, CREATE, OPTIONS, CREDITS }
 ## difficulty id -> its button, so the selection can be shown without rebuilding the list.
 var _difficulty_buttons: Dictionary = {}
 var _chosen: StringName = &""
+var _panel_tween: Tween
 
 
 func _ready() -> void:
+	modulate.a = 0.0
 	_build_difficulties()
 	_build_options()
 	_wire_navigation()
@@ -56,6 +58,8 @@ func _ready() -> void:
 	_best.text = L10n.t(&"UI_BEST_RUN", [Meta.best_day, Meta.shards])
 
 	_show(Screen.ROOT)
+	create_tween().tween_property(self, "modulate:a", 1.0, 0.35)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
 # --- Navigation ------------------------------------------------------------------------
@@ -75,8 +79,15 @@ func _wire_navigation() -> void:
 
 
 func _show(which: Screen) -> void:
+	if _panel_tween != null and _panel_tween.is_valid():
+		_panel_tween.kill()
 	for key in _panels:
 		_panels[key].visible = key == which
+	var target: Control = _panels[which]
+	target.modulate.a = 0.0
+	_panel_tween = create_tween()
+	_panel_tween.tween_property(target, "modulate:a", 1.0, 0.18)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 # --- World creation --------------------------------------------------------------------
@@ -86,7 +97,9 @@ func _build_difficulties() -> void:
 		var b := Button.new()
 		b.text = tr(def.display_name)
 		b.toggle_mode = true
-		b.custom_minimum_size = Vector2(0, 34)
+		# 26, not 34. Four tiers at 34px was 136px of a 360px screen on its own, which is what
+		# pushed the New World panel off the bottom on a device with safe-area insets.
+		b.custom_minimum_size = Vector2(0, 24)
 		b.add_theme_color_override("font_color", def.color)
 		b.pressed.connect(_on_difficulty_chosen.bind(def.id))
 		_difficulty_rows.add_child(b)

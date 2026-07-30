@@ -9,6 +9,7 @@ extends Node2D
 ## which tile goes in which cell.
 
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
+@onready var decor_layer: TileMapLayer = $DecorLayer
 @onready var feature_layer: TileMapLayer = $Sorted/FeatureLayer
 @onready var blight_overlay: ColorRect = $BlightOverlay
 @onready var influence_overlay: ColorRect = $InfluenceOverlay
@@ -36,48 +37,56 @@ func _ready() -> void:
 func _on_map_generated() -> void:
 	var grid: Grid = World.grid
 	terrain_layer.clear()
+	decor_layer.clear()
 	feature_layer.clear()
 
 	for i in grid.cell_count:
 		var c := grid.coord(i)
 		_paint_terrain(i, c)
+		_paint_decor(i, c)
 		_paint_feature(i, c)
 
 	_fit_overlay()
 
 
-## Lay down one feature tile — the dense interior if it is surrounded by its own kind, the outlined
-## silhouette if it is on the rim.
+## Lay down one feature tile. Forests and quarries use a four-way connection
+## mask: full-bleed on shared sides, irregular on exposed sides. Berry patches
+## stay compact individual shrubs even when several grow beside one another.
 ##
-## This is what makes trees, rocks and berries read as solid masses that get eaten into rather than
-## as a scattering of individual objects. It also maintains itself: nothing tracks which cells are
-## interior, it is recomputed from the four neighbours whenever a cell is repainted.
+## Nothing extra is saved; harvesting a cell repaints it and its four neighbors,
+## which exposes a correctly shaped new rim automatically.
 func _paint_feature(cell: int, c: Vector2i) -> void:
 	var f := World.feature[cell]
 	if f == Terrain.Feature.NONE:
 		feature_layer.erase_cell(c)
 		return
-	if TileAtlas.has_dense(f) and _is_surrounded(cell, f):
-		feature_layer.set_cell(c, SOURCE_ID, TileAtlas.dense_coords(f))
+	if TileAtlas.is_connected_feature(f):
+		var mask := _connection_mask(cell, f)
+		var variant := TileAtlas.connected_variant_for(c.x, c.y, f)
+		feature_layer.set_cell(c, SOURCE_ID, TileAtlas.connected_coords(f, mask, variant))
 		return
 	feature_layer.set_cell(c, SOURCE_ID,
 		TileAtlas.feature_coords(f, TileAtlas.feature_variant_for(c.x, c.y)))
 
 
-## Do all four orthogonal neighbours hold the same feature?
-##
-## Cells off the edge of the map count as MATCHING, so a wood running into the coastline keeps its
-## solid interior instead of growing a spurious rim along the border of the world.
-func _is_surrounded(cell: int, feature: int) -> bool:
+## Build the N/E/S/W connection mask used to select the atlas tile.
+func _connection_mask(cell: int, feature: int) -> int:
 	var grid: Grid = World.grid
 	var c := grid.coord(cell)
-	for offset in NEIGHBOURS_4:
-		var n := c + offset
-		if not grid.is_valid_v(n):
-			continue
-		if World.feature[grid.index_v(n)] != feature:
-			return false
-	return true
+	var mask := 0
+	var north := c + Vector2i(0, -1)
+	var east := c + Vector2i(1, 0)
+	var south := c + Vector2i(0, 1)
+	var west := c + Vector2i(-1, 0)
+	if not grid.is_valid_v(north) or World.feature[grid.index_v(north)] == feature:
+		mask |= TileAtlas.MASK_NORTH
+	if not grid.is_valid_v(east) or World.feature[grid.index_v(east)] == feature:
+		mask |= TileAtlas.MASK_EAST
+	if not grid.is_valid_v(south) or World.feature[grid.index_v(south)] == feature:
+		mask |= TileAtlas.MASK_SOUTH
+	if not grid.is_valid_v(west) or World.feature[grid.index_v(west)] == feature:
+		mask |= TileAtlas.MASK_WEST
+	return mask
 
 
 ## Lay down the ground tile for a cell — corrupted or clean, whichever the Blight says.
@@ -92,6 +101,42 @@ func _paint_terrain(cell: int, c: Vector2i) -> void:
 	if World.blight[cell] >= TileAtlas.CORRUPT_THRESHOLD and TileAtlas.is_corruptible(t):
 		coords = TileAtlas.corrupt_terrain_coords(t, variant)
 	terrain_layer.set_cell(c, SOURCE_ID, coords)
+
+
+## Add small, non-interactive marks to otherwise empty terrain.
+##
+## The density and choice are derived from position, so this costs no saved state
+## and a repainted cell always gets the same tuft, crack or glint. Real features
+## always win; dressing is erased beneath anything the player can interact with.
+func _paint_decor(cell: int, c: Vector2i) -> void:
+	if World.feature[cell] != Terrain.Feature.NONE:
+		decor_layer.erase_cell(c)
+		return
+
+	var h := absi(c.x * 83492791 ^ c.y * 2654435761)
+	var choices: Array[int] = []
+	var density := 44
+	match World.terrain[cell]:
+		Terrain.Type.GRASS:
+			choices = [0, 1, 7]
+			density = 58
+		Terrain.Type.DIRT:
+			choices = [3, 1, 2]
+		Terrain.Type.ROCK:
+			choices = [2, 6]
+		Terrain.Type.SAND:
+			choices = [4, 1]
+		Terrain.Type.WATER, Terrain.Type.DEEP_WATER:
+			choices = [5]
+			density = 28
+		Terrain.Type.RUBBLE:
+			choices = [6, 3, 2]
+
+	if choices.is_empty() or h % 100 >= density:
+		decor_layer.erase_cell(c)
+		return
+	var pick := choices[posmod(h >> 7, choices.size())]
+	decor_layer.set_cell(c, SOURCE_ID, TileAtlas.decor_coords(pick))
 
 
 ## Repaint one cell when its corruption crosses the threshold in either direction.
@@ -114,6 +159,7 @@ func _on_blight_changed(cell: int, _blighted: bool) -> void:
 ## Five set_cell calls per harvest is nothing; the alternative was tracking an edge set.
 func _on_terrain_changed(cell: int) -> void:
 	var grid: Grid = World.grid
+	_paint_decor(cell, grid.coord(cell))
 	_paint_feature(cell, grid.coord(cell))
 	var c := grid.coord(cell)
 	for offset in NEIGHBOURS_4:

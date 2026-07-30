@@ -11,10 +11,18 @@ content_margin_top = 5.0
 content_margin_right = 10.0
 content_margin_bottom = 5.0
 bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.78)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.227451, 0.266667, 0.313726, 0.9)
 corner_radius_top_left = 4
 corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 3
+shadow_offset = Vector2(0, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 10.0
@@ -22,10 +30,18 @@ content_margin_top = 8.0
 content_margin_right = 10.0
 content_margin_bottom = 8.0
 bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.227451, 0.266667, 0.313726, 0.95)
 corner_radius_top_left = 5
 corner_radius_top_right = 5
 corner_radius_bottom_right = 5
 corner_radius_bottom_left = 5
+shadow_color = Color(0, 0, 0, 0.55)
+shadow_size = 4
+shadow_offset = Vector2(0, 2)
 
 [node name="Hud" type="CanvasLayer"]
 layer = 50
@@ -54,17 +70,19 @@ mouse_filter = 2
 
 [node name="TopRow" type="HBoxContainer" parent="SafeArea/Layout"]
 layout_mode = 2
-size_flags_horizontal = 8
+size_flags_horizontal = 3
 mouse_filter = 2
+theme_override_constants/separation = 8
 
 [node name="ResourceColumn" type="VBoxContainer" parent="SafeArea/Layout/TopRow"]
 layout_mode = 2
-size_flags_horizontal = 8
+size_flags_horizontal = 0
 theme_override_constants/separation = 4
 
 [node name="ResourceBar" type="PanelContainer" parent="SafeArea/Layout/TopRow/ResourceColumn"]
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
-size_flags_horizontal = 8
+size_flags_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
 [node name="Resources" type="Label" parent="SafeArea/Layout/TopRow/ResourceColumn/ResourceBar"]
@@ -77,38 +95,50 @@ text = "wood 0    stone 0    food 0"
 [node name="Breakdown" type="PanelContainer" parent="SafeArea/Layout/TopRow/ResourceColumn"]
 visible = false
 layout_mode = 2
-size_flags_horizontal = 8
+size_flags_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 script = ExtResource("4_breakdown")
 
-[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/TopRow/ResourceColumn/Breakdown"]
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/TopRow/ResourceColumn/Breakdown"]
+custom_minimum_size = Vector2(300, 176)
 layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/TopRow/ResourceColumn/Breakdown/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 1
 
-[node name="PhaseBar" type="PanelContainer" parent="SafeArea/Layout"]
+[node name="TopSpacer" type="Control" parent="SafeArea/Layout/TopRow"]
 layout_mode = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="PhaseBar" type="PanelContainer" parent="SafeArea/Layout/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
-[node name="Row" type="HBoxContainer" parent="SafeArea/Layout/PhaseBar"]
+[node name="Row" type="HBoxContainer" parent="SafeArea/Layout/TopRow/PhaseBar"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Phase" type="Label" parent="SafeArea/Layout/PhaseBar/Row"]
+[node name="Phase" type="Label" parent="SafeArea/Layout/TopRow/PhaseBar/Row"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "PHASE_DAY"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="PauseButton" type="Button" parent="SafeArea/Layout/PhaseBar/Row"]
+[node name="PauseButton" type="Button" parent="SafeArea/Layout/TopRow/PhaseBar/Row"]
 custom_minimum_size = Vector2(42, 20)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 toggle_mode = true
 text = "UI_PAUSE"
 
-[node name="SpeedButton" type="Button" parent="SafeArea/Layout/PhaseBar/Row"]
+[node name="SpeedButton" type="Button" parent="SafeArea/Layout/TopRow/PhaseBar/Row"]
 custom_minimum_size = Vector2(30, 20)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
@@ -156,7 +186,7 @@ mouse_filter = 2
 
 [node name="BottomRow" type="VBoxContainer" parent="SafeArea/Layout"]
 layout_mode = 2
-size_flags_horizontal = 0
+size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
 [node name="SelectionCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
@@ -187,7 +217,7 @@ text = "food 80  rest 80  mood 70"
 
 [node name="JobPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(294, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -203,7 +233,7 @@ theme_override_font_sizes/font_size = 8
 text = "UI_JOB_BOARD_HINT"
 
 [node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/BottomRow/JobPanel/Layout"]
-custom_minimum_size = Vector2(300, 132)
+custom_minimum_size = Vector2(274, 220)
 layout_mode = 2
 horizontal_scroll_mode = 0
 
@@ -253,6 +283,7 @@ text = "UI_DEMOLISH"
 
 [node name="BuildPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
+custom_minimum_size = Vector2(410, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -265,8 +296,14 @@ theme_override_constants/separation = 5
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout"]
+[node name="CardsScroll" type="ScrollContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout"]
+custom_minimum_size = Vector2(390, 72)
 layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout/CardsScroll"]
+layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 6
 
 [node name="PlacementBar" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
@@ -299,30 +336,36 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "UI_BUILD"
 
-[node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout/BottomRow"]
+[node name="ButtonsClip" type="ScrollContainer" parent="SafeArea/Layout/BottomRow"]
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
-size_flags_horizontal = 0
+size_flags_horizontal = 3
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 0
+
+[node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ButtonsClip"]
+layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="Powers" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/Buttons"]
+[node name="Powers" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="JobsButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
+[node name="JobsButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
 toggle_mode = true
 text = "UI_JOBS"
 
-[node name="BuildButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
+[node name="BuildButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
 toggle_mode = true
 text = "UI_BUILD"
 
-[node name="AscendButton" type="Button" parent="SafeArea/Layout/BottomRow/Buttons"]
+[node name="AscendButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)

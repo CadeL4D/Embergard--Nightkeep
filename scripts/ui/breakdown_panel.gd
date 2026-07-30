@@ -14,7 +14,7 @@ extends PanelContainer
 
 const REFRESH_INTERVAL := 0.5
 
-@onready var _rows: VBoxContainer = $Rows
+@onready var _rows: VBoxContainer = $Scroll/Rows
 
 ## Numbers, thrown away and rebuilt twice a second.
 var _reports: VBoxContainer = null

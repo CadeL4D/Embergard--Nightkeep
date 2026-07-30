@@ -20,6 +20,6 @@ hframes = 6
 
 [node name="Carry" type="Sprite2D" parent="."]
 visible = false
-position = Vector2(0, -18)
+position = Vector2(0, -19)
 texture = ExtResource("4_carry")
-hframes = 3
+hframes = 6

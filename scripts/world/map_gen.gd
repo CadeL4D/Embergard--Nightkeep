@@ -85,6 +85,7 @@ static func generate(grid: Grid, seed_value: int, keep_override: int = -1) -> Re
 	_scatter_features(grid, res, seed_value, rng)
 	res.nest_cells = _place_nests(grid, res, rng)
 	_clear_around_keep(grid, res, res.keep_cell)
+	_prune_isolated_resources(grid, res)
 	return res
 
 
@@ -198,7 +199,10 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: Ran
 	var clump := FastNoiseLite.new()
 	clump.seed = seed_value + 31337
 	clump.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	clump.frequency = 0.06
+	# Lower frequency makes fewer, broader regions. The cleanup pass below then
+	# removes isolated cells and closes small holes, producing actual destinations
+	# rather than a uniform dusting of resources.
+	clump.frequency = 0.045
 
 	for i in grid.cell_count:
 		var t := res.terrain[i]
@@ -213,11 +217,11 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: Ran
 		# eye a mass to read and the player something to cut into — see WorldView._paint_feature.
 		match t:
 			Terrain.Type.GRASS:
-				if n > 0.70:
-					if rng.randf() < 0.93:
+				if n > 0.66:
+					if rng.randf() < 0.98:
 						res.feature[i] = Terrain.Feature.TREE
-				elif n > 0.58:
-					if rng.randf() < 0.42:
+				elif n > 0.56:
+					if rng.randf() < 0.62:
 						res.feature[i] = Terrain.Feature.TREE
 				# Raised from 0.012. Berries are the only food on the map before a farm
 				# exists, and at just over one percent of grass tiles the opening of every
@@ -225,18 +229,73 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: Ran
 				elif rng.randf() < 0.035:
 					res.feature[i] = Terrain.Feature.BERRIES
 			Terrain.Type.ROCK:
-				if n > 0.62:
-					if rng.randf() < 0.88:
+				if n > 0.60:
+					if rng.randf() < 0.96:
 						res.feature[i] = Terrain.Feature.STONE
-				elif n > 0.5:
-					if rng.randf() < 0.32:
+				elif n > 0.49:
+					if rng.randf() < 0.55:
 						res.feature[i] = Terrain.Feature.STONE
 			Terrain.Type.DIRT:
-				if n > 0.72 and rng.randf() < 0.18:
+				if n > 0.64 and rng.randf() < 0.55:
 					res.feature[i] = Terrain.Feature.TREE
 			Terrain.Type.RUBBLE:
 				if rng.randf() < 0.3:
 					res.feature[i] = Terrain.Feature.RUIN_WALL
+
+	_consolidate_resource_masses(grid, res)
+
+
+## Remove one-off resource props and close small gaps inside a mass. This is a
+## deterministic cellular pass over a snapshot, so iteration order cannot change
+## the generated map and saves still regenerate byte-identically.
+static func _consolidate_resource_masses(grid: Grid, res: Result) -> void:
+	var before: PackedByteArray = res.feature.duplicate()
+	for i in grid.cell_count:
+		var feature := int(before[i])
+		if feature == Terrain.Feature.TREE or feature == Terrain.Feature.STONE:
+			if _matching_resource_neighbours(grid, before, i, feature) <= 1:
+				res.feature[i] = Terrain.Feature.NONE
+			continue
+		if feature != Terrain.Feature.NONE:
+			continue
+
+		var target := Terrain.Feature.NONE
+		match res.terrain[i]:
+			Terrain.Type.GRASS, Terrain.Type.DIRT:
+				target = Terrain.Feature.TREE
+			Terrain.Type.ROCK:
+				target = Terrain.Feature.STONE
+		if target != Terrain.Feature.NONE \
+				and _matching_resource_neighbours(grid, before, i, target) >= 5:
+			res.feature[i] = target
+
+
+## Clearing the keep can cut a fringe cell away from the forest it belonged to.
+## Prune once more afterward so the starting view does not regain a ring of sparse
+## individual trees around an otherwise deliberate clearing.
+static func _prune_isolated_resources(grid: Grid, res: Result) -> void:
+	var before: PackedByteArray = res.feature.duplicate()
+	for i in grid.cell_count:
+		var feature := int(before[i])
+		if feature != Terrain.Feature.TREE and feature != Terrain.Feature.STONE:
+			continue
+		if _matching_resource_neighbours(grid, before, i, feature) <= 1:
+			res.feature[i] = Terrain.Feature.NONE
+
+
+static func _matching_resource_neighbours(
+		grid: Grid, features: PackedByteArray, cell: int, target: int
+	) -> int:
+	var c := grid.coord(cell)
+	var matches := 0
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx == 0 and dy == 0:
+				continue
+			var n := c + Vector2i(dx, dy)
+			if grid.is_valid_v(n) and features[grid.index_v(n)] == target:
+				matches += 1
+	return matches
 
 
 # --- Nests ------------------------------------------------------------------------------

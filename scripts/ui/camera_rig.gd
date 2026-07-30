@@ -14,9 +14,18 @@ const PAN_THRESHOLD := 12.0            ## px of movement before a touch becomes 
 const TAP_MAX_TIME := 0.25             ## seconds; longer than this is not a tap
 const INERTIA_DECAY := 6.0             ## higher = the flick stops sooner
 const INERTIA_CUTOFF := 4.0            ## px/s below which we just stop
-const ZOOM_MIN := 1.0
-const ZOOM_MAX := 5.0
+## The art is authored at 16 px per cell, but a 2x camera inside a 2x desktop
+## stretch made one terrain cell occupy 64 physical pixels.  That is why the old
+## view felt like it was built out of 128 px building blocks even though the sim
+## grid itself was already small.
+##
+## 1x is now the authored/default view.  Nothing in pathfinding or placement
+## changes; the player simply sees twice as much settlement in each direction.
+const DEFAULT_ZOOM := 1.0
+const ZOOM_MIN := 0.5
+const ZOOM_MAX := 4.0
 const ZOOM_SNAP_TIME := 0.1
+const ZOOM_STEPS: Array[float] = [0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
 
 signal tapped(world_pos: Vector2)
 
@@ -32,7 +41,7 @@ var _snap_tween: Tween
 
 
 func _ready() -> void:
-	zoom = Vector2(2.0, 2.0)
+	zoom = Vector2(DEFAULT_ZOOM, DEFAULT_ZOOM)
 	make_current()
 
 
@@ -164,11 +173,17 @@ func _apply_pinch() -> void:
 	_clamp_position()
 
 
-## Snap to a whole-number zoom on release, tweened. Snapping DURING the gesture
-## feels notchy; not snapping at all leaves pixel art shimmering at rest. Doing it
-## on release gets both.
+## Snap to a curated set of zooms on release, tweened. Whole numbers made the
+## useful wide views (0.5x and 0.75x) impossible to hold; arbitrary fractional
+## values make pixel art shimmer at rest.
 func _snap_zoom() -> void:
-	var target := clampf(roundf(zoom.x), ZOOM_MIN, ZOOM_MAX)
+	var target := ZOOM_STEPS[0]
+	var best_distance := absf(zoom.x - target)
+	for step in ZOOM_STEPS:
+		var distance := absf(zoom.x - step)
+		if distance < best_distance:
+			target = step
+			best_distance = distance
 	if is_equal_approx(target, zoom.x):
 		return
 	if _snap_tween and _snap_tween.is_valid():

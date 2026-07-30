@@ -20,37 +20,49 @@ const PALETTE := {
 	"." : Color(0, 0, 0, 0),
 
 	# neutrals / shadow
-	"k" : Color("0a0e14"),   # near-black, outlines
-	"K" : Color("141b24"),   # deep shadow
+	"k" : Color("090d13"),   # near-black, outlines
+	"K" : Color("18212c"),   # deep shadow
 
 	# stone
-	"s" : Color("2a2f38"),
-	"S" : Color("3e4650"),
-	"L" : Color("576170"),
+	"s" : Color("313945"),
+	"S" : Color("4b5663"),
+	"L" : Color("6b7888"),
+	# Warm exposed-rock ramp. Natural ridges use this rather than the colder
+	# dressed-stone ramp above, matching the earthier plateaus in the reference.
+	"q" : Color("241f1a"),
+	"Q" : Color("665847"),
+	"H" : Color("9a866c"),
 
 	# earth / wood
-	"e" : Color("241d16"),
-	"E" : Color("3a2f22"),
-	"D" : Color("574632"),
+	"e" : Color("281f16"),
+	"E" : Color("443423"),
+	"D" : Color("684e32"),
 
 	# water
-	"w" : Color("0a1420"),
-	"W" : Color("12283c"),
-	"A" : Color("1d4258"),
+	"w" : Color("0a1928"),
+	"W" : Color("16354b"),
+	"A" : Color("28627c"),
 
 	# sand
-	"n" : Color("574a35"),
-	"N" : Color("6b5c42"),
-	"x" : Color("857349"),
+	"n" : Color("625039"),
+	"N" : Color("7b6748"),
+	"x" : Color("a08756"),
 
 	# vegetation — deliberately muted. The first pass was a clean saturated green
 	# that read as a pleasant farming game; this world is supposed to be sick and
 	# cold, and firelight has to be the only vivid thing on screen.
-	"m" : Color("18261a"),
-	"M" : Color("233a27"),
-	"G" : Color("324f34"),
-	"g" : Color("43653f"),
-	"u" : Color("34372a"),   # dead/dry growth
+	"m" : Color("1a2b1d"),
+	"M" : Color("29462e"),
+	"G" : Color("3d633f"),
+	"g" : Color("568151"),
+	# Connected woods use their own deeper ramp. Grass deliberately uses M/G,
+	# so sharing those colours made a forest read as decorated ground instead of
+	# a raised canopy mass.
+	"v" : Color("102217"),
+	"V" : Color("1b3823"),
+	"j" : Color("32643b"),
+	"J" : Color("4e8150"),
+	"u" : Color("484834"),   # dead/dry growth
 
 	# blight
 	"b" : Color("2e0a1c"),
@@ -63,11 +75,181 @@ const PALETTE := {
 	"Y" : Color("ffd88a"),
 
 	# people
-	"f" : Color("b08968"),   # skin
-	"c" : Color("6d5f4e"),   # cloth
-	"C" : Color("4a4038"),   # cloth shadow
-	"r" : Color("7a2f2f"),   # rust / berries
+	"f" : Color("c09672"),   # skin
+	"c" : Color("786957"),   # cloth
+	"C" : Color("50463d"),   # cloth shadow
+	"r" : Color("913d3b"),   # rust / berries
+	"R" : Color("c95750"),   # ripe berry highlight
 }
+
+
+# =========================================================================================
+# GROUND DRESSING — visual detail with no simulation footprint
+# =========================================================================================
+#
+# Eight sparse overlays share one atlas row. WorldView scatters them by a stable
+# position hash only where there is no real feature, so clear land no longer reads
+# as a flat checkerboard while every tree, stone and berry remains mechanically
+# honest.
+
+const DECOR_GRASS := [
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	".....m..........",
+	"....mGm.........",
+	".....m..........",
+	".........m......",
+	"........mGm.....",
+	".........m......",
+	"................",
+]
+
+const DECOR_WEED := [
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"..........u.....",
+	".........u.u....",
+	"..........u.....",
+	".........e......",
+	".........e......",
+	"................",
+	"...u............",
+	"..ueu...........",
+	"................",
+]
+
+const DECOR_STONES := [
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"....s...........",
+	"...sSs..........",
+	"....ss..........",
+	"..........s.....",
+	".........sLs....",
+	"..........s.....",
+	"................",
+]
+
+const DECOR_CRACK := [
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"...e............",
+	"..e.E...........",
+	".e...e..........",
+	".....e..........",
+	".....E.e........",
+	"........e.......",
+	"................",
+	"................",
+	"................",
+]
+
+const DECOR_SAND := [
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"..xx............",
+	"................",
+	"......xxx.......",
+	"................",
+	"............xx..",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+]
+
+const DECOR_WATER := [
+	"................",
+	"................",
+	"...AAA..........",
+	"................",
+	"..........ww....",
+	"................",
+	"................",
+	".......AA.......",
+	"................",
+	"................",
+	"...........AAA..",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+]
+
+const DECOR_RUBBLE := [
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"...s............",
+	"..sSL...........",
+	"...ss.....L.....",
+	"..........Ss....",
+	"................",
+	"......s.........",
+	".....sSs........",
+	"................",
+	"................",
+]
+
+const DECOR_FLOWERS := [
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"........G.......",
+	".......GrG......",
+	"........m.......",
+	"........m.......",
+	"................",
+	"...G............",
+	"..GrG...........",
+	"...m............",
+	"................",
+	"................",
+]
+
+
+static func decor_maps() -> Array:
+	return [
+		DECOR_GRASS, DECOR_WEED, DECOR_STONES, DECOR_CRACK,
+		DECOR_SAND, DECOR_WATER, DECOR_RUBBLE, DECOR_FLOWERS,
+	]
 
 
 # =========================================================================================
@@ -227,18 +409,56 @@ const NEST := [
 const BERRIES := [
 	"................",
 	"................",
-	"......mm........",
-	".....mMMm.......",
-	"....mMGGMm......",
-	"...mMGrGGMm.....",
-	"...mGGGrGMm.....",
-	"..mMGrGGGGMm....",
-	"..mMGGGGrGMm....",
-	"...mMGGGGMm.....",
-	"....mmGGmm......",
+	"................",
+	".....vvvv.......",
+	"...vvVVVVvv.....",
+	"..vVjRjJVv......",
+	"..vVJjRJJVv.....",
+	"...vVjRjVv......",
+	"....vvVvv.......",
 	"......EE........",
 	"......eE........",
 	".....eee........",
+	"................",
+	"................",
+	"................",
+	"................",
+]
+
+const BERRIES_B := [
+	"................",
+	"................",
+	"................",
+	".......vv.......",
+	".....vvVVvv.....",
+	"....vVJRjVv.....",
+	"...vVjJRVVv.....",
+	"....vVRjVv......",
+	".....vvVv.......",
+	"......EE........",
+	"......eE........",
+	".....eee........",
+	"................",
+	"................",
+	"................",
+	"................",
+]
+
+const BERRIES_C := [
+	"................",
+	"................",
+	"................",
+	"....vvvvvv......",
+	"..vvVVjjVVvv....",
+	".vVjRJjRjJVv....",
+	".vVJjRJJjRVv....",
+	"..vVjJjJVv......",
+	"...vvVVvv.......",
+	".....E..E.......",
+	".....E..E.......",
+	"....ee..ee......",
+	"................",
+	"................",
 	"................",
 	"................",
 ]
@@ -305,7 +525,8 @@ const STONE_DENSE := [
 ]
 
 
-## 16x16. The interior of a berry thicket: the same canopy as TREE_DENSE, flecked with fruit.
+## Legacy berry-thicket comparison tile. Runtime berries now always use the
+## smaller BERRIES/BERRIES_B/BERRIES_C shrub silhouettes above.
 const BERRIES_DENSE := [
 	"GgGMGrGGMGgGGMgG",
 	"gGgGMGgGrMgGGgGM",
@@ -1044,23 +1265,180 @@ const SANCTUM := [
 ]
 
 
+# =========================================================================================
+# WIDENED FOOTPRINTS — the shapes that make packing a village a puzzle
+# =========================================================================================
+# A grid of 2x2 blocks tiles perfectly and therefore decides nothing. These four take the shape
+# list to 1x1, 2x1, 2x2, 3x2, 2x3 and 4x2, which do NOT tessellate against each other — so where a
+# building goes is a real choice, and the sphere of influence is what makes the room finite.
+
+## 2x1. Sacks and crates under a low roof.
+##
+## Widened from 1x1 with the footprint pass. A 2x1 is the most awkward shape on the list — it fits
+## neither the gap a 3x2 workshop leaves nor a square one — which is exactly what makes laying out a
+## village a puzzle rather than tiling a grid.
+const STOCKPILE_WIDE := [
+	"................................",
+	"..........kkkkkkkk..............",
+	".......kkkDDDDDDDDkkk...........",
+	"....kkkDDDEEEEEEEEDDDkkk........",
+	"..kkDDDEEEeeeeeeeeEEEDDDkk......",
+	"..kDDEEEeeEEEEEEEEeeEEEDDk......",
+	"..kEEeeEEEDDDDDDDDEEEeeEEk......",
+	"..kDDDDDDDDDDDDDDDDDDDDDDk......",
+	"..kEDDDDDDDDDDDDDDDDDDDDEk......",
+	"..kEDDNNNDDDNNNDDDNNNDDDEk......",
+	"..kEDDNxNDDDNxNDDDNxNDDDEk......",
+	"..kEDDNNNDDDNNNDDDNNNDDDEk......",
+	"..kEEDDDDDDDDDDDDDDDDDDEEk......",
+	"..kSSSSSSSSSSSSSSSSSSSSSSk......",
+	"..kssssssssssssssssssssssk......",
+	"...kkkkkkkkkkkkkkkkkkkkkk.......",
+]
+
+
+## 3x2. Four beds. Widened from 2x2 so housing is a rectangle rather than a square.
+##
+## The lit window and the doorway are at different heights and widths on purpose: at 1x zoom the
+## thing that separates a Hut from a Longhouse is how many warm points it has, so the two must not
+## read as one silhouette at two sizes.
+const HUT_WIDE := [
+	"................................................",
+	"......................kk........................",
+	".....................kEEk.......................",
+	".....................kEEk.......................",
+	"...................kkkEEkkk.....................",
+	"...............kkkDDDDDDDDDkkk..................",
+	"..........kkkkDDDEEEEEEEEEDDDkkkk...............",
+	".......kkkDDDEEEeeeeeeeeeeeEEEDDDkkk............",
+	"....kkkDDDEEEeeEEEEEEEEEEEEEeeEEEDDDkkk.........",
+	"..kkDDDEEEeeEEEDDDDDDDDDDDDDEEEeeEEEDDDkk.......",
+	"..kDDEEEeeEEEDDDDDDDDDDDDDDDDDEEEeeEEEDDk.......",
+	"..kEEeeEEEDDDDDDDDDDDDDDDDDDDDDDDEEEeeEEk.......",
+	"..kDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDk.......",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEk.......",
+	"..kEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEEk.......",
+	"..kEEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEEEk.......",
+	"..kEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEk.......",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEk.......",
+	"..kEDDDDDDDkkkkkkDDDDDDDDDDkkkkkkDDDDDDEk.......",
+	"..kEDDDDDDDkYYYYkDDDDDDDDDDkEEEEkDDDDDDEk.......",
+	"..kEDDDDDDDkOOOOkDDDDDDDDDDkeYYekDDDDDDEk.......",
+	"..kEDDDDDDDkooooKDDDDDDDDDDkeOOekDDDDDDEk.......",
+	"..kEDDDDDDDkkkkkkDDDDDDDDDDkeOOekDDDDDDEk.......",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDkeooekDDDDDDEk.......",
+	"..kEEDDDDDDDDDDDDDDDDDDDDDDkeooekDDDDDEEk.......",
+	"..kEEEDDDDDDDDDDDDDDDDDDDDDkeooekDDDDEEEk.......",
+	"..kSSSSSSSSSSSSSSSSSSSSSSSSSeooeSSSSSSSSk.......",
+	"..kSsSsSsSsSsSsSsSsSsSsSsSSSeooeSsSsSsSSk.......",
+	"..kSSSSSSSSSSSSSSSSSSSSSSSSSeooeSSSSSSSSk.......",
+	"..kssssssssssssssssssssssssseeesssssssssk.......",
+	"...kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk........",
+	"................................................",
+]
+
+
+## 3x2. Nine beds. Four lit windows where the Hut has one, plus a second chimney.
+##
+## At night the difference between a colony that has housed its people and one that has not should be
+## readable from across the map without opening a panel.
+const LONGHOUSE_WIDE := [
+	"................................................",
+	"..................kk......kk....................",
+	".................kEEk....kEEk...................",
+	"...............kkkEEkkkkkkEEkkk.................",
+	"..........kkkkDDDDDDDDDDDDDDDDDkkkk.............",
+	".......kkkDDDDDEEEEEEEEEEEEEEEEEDDDDkkk.........",
+	"....kkkDDDEEEEEeeeeeeeeeeeeeeeeeeEEEEEDDDkkk....",
+	"..kkDDDEEEeeeEEEEEEEEEEEEEEEEEEEEEEEeeeEEEDDDk..",
+	"..kDDEEEeeEEEDDDDDDDDDDDDDDDDDDDDDDDEEEeeEEEDk..",
+	"..kEEeeEEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEEEeeEk..",
+	"..kDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDk..",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEk..",
+	"..kEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEEk..",
+	"..kEEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEEEk..",
+	"..kEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEk..",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEk..",
+	"..kEDkkkkkkDDDDkkkkkkDDDDkkkkkkDDDDkkkkkkDDDEk..",
+	"..kEDkYYYYkDDDDkYYYYkDDDDkYYYYkDDDDkYYYYkDDDEk..",
+	"..kEDkOOOOkDDDDkOOOOkDDDDkOOOOkDDDDkOOOOkDDDEk..",
+	"..kEDkooooKDDDDkooooKDDDDkooooKDDDDkooooKDDDEk..",
+	"..kEDkkkkkkDDDDkkkkkkDDDDkkkkkkDDDDkkkkkkDDDEk..",
+	"..kEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEk..",
+	"..kEDDDDDDDDDDDDDDDDkkkkkkDDDDDDDDDDDDDDDDDDEk..",
+	"..kEDDDDDDDDDDDDDDDDkEEEEkDDDDDDDDDDDDDDDDDDEk..",
+	"..kEEDDDDDDDDDDDDDDDkeYYekDDDDDDDDDDDDDDDDDEEk..",
+	"..kEEEDDDDDDDDDDDDDDkeOOekDDDDDDDDDDDDDDDDEEEk..",
+	"..kSSSSSSSSSSSSSSSSSSeOOeSSSSSSSSSSSSSSSSSSSSk..",
+	"..kSsSsSsSsSsSsSsSsSSeooeSSsSsSsSsSsSsSsSsSsSk..",
+	"..kSSSSSSSSSSSSSSSSSSeooeSSSSSSSSSSSSSSSSSSSSk..",
+	"..kssssssssssssssssssseeessssssssssssssssssssk..",
+	"...kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk...",
+	"................................................",
+]
+
+
+## 4x2. Two long furrowed beds and a lit tool shed at one end.
+##
+## The longest footprint in the game, deliberately: a farm should be the thing the player has to
+## find real room for, and a 4x2 will not fit anywhere a 2x2 would. Walkable, so farmers stand in
+## it, which is why it draws beneath them (see Building._ready on z_index).
+##
+## Rows are BUILT rather than hand-typed: counting 64 characters by eye produced an off-by-one row
+## three separate times, and the result of one is a silently skewed sprite.
+const FARM_LONG := [
+	"................................................................",
+	"..kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk..",
+	"..kEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEk..",
+	"..kEnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNEk..",
+	"..kEuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGEk..",
+	"..kEGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgEk..",
+	"..kEnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNEk..",
+	"..kEuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGEk..",
+	"..kEGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgEk..",
+	"..kEnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNEk..",
+	"..kEuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGuGEk..",
+	"..kEGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgEk..",
+	"..kEnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNnNEk..",
+	"..kEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEk..",
+	"..kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk..",
+	"................................................................",
+	"..kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk............kkkkkkkkkkkk........",
+	"..kEEEEEEEEEEEEEEEEEEEEEEEEEEEEk.........kkkDDDDDDDDDDDDkkk.....",
+	"..kEnNnNnNnNnNnNnNnNnNnNnNnNnNEk......kkkDDDEEEEEEEEEEEEDDDkkk..",
+	"..kEuGuGuGuGuGuGuGuGuGuGuGuGuGEk....kDDDEEEeeeeeeeeeeeeEEEDDDk..",
+	"..kEGgGgGgGgGgGgGgGgGgGgGgGgGgEk....kDEEeeEEEEEEEEEEEEeeEEEDDk..",
+	"..kEnNnNnNnNnNnNnNnNnNnNnNnNnNEk....kEeeEEEDDDDDDDDDDDEEEeeEEk..",
+	"..kEuGuGuGuGuGuGuGuGuGuGuGuGuGEk....kDDDDDDDDDDDDDDDDDDDDDDDDk..",
+	"..kEGgGgGgGgGgGgGgGgGgGgGgGgGgEk....kEDDDDDDkkkkkkkkDDDDDDDDEk..",
+	"..kEnNnNnNnNnNnNnNnNnNnNnNnNnNEk....kEEDDDDDkYYYYYYkDDDDDDDEEk..",
+	"..kEEEEEEEEEEEEEEEEEEEEEEEEEEEEk....kSSSSSSSkOOOOOOkSSSSSSSSSk..",
+	"..kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk....kssssssskooooooKsssssssssk..",
+	"................................................................",
+	"................................................................",
+	"................................................................",
+	"................................................................",
+	"................................................................",
+]
+
+
 static func building_maps() -> Dictionary:
 	return {
 		&"palisade": {"map": PALISADE, "size": 16},
 		&"gate": {"map": GATE, "size": 16},
 		&"well": {"map": WELL, "size": 16},
-		&"stockpile": {"map": STOCKPILE, "size": 16},
+		&"stockpile": {"map": STOCKPILE_WIDE, "w": 32, "h": 16},
 		&"hearth": {"map": HEARTH, "size": 32},
-		&"hut": {"map": HUT, "size": 32},
+		&"hut": {"map": HUT_WIDE, "w": 48, "h": 32},
 		&"watchtower": {"map": WATCHTOWER, "size": 32},
-		&"farm": {"map": FARM, "size": 32},
+		&"farm": {"map": FARM_LONG, "w": 64, "h": 32},
 		# Rectangular. `size` is the SQUARE cases only; these carry explicit w/h.
 		&"sawmill": {"map": SAWMILL, "w": 48, "h": 32},
 		&"stonecutter": {"map": STONECUTTER, "w": 32, "h": 48},
 		&"toolsmith": {"map": TOOLSMITH, "w": 48, "h": 32},
 		&"great_hall": {"map": GREAT_HALL, "w": 32, "h": 32},
 		&"stone_keep": {"map": STONE_KEEP, "w": 32, "h": 32},
-		&"longhouse": {"map": LONGHOUSE, "w": 32, "h": 32},
+		&"longhouse": {"map": LONGHOUSE_WIDE, "w": 48, "h": 32},
 		&"shrine": {"map": SHRINE, "w": 32, "h": 48},
 		&"temple": {"map": TEMPLE, "w": 32, "h": 48},
 		&"sanctum": {"map": SANCTUM, "w": 32, "h": 48},
@@ -1074,71 +1452,71 @@ static func building_maps() -> Dictionary:
 # =========================================================================================
 
 const VILLAGER_DOWN_0 := [
-	"............",
-	"....ffff....",
-	"...ffffff...",
-	"...fkffkf...",
-	"...ffffff...",
-	"....ffff....",
-	"...CCCCCC...",
-	"..fCccccCf..",
-	"..fCccccCf..",
-	"...cccccc...",
-	"...CC..CC...",
-	"...CC..CC...",
-	"...CC..CC...",
+	"....kkkk....",
+	"...kCCCCk...",
+	"...kCffCk...",
+	"...kfkfCk...",
+	"...kffffk...",
+	"....kkkk....",
+	"...krrrrk...",
+	"..fkCccCkf..",
+	"..fkCccCkf..",
+	"...kCDDCk...",
+	"...kCCCCk...",
+	"...kC..Ck...",
 	"..kkk..kkk..",
+	"..kk....kk..",
 ]
 
 const VILLAGER_DOWN_1 := [
-	"............",
-	"....ffff....",
-	"...ffffff...",
-	"...fkffkf...",
-	"...ffffff...",
-	"....ffff....",
-	"...CCCCCC...",
-	"..fCccccCf..",
-	"..fCccccCf..",
-	"...cccccc...",
-	"...CC..CC...",
-	"..CC....CC..",
-	"..CC....CC..",
+	"....kkkk....",
+	"...kCCCCk...",
+	"...kCffCk...",
+	"...kfkfCk...",
+	"...kffffk...",
+	"....kkkk....",
+	"...krrrrk...",
+	"..fkCccCkf..",
+	"..fkCccCkf..",
+	"...kCDDCk...",
+	"...kCCCCk...",
+	"..kC....Ck..",
 	".kkk....kkk.",
+	".kk......kk.",
 ]
 
 const VILLAGER_UP_0 := [
-	"............",
-	"....CCCC....",
-	"...CCCCCC...",
-	"...CCCCCC...",
-	"...CCCCCC...",
-	"....CCCC....",
-	"...CCCCCC...",
-	"..fCccccCf..",
-	"..fCccccCf..",
-	"...cccccc...",
-	"...CC..CC...",
-	"...CC..CC...",
-	"...CC..CC...",
+	"....kkkk....",
+	"...kCCCCk...",
+	"...kCccCk...",
+	"...kcccck...",
+	"...kCccCk...",
+	"....kkkk....",
+	"...krrrrk...",
+	"..fkCccCkf..",
+	"..fkCccCkf..",
+	"...kCDDCk...",
+	"...kCCCCk...",
+	"...kC..Ck...",
 	"..kkk..kkk..",
+	"..kk....kk..",
 ]
 
 const VILLAGER_UP_1 := [
-	"............",
-	"....CCCC....",
-	"...CCCCCC...",
-	"...CCCCCC...",
-	"...CCCCCC...",
-	"....CCCC....",
-	"...CCCCCC...",
-	"..fCccccCf..",
-	"..fCccccCf..",
-	"...cccccc...",
-	"...CC..CC...",
-	"..CC....CC..",
-	"..CC....CC..",
+	"....kkkk....",
+	"...kCCCCk...",
+	"...kCccCk...",
+	"...kcccck...",
+	"...kCccCk...",
+	"....kkkk....",
+	"...krrrrk...",
+	"..fkCccCkf..",
+	"..fkCccCkf..",
+	"...kCDDCk...",
+	"...kCCCCk...",
+	"..kC....Ck..",
 	".kkk....kkk.",
+	".kk......kk.",
 ]
 
 ## Profile view, facing RIGHT — the renderer mirrors it for left. The head is shifted
@@ -1152,37 +1530,37 @@ const VILLAGER_UP_1 := [
 ## is the only facing cue there is, so one pixel on the wrong side reads as the whole
 ## colony walking backwards.
 const VILLAGER_SIDE_0 := [
-	"............",
-	".....ffff...",
-	"....ffffff..",
-	"....ffffkf..",
-	"....ffffff..",
-	".....ffff...",
-	"...CCCCC....",
-	"..fCcccC....",
-	"..fCcccC....",
-	"...ccccc....",
-	"....CCC.....",
-	"....CC......",
-	"...CC.CC....",
-	"..kkk.kkk...",
+	".....kkkk...",
+	"....kCCCCk..",
+	"....kCfffk..",
+	"....kCffkf..",
+	"....kffffk..",
+	".....kkkk...",
+	"...krrrrk...",
+	"..fkCcccCk..",
+	"..fkCcccCk..",
+	"...kCDDDk...",
+	"...kCCCCk...",
+	"....kCCk....",
+	"...kkk.kkk..",
+	"..kk....kk..",
 ]
 
 const VILLAGER_SIDE_1 := [
-	"............",
-	".....ffff...",
-	"....ffffff..",
-	"....ffffkf..",
-	"....ffffff..",
-	".....ffff...",
-	"...CCCCC....",
-	"..fCcccC....",
-	"..fCcccC....",
-	"...ccccc....",
-	"....CCC.....",
-	"...CCC......",
-	"..CC..CC....",
-	".kkk...kkk..",
+	".....kkkk...",
+	"....kCCCCk..",
+	"....kCfffk..",
+	"....kCffkf..",
+	"....kffffk..",
+	".....kkkk...",
+	"...krrrrk...",
+	"..fkCcccCk..",
+	"..fkCcccCk..",
+	"...kCDDDk...",
+	"...kCCCCk...",
+	"...kCC......",
+	"..kkk..kkk..",
+	".kk.....kk..",
 ]
 
 
@@ -1238,9 +1616,8 @@ static func feature_maps() -> Dictionary:
 	}
 
 
-## Dense interiors, keyed by feature. Must cover exactly TileAtlas.DENSE_FEATURES — a feature listed
-## there with no map here bakes an empty tile, which would punch transparent holes in the middle of
-## every wood.
+## Legacy full-bleed texture references retained for art comparison. The baker now
+## generates the full connection-mask set instead of using this two-state shortcut.
 static func dense_feature_maps() -> Dictionary:
 	return {
 		Terrain.Feature.TREE: TREE_DENSE,
@@ -1255,6 +1632,7 @@ static func dense_feature_maps() -> Dictionary:
 static func feature_variants() -> Dictionary:
 	return {
 		Terrain.Feature.TREE: [TREE, TREE_B, TREE_C],
+		Terrain.Feature.BERRIES: [BERRIES, BERRIES_B, BERRIES_C],
 	}
 
 
@@ -1353,33 +1731,39 @@ const SPITTER_1 := [
 ## a seven-pixel icon has no room for interior outlines, so the banding has to come
 ## from tone contrast alone.
 const CARRY_WOOD := [
-	".......",
-	".kkkkk.",
-	".kxxxk.",
-	".kDDDk.",
-	".kxxxk.",
-	".kkkkk.",
-	".......",
+	".........",
+	"..kkkkk..",
+	".kDDDDDk.",
+	".kDxxxDk.",
+	".kDxxxDk.",
+	".kDDDDDk.",
+	"..kDkDk..",
+	"..kkkkk..",
+	".........",
 ]
 
 const CARRY_STONE := [
-	".......",
-	"..kkk..",
-	".kLLLk.",
-	"kLSSSLk",
-	"kSSSSSk",
-	".kkkkk.",
-	".......",
+	".........",
+	"...kkk...",
+	"..kLLLk..",
+	".kLLSSSk.",
+	".kLSSSSk.",
+	".kSSSSSk.",
+	"..kSSSk..",
+	"...kkk...",
+	".........",
 ]
 
 const CARRY_FOOD := [
-	".......",
-	"...m...",
-	"..mgm..",
-	".krrrk.",
-	"krrxrrk",
-	".krrrk.",
-	"..kkk..",
+	"....m....",
+	"...mgm...",
+	"..mgggm..",
+	"..kkkkk..",
+	".krrrrrk.",
+	".krrxrrk.",
+	".krrrrrk.",
+	"..kkkkk..",
+	".........",
 ]
 
 
@@ -1390,36 +1774,42 @@ const CARRY_FOOD := [
 ## are lighter and squarer than wood, cut stone is pale and regular where rough stone is a lumpy
 ## grey mass, and tools are the only icon in the set with a metal highlight.
 const CARRY_BOARDS := [
-	".......",
-	".kkkkk.",
-	".kNNNk.",
-	".kkkkk.",
-	".kNNNk.",
-	".kkkkk.",
-	".......",
+	".........",
+	".kkkkkkk.",
+	".kNNNNNk.",
+	".kDDDDDk.",
+	".kkkkkkk.",
+	".kNNNNNk.",
+	".kDDDDDk.",
+	".kkkkkkk.",
+	".........",
 ]
 
 ## Dressed blocks — square, pale, mortared. Reads as masonry against rough stone's boulder.
 const CARRY_CUT_STONE := [
-	".......",
-	"kkkkkkk",
-	"kLLkLLk",
-	"kkkkkkk",
-	"kLLkLLk",
-	"kkkkkkk",
-	".......",
+	".........",
+	".kkkkkkk.",
+	".kLLLkLk.",
+	".kLLLkLk.",
+	".kkkkkkk.",
+	".kLkLLLk.",
+	".kLkLLLk.",
+	".kkkkkkk.",
+	".........",
 ]
 
 ## A hammer. The only carried good with a bright metal head, because tools are the gate to the
 ## upper half of the build list and a player should be able to see one crossing the village.
 const CARRY_TOOLS := [
-	".......",
-	".kkkk..",
-	".kLYLk.",
-	".kkEkk.",
-	"...E...",
-	"...E...",
-	"...k...",
+	".........",
+	".kkkkk...",
+	".kLLYk...",
+	".kkkkkk..",
+	"....kEk..",
+	"....kEk..",
+	"....kEk..",
+	"....kkk..",
+	".........",
 ]
 
 

@@ -18,14 +18,15 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _resources: Label = $SafeArea/Layout/TopRow/ResourceColumn/ResourceBar/Resources
 @onready var _resource_bar: PanelContainer = $SafeArea/Layout/TopRow/ResourceColumn/ResourceBar
 @onready var _breakdown: BreakdownPanel = $SafeArea/Layout/TopRow/ResourceColumn/Breakdown
-@onready var _jobs_button: Button = $SafeArea/Layout/BottomRow/Buttons/JobsButton
-@onready var _build_button: Button = $SafeArea/Layout/BottomRow/Buttons/BuildButton
-@onready var _ascend_button: Button = $SafeArea/Layout/BottomRow/Buttons/AscendButton
+@onready var _jobs_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton
+@onready var _build_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BuildButton
+@onready var _ascend_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/AscendButton
 @onready var _job_panel: PanelContainer = $SafeArea/Layout/BottomRow/JobPanel
 @onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll/Rows
 @onready var _build_panel: PanelContainer = $SafeArea/Layout/BottomRow/BuildPanel
 @onready var _tabs: HBoxContainer = $SafeArea/Layout/BottomRow/BuildPanel/Layout/Tabs
-@onready var _cards: HBoxContainer = $SafeArea/Layout/BottomRow/BuildPanel/Layout/Cards
+@onready var _cards: HBoxContainer = \
+	$SafeArea/Layout/BottomRow/BuildPanel/Layout/CardsScroll/Cards
 @onready var _building_card: PanelContainer = $SafeArea/Layout/BottomRow/BuildingCard
 @onready var _bld_what: Label = $SafeArea/Layout/BottomRow/BuildingCard/Rows/What
 @onready var _bld_detail: Label = $SafeArea/Layout/BottomRow/BuildingCard/Rows/Detail
@@ -37,10 +38,10 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _placement_status: Label = $SafeArea/Layout/BottomRow/PlacementBar/Row/Status
 @onready var _confirm_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/ConfirmButton
 @onready var _cancel_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/CancelButton
-@onready var _powers: HBoxContainer = $SafeArea/Layout/BottomRow/Buttons/Powers
-@onready var _phase_label: Label = $SafeArea/Layout/PhaseBar/Row/Phase
-@onready var _pause_button: Button = $SafeArea/Layout/PhaseBar/Row/PauseButton
-@onready var _speed_button: Button = $SafeArea/Layout/PhaseBar/Row/SpeedButton
+@onready var _powers: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/Powers
+@onready var _phase_label: Label = $SafeArea/Layout/TopRow/PhaseBar/Row/Phase
+@onready var _pause_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/PauseButton
+@onready var _speed_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/SpeedButton
 @onready var _migrant_prompt: PanelContainer = $SafeArea/Layout/MigrantPrompt
 @onready var _migrant_ask: Label = $SafeArea/Layout/MigrantPrompt/Row/Ask
 @onready var _accept_button: Button = $SafeArea/Layout/MigrantPrompt/Row/AcceptButton
@@ -58,6 +59,8 @@ var _card_widgets: Dictionary = {}
 var _tab_widgets: Dictionary = {}
 ## Signature of the job set the board was built for. See _sync_rows.
 var _rows_key: String = ""
+## Signature of the build-menu state. See _on_roster_changed.
+var _menu_key: String = ""
 ## Which build-menu tab is open. Empty until _build_tabs picks the first one.
 var _tab: StringName = &""
 ## power id -> button
@@ -177,7 +180,9 @@ func _build_rows() -> void:
 
 		var swatch: ColorRect = row.get_node("Swatch")
 		var name_label: Label = row.get_node("JobName")
+		var minus_button: Button = row.get_node("MinusButton")
 		var slider: HSlider = row.get_node("Slider")
+		var plus_button: Button = row.get_node("PlusButton")
 		var count: Label = row.get_node("Count")
 
 		swatch.color = job.color
@@ -185,8 +190,16 @@ func _build_rows() -> void:
 		name_label.add_theme_color_override("font_color", job.color)
 		slider.value = Colony.quota_of(job.id)
 		slider.value_changed.connect(_on_slider_changed.bind(job.id))
+		minus_button.pressed.connect(_nudge_job.bind(job.id, -1))
+		plus_button.pressed.connect(_nudge_job.bind(job.id, 1))
 
-		_row_widgets[job.id] = {"root": row, "slider": slider, "count": count}
+		_row_widgets[job.id] = {
+			"root": row,
+			"slider": slider,
+			"count": count,
+			"minus": minus_button,
+			"plus": plus_button,
+		}
 
 
 func _on_slider_changed(value: float, job_id: StringName) -> void:
@@ -194,10 +207,22 @@ func _on_slider_changed(value: float, job_id: StringName) -> void:
 	_refresh()
 
 
+func _nudge_job(job_id: StringName, delta: int) -> void:
+	var widgets: Dictionary = _row_widgets.get(job_id, {})
+	if widgets.is_empty():
+		return
+	var slider: HSlider = widgets["slider"]
+	var next_value := clampi(Colony.quota_of(job_id) + delta, 0, int(slider.max_value))
+	slider.value = next_value
+
+
 func _on_jobs_toggled(pressed: bool) -> void:
 	_job_panel.visible = pressed
 	if pressed:
+		_breakdown.visible = false
 		_build_button.button_pressed = false
+	_refresh_selection()
+	_refresh_building_card()
 
 
 # --- Build menu ------------------------------------------------------------------------
@@ -287,9 +312,19 @@ func _build_cards() -> void:
 ## Anything that can change what is buildable: a completed Village Center raises the tier, a
 ## destroyed one lowers it, an arriving survivor can clear a headcount gate.
 func _on_roster_changed(_arg: Variant = null) -> void:
-	_build_tabs()
-	_build_cards()
-	# A finished sawmill adds the Sawyer row; a destroyed one takes it away again.
+	# Guarded by a signature, like the job rows and the ability buttons.
+	#
+	# This fires on every building AND every villager, and it used to rebuild the whole tab strip and
+	# card row unconditionally — so the stress test's 60 spawns triggered 60 full menu rebuilds,
+	# instantiating several hundred card scenes and immediately freeing them. Population only matters
+	# here through `min_population` gates, which change at a handful of thresholds, not per villager.
+	var key := "%d:%d:%d" % [Colony.center_tier(), Colony.population(), Buildings.in_menu().size()]
+	if key != _menu_key:
+		_menu_key = key
+		_build_tabs()
+		_build_cards()
+	# A finished sawmill adds the Sawyer row; a destroyed one takes it away again. Guarded separately
+	# because the job set and the build menu change on different events.
 	_sync_rows()
 
 
@@ -329,7 +364,7 @@ func _on_demolish() -> void:
 
 func _refresh_building_card() -> void:
 	var b: Building = _god_hand.selected_building if _god_hand != null else null
-	if b == null or not is_instance_valid(b):
+	if b == null or not is_instance_valid(b) or _action_panel_open():
 		_building_card.visible = false
 		_demolish_armed = false
 		return
@@ -372,10 +407,13 @@ func _refresh_building_card() -> void:
 func _on_build_toggled(pressed: bool) -> void:
 	_build_panel.visible = pressed
 	if pressed:
+		_breakdown.visible = false
 		_jobs_button.button_pressed = false
 	elif _placement != null and _placement.active:
 		_placement.cancel()
 	_refresh_cards()
+	_refresh_selection()
+	_refresh_building_card()
 
 
 func _on_card_pressed(def: BuildingDef) -> void:
@@ -415,7 +453,11 @@ func _on_placement_changed(active: bool, status: String, valid: bool) -> void:
 	_placement_bar.visible = active
 	_build_panel.visible = _build_button.button_pressed and not active
 	if not active:
+		_refresh_selection()
+		_refresh_building_card()
 		return
+	_breakdown.visible = false
+	_jobs_button.button_pressed = false
 	# Tapping the ghost is the primary confirm, so the bar has to teach it — the
 	# gesture is invisible otherwise, and a player who never finds it is left tapping
 	# a small button at the bottom of the screen for every wall segment.
@@ -616,7 +658,15 @@ func _on_resource_bar_input(event: InputEvent) -> void:
 	if frame == _tap_frame:
 		return
 	_tap_frame = frame
+	var opening := not _breakdown.visible
+	if opening:
+		_jobs_button.button_pressed = false
+		_build_button.button_pressed = false
+		if _placement != null and _placement.active:
+			_placement.cancel()
 	_breakdown.toggle()
+	_refresh_selection()
+	_refresh_building_card()
 	# On the CONTROL that received the event, not on self — the Hud is a CanvasLayer and
 	# accept_event() is a Control method. Consuming it stops the tap falling through to the
 	# God Hand and sending the Ember to wherever the resource bar happens to be.
@@ -628,6 +678,12 @@ func _on_resource_bar_input(event: InputEvent) -> void:
 ## Names the cost of saying yes, so the choice is informed. Accepting people you cannot house is
 ## allowed — it is the whole decision — but the player should know they are doing it.
 func _on_migrants_arrived(count: int) -> void:
+	# The survivor decision is timed and takes priority over optional drawers.
+	# Closing them keeps the prompt inside the safe area even when the resource
+	# ledger or job board had been open on a short phone display.
+	_breakdown.visible = false
+	_jobs_button.button_pressed = false
+	_build_button.button_pressed = false
 	_migrant_prompt.visible = true
 	var beds := Colony.beds_free()
 	var warning := ""
@@ -675,7 +731,7 @@ func _refresh_selection() -> void:
 	# describe) lives on Villager and none of them on Node, so a Node-typed local would make the
 	# whole block unchecked.
 	var who: Villager = _god_hand.selected if _god_hand != null else null
-	if who == null or not is_instance_valid(who) or not who.alive:
+	if who == null or not is_instance_valid(who) or not who.alive or _action_panel_open():
 		_selection_card.visible = false
 		return
 
@@ -691,6 +747,13 @@ func _refresh_selection() -> void:
 	if worst <= Villager.HUNGER_URGENT:
 		tint = UiPalette.DANGER if worst <= 15.0 else UiPalette.WARN
 	_sel_needs.add_theme_color_override("font_color", tint)
+
+
+## Only one large drawer is allowed in the thumb zone. This is both a readability
+## rule and a hard layout guarantee for the 360 px-tall mobile viewport.
+func _action_panel_open() -> bool:
+	return _breakdown.visible or _job_panel.visible or _build_panel.visible \
+		or _placement_bar.visible or _migrant_prompt.visible
 
 
 func _refresh() -> void:
@@ -830,10 +893,14 @@ func _refresh_counts() -> void:
 		var w: Dictionary = _row_widgets[id]
 		var count: Label = w["count"]
 		var slider: HSlider = w["slider"]
+		var minus_button: Button = w["minus"]
+		var plus_button: Button = w["plus"]
 		if not is_equal_approx(slider.max_value, slider_max):
 			slider.max_value = slider_max
 		var have := Colony.headcount_of(id)
 		var want := Colony.quota_of(id)
+		minus_button.disabled = want <= 0
+		plus_button.disabled = want >= int(slider_max)
 		count.text = L10n.t(&"HUD_HEADCOUNT", [have, want])
 		# Amber when the colony cannot meet the order — the player needs to see
 		# "you asked for more people than you have" without opening a tutorial.

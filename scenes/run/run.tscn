@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/run/run.gd" id="1_run"]
 [ext_resource type="Script" path="res://scripts/divine/god_hand.gd" id="8_god_hand"]
@@ -7,6 +7,7 @@
 [ext_resource type="Shader" path="res://assets/shaders/blight_overlay.gdshader" id="4_blight"]
 [ext_resource type="Shader" path="res://assets/shaders/influence_overlay.gdshader" id="13_influence"]
 [ext_resource type="Script" path="res://scripts/world/blight_structure_view.gd" id="14_blight_view"]
+[ext_resource type="Script" path="res://scripts/world/feature_detail_overlay.gd" id="15_feature_details"]
 [ext_resource type="PackedScene" path="res://scenes/entities/ember.tscn" id="5_ember"]
 [ext_resource type="Script" path="res://scripts/ui/camera_rig.gd" id="6_camera"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_overlay.tscn" id="7_debug"]
@@ -47,6 +48,10 @@ script = ExtResource("2_world_view")
 z_index = -2
 tile_set = ExtResource("3_tileset")
 
+[node name="DecorLayer" type="TileMapLayer" parent="WorldView"]
+z_index = -1
+tile_set = ExtResource("3_tileset")
+
 [node name="Sorted" type="Node2D" parent="WorldView"]
 y_sort_enabled = true
 
@@ -54,10 +59,16 @@ y_sort_enabled = true
 y_sort_enabled = true
 tile_set = ExtResource("3_tileset")
 
+[node name="FeatureDetails" type="Node2D" parent="WorldView"]
+z_index = 1
+script = ExtResource("15_feature_details")
+
 [node name="Entities" type="Node2D" parent="WorldView/Sorted"]
+z_index = 2
 y_sort_enabled = true
 
 [node name="BlightStructures" type="Node2D" parent="WorldView/Sorted"]
+z_index = 2
 y_sort_enabled = true
 script = ExtResource("14_blight_view")
 
@@ -79,7 +90,7 @@ mouse_filter = 2
 [node name="Ember" parent="." instance = ExtResource("5_ember")]
 
 [node name="CameraRig" type="Camera2D" parent="."]
-zoom = Vector2(2, 2)
+zoom = Vector2(1, 1)
 script = ExtResource("6_camera")
 
 [node name="GodHand" type="Node2D" parent="."]

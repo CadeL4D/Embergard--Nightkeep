@@ -1,21 +1,22 @@
 [gd_scene load_steps=1 format=3]
 
 [node name="BuildCard" type="Button"]
-custom_minimum_size = Vector2(74, 66)
+custom_minimum_size = Vector2(86, 72)
+clip_contents = true
 
 [node name="Layout" type="VBoxContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 4.0
-offset_top = 3.0
+offset_top = 4.0
 offset_right = -4.0
-offset_bottom = -3.0
+offset_bottom = -4.0
 mouse_filter = 2
 theme_override_constants/separation = 1
 
 [node name="Icon" type="TextureRect" parent="Layout"]
-custom_minimum_size = Vector2(0, 30)
+custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -32,7 +33,7 @@ horizontal_alignment = 1
 [node name="Cost" type="Label" parent="Layout"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.65, 0.7, 0.76, 1)
+theme_override_colors/font_color = Color(0.701961, 0.760784, 0.819608, 1)
 theme_override_font_sizes/font_size = 9
 text = "cost"
 horizontal_alignment = 1

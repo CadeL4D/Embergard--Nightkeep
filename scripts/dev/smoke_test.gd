@@ -232,11 +232,31 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 			int(sqrt(float(start_closest))), int(sqrt(float(end_closest))), engaged])
 
 	# --- Guards fight back -------------------------------------------------------------
+	#
+	# Sampled over a WINDOW, not at one instant, and this is the fix for a flake that had been
+	# misreported as random noise for most of two sessions.
+	#
+	# The original counted GUARDING once. That was sound when nightfall recalled everybody, but Phase
+	# 2 made the night deliberately non-uniform: warriors defend, and everyone else keeps working as
+	# long as the ground they stand on is lit (Villager._works_after_dark). Add the villagers who are
+	# legitimately eating, drinking or asleep at that moment and a count of zero is a perfectly
+	# correct state for a six-person colony — so the assertion failed roughly one run in twenty on
+	# behaviour that was working exactly as designed.
+	#
+	# What actually matters is that somebody takes up guard duty during the night, so that is what is
+	# measured.
 	var guarding := 0
-	for v in Colony.villagers:
-		if v.state == Villager.State.GUARDING:
-			guarding += 1
-	_expect(guarding > 0, seed_value, "villagers switch to guard duty after dark (%d)" % guarding)
+	for _i in 90:
+		await get_tree().process_frame
+		var now := 0
+		for v in Colony.villagers:
+			if is_instance_valid(v) and v.state == Villager.State.GUARDING:
+				now += 1
+		guarding = maxi(guarding, now)
+		if guarding > 0:
+			break
+	_expect(guarding > 0, seed_value,
+		"villagers take up guard duty during the night (peak %d)" % guarding)
 
 	# --- Powers ------------------------------------------------------------------------
 	Divine.faith = Divine.faith_max()
@@ -614,14 +634,13 @@ func _check_phase2_tail(seed_value: int) -> void:
 		"the nest ring sits inside the coastline (%d vs ~%.0f)" % [
 			MapGen.NEST_MIN_DIST, land_radius])
 
-	# --- resources form masses with interiors ----------------------------------------------
-	# The renderer's dense-interior tile only appears for a cell whose four neighbours share its
-	# feature. If clumping is too sparse none ever qualifies and a wood stays a lattice of separate
-	# trees — which is exactly what the old flat 55% fill produced.
+	# --- resources form connected masses ----------------------------------------------------
+	# Connection masks only matter if generation actually makes solid interiors. If clumping is
+	# too sparse, every mask is an isolated/rim shape and a wood becomes separate shrubs again.
 	var interiors := 0
 	for i in World.grid.cell_count:
 		var f := World.feature[i]
-		if f == Terrain.Feature.NONE or not TileAtlas.has_dense(f):
+		if f == Terrain.Feature.NONE or not TileAtlas.is_connected_feature(f):
 			continue
 		var c := World.grid.coord(i)
 		var solid := true
@@ -634,9 +653,18 @@ func _check_phase2_tail(seed_value: int) -> void:
 			interiors += 1
 	_expect(interiors > 40, seed_value,
 		"resource clumps have solid interiors to draw as a mass (%d cells)" % interiors)
-	for f: int in TileAtlas.DENSE_FEATURES:
-		_expect(TileAtlas.dense_coords(f).y == TileAtlas.DENSE_ROW, seed_value,
-			"feature %d has a dense tile in the atlas" % f)
+	for f: int in TileAtlas.CONNECTED_FEATURE_ROWS:
+		var seen_coords := {}
+		for variant in TileAtlas.connected_variant_count(f):
+			for mask in 16:
+				var coords := TileAtlas.connected_coords(f, mask, variant)
+				seen_coords[coords] = true
+				_expect(coords.x >= 0 and coords.x < TileAtlas.COLUMNS
+						and coords.y >= 0 and coords.y < TileAtlas.ROWS,
+					seed_value, "feature %d mask %d variant %d is inside the atlas" % [
+						f, mask, variant])
+		_expect(seen_coords.size() == 16 * TileAtlas.connected_variant_count(f), seed_value,
+			"feature %d has all connection masks and variants (%d)" % [f, seen_coords.size()])
 
 	# --- the Blight builds -----------------------------------------------------------------
 	_expect(BlightStructures.all().size() >= 3, seed_value,
@@ -1227,7 +1255,33 @@ func _report() -> void:
 	printerr("%d failure(s):" % _failures.size())
 	for f in _failures:
 		printerr("  - %s" % f)
+	_log_failures()
 	quit(1)
+
+
+## Append failures to a file as well as stdout.
+##
+## Because this suite is not fully deterministic — blight growth, Tome scribing and migrant timing all
+## draw on the global RNG — it flakes roughly one run in twenty, and a flake is worth far more than a
+## pass. Twice now a red run was noticed only after its output had already scrolled away, so the
+## specific assertion was never captured and the cause is still unknown.
+##
+## Appending, never truncating, so an overnight loop of runs leaves a record of every distinct
+## failure rather than only the last one.
+func _log_failures() -> void:
+	var path := "user://smoke_failures.log"
+	var f := FileAccess.open(path, FileAccess.READ_WRITE) if FileAccess.file_exists(path) \
+		else FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return
+	f.seek_end()
+	# Timestamped so repeated flakes can be told apart, and the seed list recorded because a flake
+	# that only appears on one seed is a very different problem from one that floats.
+	f.store_line("--- %s  seeds %s" % [Time.get_datetime_string_from_system(), str(SEEDS)])
+	for line in _failures:
+		f.store_line("  " + line)
+	f.close()
+	printerr("(also appended to %s)" % ProjectSettings.globalize_path(path))
 
 
 func quit(code: int) -> void:

@@ -12,6 +12,10 @@ extends RefCounted
 ##   rows 0..2 = Terrain.Type, one row per variant (column == enum value)
 ##   row 3     = Terrain.Feature (column == enum value - 1, since NONE is not drawn)
 ##   rows 4..6 = CORRUPTED Terrain.Type, same columns, one row per variant
+##   rows 7..22  = connected forest masks (eight edge/texture variants)
+##   rows 23..38 = connected stone masks (eight edge/texture variants)
+##   row 39      = cosmetic ground dressing
+##   row 40      = compact berry-shrub variants
 ##
 ## VARIANTS exist because a single tile per material makes large areas read as an
 ## obvious repeating grid — the eye locks onto the identical noise instantly. Three
@@ -19,34 +23,56 @@ extends RefCounted
 ## space and no runtime cost.
 
 const COLUMNS := 8
-const ROWS := 8
+const ROWS := 41
 const TILE := 16
 const VARIANTS := 3
 
 const FEATURE_ROW := 3
 
-## Row holding the DENSE interior of each clustered feature — see ArtData's note.
-##
-## A cell whose four orthogonal neighbours share its feature is painted from here instead of from
-## the feature row, so a wood reads as one mass with a ragged rim rather than as a lattice of
-## separate trees. Column is the same as the feature row's, so there is one mapping to remember.
-const DENSE_ROW := 7
+## Sixteen cardinal masks need two atlas rows per visual variant. Berry bushes are
+## intentionally absent: even adjacent berry cells remain separate low shrubs with
+## visible ground around them rather than merging into another terrain mass.
+const CONNECTED_FEATURE_ROWS := {
+	Terrain.Feature.TREE: 7,
+	Terrain.Feature.STONE: 23,
+}
+const CONNECTED_FEATURE_VARIANTS := {
+	Terrain.Feature.TREE: 8,
+	Terrain.Feature.STONE: 8,
+}
 
-## Features that have a dense interior. Anything absent simply always uses its outlined sprite,
-## which is correct for the things that never cluster — a ruin wall, a nest.
-const DENSE_FEATURES := [
-	Terrain.Feature.TREE,
-	Terrain.Feature.STONE,
-	Terrain.Feature.BERRIES,
-]
-
-
-static func has_dense(feature: int) -> bool:
-	return feature in DENSE_FEATURES
+const MASK_NORTH := 1
+const MASK_EAST := 2
+const MASK_SOUTH := 4
+const MASK_WEST := 8
 
 
-static func dense_coords(feature: int) -> Vector2i:
-	return Vector2i(feature - 1, DENSE_ROW)
+static func is_connected_feature(feature: int) -> bool:
+	return CONNECTED_FEATURE_ROWS.has(feature)
+
+
+static func connected_variant_count(feature: int) -> int:
+	return CONNECTED_FEATURE_VARIANTS.get(feature, 1)
+
+
+static func connected_coords(feature: int, mask: int, variant: int = 0) -> Vector2i:
+	var base_row: int = CONNECTED_FEATURE_ROWS.get(feature, 7)
+	var safe_mask := mask & 15
+	var variant_count := connected_variant_count(feature)
+	return Vector2i(
+		safe_mask % COLUMNS,
+		base_row + posmod(variant, variant_count) * 2 + safe_mask / COLUMNS
+	)
+
+## Purely visual ground dressing. These never enter World.feature, never block a
+## path, and never become a harvest target. Keeping them in their own TileMapLayer
+## lets the map look inhabited and textural without quietly changing the sim.
+const DECOR_ROW := 39
+const DECOR_COUNT := 8
+
+
+static func decor_coords(index: int) -> Vector2i:
+	return Vector2i(posmod(index, DECOR_COUNT), DECOR_ROW)
 
 ## First row of corrupted ground. Corrupted tiles mirror the clean rows exactly — same column
 ## per terrain type, same three variants — so a blighted tile is a genuine terrain swap rather
@@ -81,9 +107,14 @@ static func is_corruptible(terrain_type: int) -> bool:
 const FEATURE_VARIANT_COLS := {
 	Terrain.Feature.TREE: [0, 6, 7],
 }
+const BERRY_VARIANT_COORDS: Array[Vector2i] = [
+	Vector2i(5, FEATURE_ROW), Vector2i(0, 40), Vector2i(1, 40),
+]
 
 
 static func feature_coords(feature: int, variant: int = 0) -> Vector2i:
+	if feature == Terrain.Feature.BERRIES:
+		return BERRY_VARIANT_COORDS[posmod(variant, BERRY_VARIANT_COORDS.size())]
 	var cols: Array = FEATURE_VARIANT_COLS.get(feature, [])
 	if cols.is_empty():
 		return Vector2i(feature - 1, FEATURE_ROW)
@@ -103,4 +134,13 @@ static func variant_for(x: int, y: int) -> int:
 ## the lattice the variants exist to remove.
 static func feature_variant_for(x: int, y: int) -> int:
 	var h := x * 40503 ^ y * 51683 ^ (x + y) * 92837111
-	return absi(h) % 3
+	return absi(h)
+
+
+## Connected variants are decorrelated from the ground and mixed above the low
+## parity bits. Eight possibilities give long exposed borders substantially more
+## silhouette variation without changing any simulation data.
+static func connected_variant_for(x: int, y: int, feature: int) -> int:
+	var h := absi(x * 73856093 ^ y * 19349663 ^ feature * 83492791)
+	h ^= h >> 11
+	return h % connected_variant_count(feature)

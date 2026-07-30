@@ -45,9 +45,20 @@ const WALKABLE := {
 
 ## Features that block movement. Trees do NOT — villagers walk through woodland,
 ## which keeps early pathing forgiving and stops forests from becoming mazes.
+## Features nobody can walk through.
+##
+## TREE blocks now. It did not before, and that single flag is most of why the map read as decoration
+## rather than as terrain: a forest you can stroll through is a green texture, whereas one you have to
+## go round — or cut a road through — is a place. It makes woodland a wall the colony carves into, it
+## gives the flow field something real to route the horde around, and it means clearing trees is
+## genuinely how you open ground.
+##
+## BERRIES stay walkable. They are a low bush and, more importantly, the only food on the map before a
+## farm exists; making a scattered food source into an obstacle course would punish the opening for no
+## design gain.
 const FEATURE_BLOCKS := {
 	Feature.NONE: false,
-	Feature.TREE: false,
+	Feature.TREE: true,
 	Feature.STONE: true,
 	Feature.RUIN_WALL: true,
 	Feature.RUIN_FLOOR: false,
@@ -68,11 +79,20 @@ const MOVE_COST := {
 }
 
 ## What a feature yields when harvested: resource kind and amount per full harvest.
+## What one harvested feature gives up.
+##
+## Cut hard from 12 wood / 10 stone / 8 food. Combined with the work times below, raw gathering was
+## fast enough that the early game had no scarcity in it at all: two woodcutters kept ahead of every
+## build order, so choosing WHAT to build was never a real decision and the production chain existed
+## to convert a surplus rather than to relieve a shortage.
+##
+## The point is not to make the player wait. It is that wood, stone and food have to be worth
+## deciding between, which they are not while all three are abundant.
 const FEATURE_YIELD := {
-	Feature.TREE: {&"wood": 12},
-	Feature.STONE: {&"stone": 10},
+	Feature.TREE: {&"wood": 7},
+	Feature.STONE: {&"stone": 5},
 	Feature.RUIN_WALL: {&"stone": 6},
-	Feature.BERRIES: {&"food": 8},
+	Feature.BERRIES: {&"food": 5},
 }
 
 ## Hit points of a Blight nest.
@@ -84,12 +104,41 @@ const FEATURE_YIELD := {
 const NEST_HP := 260.0
 
 ## Villager-seconds required to fully harvest a feature.
+## Villager-seconds to harvest one feature.
+##
+## Raised alongside the yields being cut, so the two multiply: a tree was 12 wood for 6 seconds and is
+## now 7 wood for 11, which is roughly a third of the old rate. Stone is slower again, because it is
+## the material the upper half of the build list wants and it should be the thing a colony has to
+## commit quarriers to rather than something that accumulates.
+##
+## Berries stay quick. They are meant to be the thing that keeps day one alive while the player works
+## out where the farm goes, and a slow forage would just make the opening tense for the wrong reason.
 const FEATURE_WORK := {
-	Feature.TREE: 6.0,
-	Feature.STONE: 9.0,
-	Feature.RUIN_WALL: 5.0,
-	Feature.BERRIES: 3.0,
+	Feature.TREE: 11.0,
+	Feature.STONE: 18.0,
+	Feature.RUIN_WALL: 9.0,
+	Feature.BERRIES: 4.0,
 }
+
+
+## Features that raising a building simply clears out of the way.
+##
+## Necessary because TREE now blocks movement, and `Colony.check_placement` refuses any cell held by a
+## blocking feature — which would have meant a forested map had nowhere to build at all except the
+## pre-cleared ground around the keep, with no way to order a specific tree felled.
+##
+## So building on woodland IS clearing it: the site is valid, and `place_building` levels the trees on
+## the footprint. Boulders, ruin walls and nests are not on this list — those are genuine obstacles the
+## player has to send someone to break first.
+const FEATURE_CLEARABLE := {
+	Feature.TREE: true,
+	Feature.BERRIES: true,
+}
+
+
+## Does a builder have to remove this before the ground is usable, or can they just build over it?
+static func blocks_building(feature: int) -> bool:
+	return FEATURE_BLOCKS.get(feature, false) and not FEATURE_CLEARABLE.get(feature, false)
 
 
 static func is_walkable(terrain_type: int, feature: int) -> bool:

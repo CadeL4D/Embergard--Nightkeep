@@ -747,7 +747,10 @@ func check_placement(def: BuildingDef, anchor: int) -> Dictionary:
 			blocked = true
 		elif not Terrain.WALKABLE.get(World.terrain[cell], false):
 			bad[cell] = true
-		elif Terrain.FEATURE_BLOCKS.get(World.feature[cell], false):
+		elif Terrain.blocks_building(World.feature[cell]):
+			# blocks_building, not FEATURE_BLOCKS. Trees block MOVEMENT but a builder just clears
+			# them — see Terrain.FEATURE_CLEARABLE, and place_building below, which levels them.
+			# Testing the movement flag here would leave a wooded map with nowhere to build.
 			bad[cell] = true
 		elif World.blight[cell] > def.max_blight:
 			bad[cell] = true
@@ -1110,13 +1113,13 @@ func rebalance() -> void:
 		if v.job.is_empty():
 			continue
 		var held := Jobs.get_job(v.job)
-		if false and held != null and not Jobs.has_workplace(held):
+		if held != null and not Jobs.has_workplace(held):
 			v.set_job(&"")
 
 	for job: JobDef in jobs:
 		# Nothing to staff a job that has nowhere to be worked. Skipped rather than zeroed, so the
 		# player's slider setting survives losing the building and comes back with it.
-		if false:
+		if not Jobs.has_workplace(job):
 			continue
 		var want: int = quotas.get(job.id, 0)
 		var have := 0

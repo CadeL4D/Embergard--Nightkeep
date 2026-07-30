@@ -18,7 +18,6 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-; Locale first: everything below may want to translate a string while starting up.
 Locale="*res://scripts/core/locale.gd"
 Events="*res://scripts/core/events.gd"
 Sim="*res://scripts/core/sim.gd"
@@ -32,13 +31,6 @@ Ui="*res://scripts/ui/ui.gd"
 
 [display]
 
-; 20:9 — a modern phone held sideways. 16:9 (640x360) was both wrong for the target device and
-; too narrow for the HUD: the resource readout and the phase clock together needed most of the
-; width, so the top of the screen was permanently crowded. The extra 160 logical pixels go
-; straight into breathing room.
-;
-; stretch/aspect is "expand", so phones that are not exactly 20:9 show slightly more or less
-; world rather than letterboxing.
 window/size/viewport_width=800
 window/size/viewport_height=360
 window/size/window_width_override=1600
@@ -72,12 +64,6 @@ debug_speed_down={
 [input_devices]
 
 pointing/emulate_touch_from_mouse=true
-
-[internationalization]
-
-; Translations are NOT registered here. The CSV is parsed at runtime by the Locale autoload and
-; handed to TranslationServer directly — see scripts/core/locale.gd for why.
-locale/test=""
 
 [rendering]
 

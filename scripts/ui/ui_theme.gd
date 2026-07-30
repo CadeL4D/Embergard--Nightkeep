@@ -15,7 +15,7 @@ extends RefCounted
 ## with canvas_items stretch, so anything softer turns to mush at 1x and anything
 ## heavier fights the pixel art.
 
-const RADIUS := 3
+const RADIUS := 4
 const BORDER_W := 1
 
 ## Base font size, in a 360px-tall viewport.
@@ -37,9 +37,11 @@ static func build() -> Theme:
 	_style_panels(t)
 	_style_buttons(t)
 	_style_labels(t)
+	_style_fields(t)
 	_style_sliders(t)
 	_style_tabs(t)
 	_style_progress(t)
+	_style_scrollbars(t)
 	return t
 
 
@@ -49,25 +51,54 @@ static func _style_panels(t: Theme) -> void:
 	# Translucent rather than opaque so the world stays legible behind the HUD. On a
 	# phone the panels cover a third of the screen and an opaque strip would hide the
 	# thing the player is trying to react to.
-	var panel := _flat(_alpha(UiPalette.BG_PANEL, 0.92), UiPalette.BORDER)
+	var panel := _flat(_alpha(UiPalette.BG_PANEL, 0.94), UiPalette.BORDER)
+	panel.shadow_color = Color(0.01, 0.015, 0.025, 0.62)
+	panel.shadow_size = 5
+	panel.shadow_offset = Vector2(0, 2)
 	t.set_stylebox("panel", "PanelContainer", panel)
 	t.set_stylebox("panel", "Panel", panel)
 
 	var popup := _flat(_alpha(UiPalette.BG_DEEP, 0.97), UiPalette.BORDER_STRONG)
+	popup.shadow_color = Color(0, 0, 0, 0.72)
+	popup.shadow_size = 8
+	popup.shadow_offset = Vector2(0, 3)
 	t.set_stylebox("panel", "PopupPanel", popup)
 
 
 # --- Buttons ---------------------------------------------------------------------------
 
 static func _style_buttons(t: Theme) -> void:
-	t.set_stylebox("normal", "Button", _flat(UiPalette.BG_RAISED, UiPalette.BORDER))
-	t.set_stylebox("hover", "Button", _flat(UiPalette.BG_HOVER, UiPalette.BORDER_STRONG))
+	t.set_font_size("font_size", "Button", FONT_SIZE)
+	var normal := _flat(UiPalette.BG_RAISED, UiPalette.BORDER)
+	normal.content_margin_left = 8
+	normal.content_margin_right = 8
+	normal.content_margin_top = 4
+	normal.content_margin_bottom = 4
+	t.set_stylebox("normal", "Button", normal)
+
+	var hover := _flat(UiPalette.BG_HOVER, UiPalette.ACCENT_DIM)
+	hover.content_margin_left = 8
+	hover.content_margin_right = 8
+	hover.content_margin_top = 4
+	hover.content_margin_bottom = 4
+	t.set_stylebox("hover", "Button", hover)
 	# Pressed reads as ember-lit rather than merely darker. A colour change survives being
 	# viewed under a thumb; a brightness change does not.
-	t.set_stylebox("pressed", "Button", _flat(UiPalette.ACCENT_DIM, UiPalette.ACCENT))
+	var pressed := _flat(UiPalette.ACCENT_DIM, UiPalette.ACCENT_PALE)
+	pressed.content_margin_left = 8
+	pressed.content_margin_right = 8
+	pressed.content_margin_top = 5
+	pressed.content_margin_bottom = 3
+	t.set_stylebox("pressed", "Button", pressed)
 	t.set_stylebox("disabled", "Button",
 		_flat(_alpha(UiPalette.BG_RAISED, 0.45), _alpha(UiPalette.BORDER, 0.45)))
-	t.set_stylebox("focus", "Button", _flat(Color(0, 0, 0, 0), UiPalette.ACCENT))
+	var focus := _flat(Color(0, 0, 0, 0), UiPalette.ACCENT_PALE)
+	focus.set_border_width_all(1)
+	focus.expand_margin_left = 1
+	focus.expand_margin_top = 1
+	focus.expand_margin_right = 1
+	focus.expand_margin_bottom = 1
+	t.set_stylebox("focus", "Button", focus)
 
 	t.set_color("font_color", "Button", UiPalette.TEXT)
 	t.set_color("font_hover_color", "Button", UiPalette.ACCENT_PALE)
@@ -84,8 +115,35 @@ static func _style_buttons(t: Theme) -> void:
 # --- Text ------------------------------------------------------------------------------
 
 static func _style_labels(t: Theme) -> void:
+	t.set_font_size("font_size", "Label", FONT_SIZE)
+	t.set_font_size("normal_font_size", "RichTextLabel", FONT_SIZE)
 	t.set_color("font_color", "Label", UiPalette.TEXT)
 	t.set_color("font_color", "RichTextLabel", UiPalette.TEXT)
+	# A one-pixel ink edge keeps the small strategy readouts legible over fire,
+	# water and the new illustrated title backdrop without turning them into
+	# heavy outlined display type.
+	t.set_color("font_outline_color", "Label", _alpha(UiPalette.BG_DEEP, 0.75))
+	t.set_constant("outline_size", "Label", 1)
+
+
+# --- Text fields and toggles ------------------------------------------------------------
+
+static func _style_fields(t: Theme) -> void:
+	t.set_font_size("font_size", "LineEdit", FONT_SIZE)
+	t.set_font_size("font_size", "CheckBox", FONT_SIZE)
+	var field := _flat(UiPalette.BG_DEEP, UiPalette.BORDER_STRONG)
+	field.content_margin_left = 7
+	field.content_margin_right = 7
+	field.content_margin_top = 4
+	field.content_margin_bottom = 4
+	t.set_stylebox("normal", "LineEdit", field)
+	t.set_stylebox("focus", "LineEdit", _flat(UiPalette.BG_DEEP, UiPalette.ACCENT))
+	t.set_color("font_color", "LineEdit", UiPalette.TEXT)
+	t.set_color("font_placeholder_color", "LineEdit", UiPalette.TEXT_FAINT)
+	t.set_color("caret_color", "LineEdit", UiPalette.ACCENT_PALE)
+	t.set_color("font_color", "CheckBox", UiPalette.TEXT_DIM)
+	t.set_color("font_hover_color", "CheckBox", UiPalette.TEXT)
+	t.set_color("font_pressed_color", "CheckBox", UiPalette.ACCENT_PALE)
 
 
 # --- Sliders ---------------------------------------------------------------------------
@@ -101,11 +159,18 @@ static func _style_sliders(t: Theme) -> void:
 	var filled := _flat(UiPalette.ACCENT_DIM, UiPalette.ACCENT, 2)
 	t.set_stylebox("grabber_area", "HSlider", filled)
 	t.set_stylebox("grabber_area_highlight", "HSlider", _flat(UiPalette.ACCENT, UiPalette.ACCENT_PALE, 2))
+	t.set_icon("grabber", "HSlider", _slider_grabber(UiPalette.ACCENT, UiPalette.ACCENT_PALE))
+	t.set_icon("grabber_highlight", "HSlider",
+		_slider_grabber(UiPalette.ACCENT_PALE, Color.WHITE))
+	t.set_icon("grabber_disabled", "HSlider",
+		_slider_grabber(UiPalette.TEXT_FAINT, UiPalette.BORDER))
 
 
 # --- Tabs (used by the Phase 2 build menu) ---------------------------------------------
 
 static func _style_tabs(t: Theme) -> void:
+	t.set_font_size("font_size", "TabBar", FONT_SIZE_SMALL)
+	t.set_font_size("font_size", "TabContainer", FONT_SIZE_SMALL)
 	t.set_stylebox("tab_selected", "TabBar", _flat(UiPalette.BG_RAISED, UiPalette.ACCENT))
 	t.set_stylebox("tab_unselected", "TabBar",
 		_flat(_alpha(UiPalette.BG_PANEL, 0.7), UiPalette.BORDER))
@@ -126,9 +191,20 @@ static func _style_tabs(t: Theme) -> void:
 # --- Bars ------------------------------------------------------------------------------
 
 static func _style_progress(t: Theme) -> void:
+	t.set_font_size("font_size", "ProgressBar", FONT_SIZE_SMALL)
 	t.set_stylebox("background", "ProgressBar", _flat(UiPalette.BG_DEEP, UiPalette.BORDER, 2))
 	t.set_stylebox("fill", "ProgressBar", _flat(UiPalette.ACCENT_DIM, UiPalette.ACCENT, 2))
 	t.set_color("font_color", "ProgressBar", UiPalette.TEXT)
+
+
+# --- Scrolling -------------------------------------------------------------------------
+
+static func _style_scrollbars(t: Theme) -> void:
+	for kind: String in ["HScrollBar", "VScrollBar"]:
+		t.set_stylebox("scroll", kind, _flat(_alpha(UiPalette.BG_DEEP, 0.55), UiPalette.BORDER, 2))
+		t.set_stylebox("grabber", kind, _flat(UiPalette.BORDER_STRONG, UiPalette.BORDER_STRONG, 2))
+		t.set_stylebox("grabber_highlight", kind, _flat(UiPalette.ACCENT_DIM, UiPalette.ACCENT, 2))
+		t.set_stylebox("grabber_pressed", kind, _flat(UiPalette.ACCENT, UiPalette.ACCENT_PALE, 2))
 
 
 # --- Helpers ---------------------------------------------------------------------------
@@ -148,3 +224,19 @@ static func _flat(bg: Color, border: Color, radius: int = RADIUS) -> StyleBoxFla
 
 static func _alpha(c: Color, a: float) -> Color:
 	return Color(c.r, c.g, c.b, a)
+
+
+## A crisp diamond reads at 1x and stays comfortably finger-sized after the
+## viewport's 2x display stretch. Using a generated theme icon also removes the
+## oversized stock-Godot white knob from every settings and job slider.
+static func _slider_grabber(fill: Color, edge: Color) -> ImageTexture:
+	const SIZE := 9
+	const MID := 4
+	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in SIZE:
+		for x in SIZE:
+			var distance := absi(x - MID) + absi(y - MID)
+			if distance <= MID:
+				img.set_pixel(x, y, edge if distance == MID else fill)
+	return ImageTexture.create_from_image(img)

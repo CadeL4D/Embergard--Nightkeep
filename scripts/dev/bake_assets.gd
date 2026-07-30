@@ -20,7 +20,7 @@ const LIGHT_PATH := "res://assets/sprites/fx/light_falloff.png"
 const RING_PATH := "res://assets/sprites/fx/selection_ring.png"
 const CARRY_PATH := "res://assets/sprites/fx/carry.png"
 
-const CARRY_SIZE := 7
+const CARRY_SIZE := 9
 
 const LIGHT_SIZE := 256
 const VILLAGER_W := 12
@@ -37,38 +37,38 @@ var _failures: int = 0
 const GROUND := {
 	Terrain.Type.GRASS: {
 		"base": "M",
-		"speck": {"m": 34, "G": 28, "u": 5},
-		"motifs": [{"map": [".g.", "mGm"], "count": 6}],
+		"speck": {"m": 16, "G": 12, "u": 3},
+		"motifs": [{"map": [".g.", "mGm"], "count": 3}],
 	},
 	Terrain.Type.DIRT: {
 		"base": "E",
-		"speck": {"e": 40, "D": 26, "u": 4},
-		"motifs": [{"map": ["De", "ee"], "count": 4}],
+		"speck": {"e": 18, "D": 12, "u": 2},
+		"motifs": [{"map": ["De", "ee"], "count": 2}],
 	},
 	Terrain.Type.ROCK: {
 		"base": "S",
-		"speck": {"s": 38, "L": 24},
-		"motifs": [{"map": ["s.", ".s", "s."], "count": 4}, {"map": ["LL"], "count": 5}],
+		"speck": {"s": 18, "L": 10},
+		"motifs": [{"map": ["s.", ".s", "s."], "count": 2}, {"map": ["LL"], "count": 2}],
 	},
 	Terrain.Type.SAND: {
 		"base": "N",
-		"speck": {"n": 36, "x": 22},
-		"motifs": [{"map": ["xx"], "count": 5}],
+		"speck": {"n": 16, "x": 10},
+		"motifs": [{"map": ["xx"], "count": 3}],
 	},
 	Terrain.Type.WATER: {
 		"base": "W",
-		"speck": {"w": 26, "A": 22},
-		"motifs": [{"map": ["AAA"], "count": 4}, {"map": ["ww"], "count": 3}],
+		"speck": {"w": 12, "A": 9},
+		"motifs": [{"map": ["AAA"], "count": 2}, {"map": ["ww"], "count": 2}],
 	},
 	Terrain.Type.DEEP_WATER: {
 		"base": "w",
-		"speck": {"W": 18, "k": 10},
-		"motifs": [{"map": ["WW"], "count": 3}],
+		"speck": {"W": 9, "k": 4},
+		"motifs": [{"map": ["WW"], "count": 2}],
 	},
 	Terrain.Type.RUBBLE: {
 		"base": "D",
-		"speck": {"e": 30, "S": 20, "E": 20},
-		"motifs": [{"map": ["SS", "sS"], "count": 5}, {"map": ["ee"], "count": 4}],
+		"speck": {"e": 14, "S": 9, "E": 9},
+		"motifs": [{"map": ["SS", "sS"], "count": 3}, {"map": ["ee"], "count": 2}],
 	},
 }
 
@@ -190,6 +190,22 @@ func _stamp(img: Image, map: Array, ox: int, oy: int) -> void:
 				img.set_pixel(px, py, c)
 
 
+## A restrained one-pixel contact shadow gives tiny sprites a clear footprint
+## against noisy ground. The scan runs backwards so pixels added as shadow never
+## become new shadow sources, and region bounds prevent one animation frame from
+## bleeding into the next frame in a strip.
+func _add_sprite_shadow(img: Image, ox: int, oy: int, w: int, h: int) -> void:
+	var shadow := Color(0.02, 0.027, 0.038, 0.58)
+	for y in range(oy + h - 2, oy - 1, -1):
+		for x in range(ox + w - 2, ox - 1, -1):
+			if img.get_pixel(x, y).a <= 0.0:
+				continue
+			var dx := x + 1
+			var dy := y + 1
+			if dx < ox + w and dy < oy + h and img.get_pixel(dx, dy).a <= 0.0:
+				img.set_pixel(dx, dy, shadow)
+
+
 # --- Tileset ------------------------------------------------------------------------------
 
 func _bake_tileset() -> void:
@@ -227,14 +243,22 @@ func _bake_tileset() -> void:
 			var coords := TileAtlas.feature_coords(f, v)
 			_stamp(img, map, coords.x * TileAtlas.TILE, coords.y * TileAtlas.TILE)
 
-	# Dense interiors, in the row below. Only the clustering features have one — see
-	# TileAtlas.DENSE_FEATURES and ArtData's note on why this is two states and not sixteen.
-	var dense: Dictionary = ArtData.dense_feature_maps()
-	for f: int in dense:
-		var map: Array = dense[f]
-		if not _check_map("dense feature %d" % f, map, TileAtlas.TILE, TileAtlas.TILE):
+	# Connected resources get the full N/E/S/W shape set below.
+	for f: int in TileAtlas.CONNECTED_FEATURE_ROWS:
+		for variant in TileAtlas.connected_variant_count(f):
+			for mask in 16:
+				_paint_connected_feature(
+					img, TileAtlas.connected_coords(f, mask, variant), f, mask, variant
+				)
+
+	# Sparse visual dressing. These are overlays with transparent backgrounds,
+	# stamped by WorldView into a layer of their own and never read by the sim.
+	var decor := ArtData.decor_maps()
+	for i in decor.size():
+		var map: Array = decor[i]
+		if not _check_map("ground decor %d" % i, map, TileAtlas.TILE, TileAtlas.TILE):
 			continue
-		var coords := TileAtlas.dense_coords(f)
+		var coords := TileAtlas.decor_coords(i)
 		_stamp(img, map, coords.x * TileAtlas.TILE, coords.y * TileAtlas.TILE)
 
 	_save(img, TILESET_PATH)
@@ -277,6 +301,171 @@ func _paint_ground(img: Image, coords: Vector2i, recipe: Dictionary, rng: Random
 					img.set_pixel(px, py, c)
 
 
+## Paint a full-tile natural mass with an irregular exposed rim and full-bleed
+## shared edges. The geometry is deterministic, so the atlas never churns.
+func _paint_connected_feature(
+		img: Image, coords: Vector2i, feature: int, mask: int, variant: int
+	) -> void:
+	var size := TileAtlas.TILE
+	var ox := coords.x * size
+	var oy := coords.y * size
+
+	for y in size:
+		for x in size:
+			if not _connected_shape_contains(x, y, mask, feature, variant):
+				continue
+
+			var rim_depth := _connected_rim_depth(x, y, mask, feature, variant)
+
+			var ch := "V"
+			match feature:
+				Terrain.Feature.TREE:
+					if rim_depth == 1:
+						ch = "k"
+					elif rim_depth == 2:
+						ch = "v"
+					elif rim_depth == 3:
+						ch = "j"
+					else:
+						ch = _forest_surface_char(x, y, variant)
+				Terrain.Feature.STONE:
+					if rim_depth == 1:
+						ch = "q"
+					elif rim_depth == 2:
+						ch = "H" if _edge_faces_light(
+							x, y, mask, feature, variant
+						) else "q"
+					elif rim_depth == 3:
+						ch = "Q"
+					else:
+						ch = _rock_surface_char(x, y, variant)
+			img.set_pixel(ox + x, oy + y, ArtData.color_of(ch))
+
+
+## Cardinally connected sides count as filled just outside the tile. This prevents
+## a dark outline from reappearing along shared seams.
+func _connected_shape_contains(
+		x: int, y: int, mask: int, feature: int, variant: int
+	) -> bool:
+	if x < 0:
+		return (mask & TileAtlas.MASK_WEST) != 0
+	if x >= TileAtlas.TILE:
+		return (mask & TileAtlas.MASK_EAST) != 0
+	if y < 0:
+		return (mask & TileAtlas.MASK_NORTH) != 0
+	if y >= TileAtlas.TILE:
+		return (mask & TileAtlas.MASK_SOUTH) != 0
+
+	var left := 0 if (mask & TileAtlas.MASK_WEST) != 0 \
+		else 1 + _edge_jitter(y, feature, variant, 1)
+	var right := TileAtlas.TILE - 1 if (mask & TileAtlas.MASK_EAST) != 0 \
+		else TileAtlas.TILE - 2 - _edge_jitter(y, feature, variant, 2)
+	var top := 0 if (mask & TileAtlas.MASK_NORTH) != 0 \
+		else 1 + _edge_jitter(x, feature, variant, 3)
+	var bottom := TileAtlas.TILE - 1 if (mask & TileAtlas.MASK_SOUTH) != 0 \
+		else TileAtlas.TILE - 2 - _edge_jitter(x, feature, variant, 4)
+	if x < left or x > right or y < top or y > bottom:
+		return false
+
+	# A cardinal mask alone produces square outside corners. Test each exposed
+	# corner against a pixel quarter-circle instead of cutting a straight diagonal;
+	# the latter made pointed teeth where two independently profiled sides met.
+	var radius := 5 if feature == Terrain.Feature.TREE else 4
+	var far := TileAtlas.TILE - 1
+	if (mask & TileAtlas.MASK_WEST) == 0 and (mask & TileAtlas.MASK_NORTH) == 0:
+		if x < radius and y < radius \
+				and (x - radius) ** 2 + (y - radius) ** 2 > radius ** 2:
+			return false
+	if (mask & TileAtlas.MASK_EAST) == 0 and (mask & TileAtlas.MASK_NORTH) == 0:
+		var east_x_top := far - x
+		if east_x_top < radius and y < radius \
+				and (east_x_top - radius) ** 2 + (y - radius) ** 2 > radius ** 2:
+			return false
+	if (mask & TileAtlas.MASK_WEST) == 0 and (mask & TileAtlas.MASK_SOUTH) == 0:
+		var south_y_left := far - y
+		if x < radius and south_y_left < radius \
+				and (x - radius) ** 2 + (south_y_left - radius) ** 2 > radius ** 2:
+			return false
+	if (mask & TileAtlas.MASK_EAST) == 0 and (mask & TileAtlas.MASK_SOUTH) == 0:
+		var east_x_bottom := far - x
+		var south_y_right := far - y
+		if east_x_bottom < radius and south_y_right < radius \
+				and (east_x_bottom - radius) ** 2 \
+				+ (south_y_right - radius) ** 2 > radius ** 2:
+			return false
+	return true
+
+
+func _edge_jitter(axis: int, feature: int, variant: int, side: int) -> int:
+	# Interpolate between seeded anchors instead of cycling a short pixel table.
+	# Each exposed side now has three or four broad changes across the full 16 px,
+	# so it cannot reveal the old 8 px sine-wave repetition.
+	var span := 5 if feature == Terrain.Feature.TREE else 6
+	var segment := floori(float(axis) / float(span))
+	var local := posmod(axis, span)
+	var a := _edge_anchor(segment, feature, variant, side)
+	var b := _edge_anchor(segment + 1, feature, variant, side)
+	return roundi(lerpf(float(a), float(b), float(local) / float(span)))
+
+
+func _edge_anchor(segment: int, feature: int, variant: int, side: int) -> int:
+	var h := _feature_hash(segment + side * 17, variant + side * 7, feature + 83, side)
+	if feature == Terrain.Feature.TREE:
+		return [0, 0, 0, 1, 1, 1, 2, 2][h % 8]
+	return [0, 0, 0, 1, 1, 2][h % 6]
+
+
+func _connected_rim_depth(
+		x: int, y: int, mask: int, feature: int, variant: int
+	) -> int:
+	for distance in range(1, 5):
+		if (
+			not _connected_shape_contains(x - distance, y, mask, feature, variant)
+				or not _connected_shape_contains(x + distance, y, mask, feature, variant)
+				or not _connected_shape_contains(x, y - distance, mask, feature, variant)
+				or not _connected_shape_contains(x, y + distance, mask, feature, variant)
+		):
+			return distance
+	return 5
+
+
+func _edge_faces_light(
+		x: int, y: int, mask: int, feature: int, variant: int
+	) -> bool:
+	return (
+		not _connected_shape_contains(x, y - 2, mask, feature, variant)
+			or not _connected_shape_contains(x - 2, y, mask, feature, variant)
+	)
+
+
+func _forest_surface_char(x: int, y: int, variant: int) -> String:
+	var mottle := _feature_hash(
+		x >> 1, y >> 1, Terrain.Feature.TREE + 31, variant
+	)
+	if mottle % 59 == 0:
+		return "J"
+	if mottle % 19 == 0:
+		return "j"
+	return "V"
+
+
+func _rock_surface_char(x: int, y: int, variant: int) -> String:
+	var texture_hash := _feature_hash(x, y, Terrain.Feature.STONE, variant)
+	if texture_hash % 61 == 0:
+		return "q"
+	if texture_hash % 53 == 0:
+		return "H"
+	return "Q"
+
+
+func _feature_hash(x: int, y: int, feature: int, variant: int) -> int:
+	var h := x * 73856093 ^ y * 19349663 ^ feature * 83492791 ^ variant * 2654437
+	h ^= h >> 13
+	h *= 1274126177
+	h ^= h >> 16
+	return absi(h)
+
+
 # --- Villager sheet -------------------------------------------------------------------------
 
 ## Horizontal strip: down_0 down_1 up_0 up_1 side_0 side_1. The renderer flips the
@@ -294,6 +483,7 @@ func _bake_villager() -> void:
 		if not _check_map("villager %s" % key, map, VILLAGER_W, VILLAGER_H):
 			continue
 		_stamp(img, map, i * VILLAGER_W, 0)
+		_add_sprite_shadow(img, i * VILLAGER_W, 0, VILLAGER_W, VILLAGER_H)
 
 	_save(img, VILLAGER_PATH)
 
@@ -341,6 +531,7 @@ func _bake_monsters() -> void:
 				ok = false
 				continue
 			_stamp(img, frames[i], i * VILLAGER_W, 0)
+			_add_sprite_shadow(img, i * VILLAGER_W, 0, VILLAGER_W, VILLAGER_H)
 		if ok:
 			_save(img, "res://assets/sprites/monsters/%s.png" % id)
 
@@ -359,6 +550,7 @@ func _bake_blight_structures() -> void:
 		var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 		img.fill(Color(0, 0, 0, 0))
 		_stamp(img, entry["map"], 0, 0)
+		_add_sprite_shadow(img, 0, 0, w, h)
 		_save(img, "res://assets/sprites/blight/%s.png" % id)
 
 
@@ -380,6 +572,7 @@ func _bake_buildings() -> void:
 		var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 		img.fill(Color(0, 0, 0, 0))
 		_stamp(img, map, 0, 0)
+		_add_sprite_shadow(img, 0, 0, w, h)
 		_save(img, "res://assets/sprites/buildings/%s.png" % id)
 
 

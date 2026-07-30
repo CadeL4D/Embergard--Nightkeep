@@ -1,36 +1,50 @@
 [gd_scene load_steps=1 format=3]
 
 [node name="JobRow" type="HBoxContainer"]
-custom_minimum_size = Vector2(0, 24)
-theme_override_constants/separation = 6
+custom_minimum_size = Vector2(0, 30)
+theme_override_constants/separation = 4
 
 [node name="Swatch" type="ColorRect" parent="."]
-custom_minimum_size = Vector2(4, 0)
+custom_minimum_size = Vector2(3, 0)
 layout_mode = 2
 size_flags_vertical = 3
 color = Color(1, 1, 1, 1)
 
 [node name="JobName" type="Label" parent="."]
-custom_minimum_size = Vector2(84, 0)
+custom_minimum_size = Vector2(70, 0)
 layout_mode = 2
 size_flags_vertical = 1
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 10
 text = "Job"
 vertical_alignment = 1
 
+[node name="MinusButton" type="Button" parent="."]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 12
+text = "−"
+
 [node name="Slider" type="HSlider" parent="."]
-custom_minimum_size = Vector2(0, 22)
+custom_minimum_size = Vector2(64, 22)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 1
 max_value = 20.0
 rounded = true
 
+[node name="PlusButton" type="Button" parent="."]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 12
+text = "+"
+
 [node name="Count" type="Label" parent="."]
-custom_minimum_size = Vector2(46, 0)
+custom_minimum_size = Vector2(34, 0)
 layout_mode = 2
 size_flags_vertical = 1
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 10
 text = "0/0"
 horizontal_alignment = 2
 vertical_alignment = 1

@@ -589,7 +589,7 @@ func _seek_work() -> void:
 			_wander()
 		return
 
-	var target := World.resources.nearest(cell(), def, Colony.is_claimable)
+	var target := World.resources.nearest(cell(), def, _can_work_on)
 	if target == -1:
 		_wander()
 		return
@@ -602,6 +602,15 @@ func _seek_work() -> void:
 		_release_target()
 		return
 	_request_path(approach, State.SEEKING)
+
+
+## Is this feature both unclaimed AND actually reachable?
+##
+## Two conditions, not one. Trees block movement now, so the middle of a wood has no cell a villager
+## could stand on — and a claim on an unreachable tree is a villager that walks off, fails to arrive,
+## drops the claim and picks the same tree again forever. See World.has_walkable_neighbour.
+func _can_work_on(target: int) -> bool:
+	return Colony.is_claimable(target) and World.has_walkable_neighbour(target)
 
 
 func _tick_seeking() -> void:

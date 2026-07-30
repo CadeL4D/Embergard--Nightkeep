@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_menu"]
 [ext_resource type="Shader" path="res://assets/shaders/menu_backdrop.gdshader" id="2_blight"]
+[ext_resource type="Texture2D" path="res://assets/ui/nightkeep_menu_backdrop.png" id="3_backdrop"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
 shader = ExtResource("2_blight")
@@ -11,12 +12,23 @@ shader_parameter/deep = Color(0.18, 0.039, 0.11, 1)
 shader_parameter/mid = Color(0.345, 0.086, 0.227, 1)
 shader_parameter/glow = Color(0.561, 0.141, 0.337, 1)
 
+[sub_resource type="Gradient" id="Gradient_left"]
+offsets = PackedFloat32Array(0.0, 0.48, 0.76, 1.0)
+colors = PackedColorArray(0.022, 0.031, 0.047, 0.9, 0.022, 0.031, 0.047, 0.72, 0.022, 0.031, 0.047, 0.18, 0.022, 0.031, 0.047, 0.0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_left"]
+gradient = SubResource("Gradient_left")
+width = 512
+height = 1
+fill_from = Vector2(0, 0.5)
+fill_to = Vector2(1, 0.5)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 content_margin_left = 12.0
-content_margin_top = 10.0
+content_margin_top = 7.0
 content_margin_right = 12.0
-content_margin_bottom = 10.0
-bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.92)
+content_margin_bottom = 7.0
+bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.94)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
@@ -26,6 +38,9 @@ corner_radius_top_left = 5
 corner_radius_top_right = 5
 corner_radius_bottom_right = 5
 corner_radius_bottom_left = 5
+shadow_color = Color(0, 0, 0, 0.68)
+shadow_size = 8
+shadow_offset = Vector2(0, 3)
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -34,13 +49,26 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("1_menu")
 
-[node name="Backdrop" type="ColorRect" parent="."]
+[node name="Backdrop" type="TextureRect" parent="."]
+texture_filter = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
-color = Color(0.0705882, 0.0862745, 0.113725, 1)
+texture = ExtResource("3_backdrop")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="LeftShade" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+texture = SubResource("GradientTexture2D_left")
+expand_mode = 1
+stretch_mode = 0
 
 [node name="Corruption" type="ColorRect" parent="."]
 material = SubResource("ShaderMaterial_bg")
@@ -49,44 +77,46 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
-color = Color(1, 1, 1, 0.18)
+color = Color(1, 1, 1, 0.08)
 
 [node name="Title" type="Label" parent="."]
 layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -200.0
-offset_top = 22.0
-offset_right = 200.0
-offset_bottom = 78.0
+anchor_left = 0.045
+anchor_top = 0.04
+anchor_right = 0.48
+anchor_bottom = 0.04
+offset_bottom = 42.0
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.603922, 0.235294, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(1, 0.701961, 0.376471, 1)
+theme_override_colors/font_outline_color = Color(0.0352941, 0.0470588, 0.0705882, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 28
 text = "EMBERGARD"
 horizontal_alignment = 1
 
 [node name="Subtitle" type="Label" parent="."]
 layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -200.0
-offset_top = 54.0
-offset_right = 200.0
-offset_bottom = 76.0
+anchor_left = 0.045
+anchor_top = 0.04
+anchor_right = 0.48
+anchor_bottom = 0.04
+offset_top = 34.0
+offset_bottom = 54.0
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.701961, 0.760784, 0.819608, 1)
+theme_override_colors/font_color = Color(0.772549, 0.819608, 0.870588, 1)
+theme_override_constants/outline_size = 2
 theme_override_font_sizes/font_size = 10
 text = "N I G H T K E E P"
 horizontal_alignment = 1
 
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
+anchor_left = 0.045
+anchor_top = 0.04
+anchor_right = 0.48
 anchor_bottom = 1.0
-offset_top = 40.0
+offset_top = 48.0
+offset_bottom = -10.0
 mouse_filter = 2
 
 [node name="Root" type="PanelContainer" parent="Center"]
@@ -98,29 +128,29 @@ layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="ContinueButton" type="Button" parent="Center/Root/Rows"]
-custom_minimum_size = Vector2(150, 28)
+custom_minimum_size = Vector2(176, 30)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "UI_CONTINUE"
 
 [node name="NewButton" type="Button" parent="Center/Root/Rows"]
-custom_minimum_size = Vector2(150, 28)
+custom_minimum_size = Vector2(176, 30)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "UI_NEW_WORLD"
 
 [node name="OptionsButton" type="Button" parent="Center/Root/Rows"]
-custom_minimum_size = Vector2(150, 24)
+custom_minimum_size = Vector2(176, 26)
 layout_mode = 2
 text = "UI_OPTIONS"
 
 [node name="CreditsButton" type="Button" parent="Center/Root/Rows"]
-custom_minimum_size = Vector2(150, 24)
+custom_minimum_size = Vector2(176, 26)
 layout_mode = 2
 text = "UI_CREDITS"
 
 [node name="QuitButton" type="Button" parent="Center/Root/Rows"]
-custom_minimum_size = Vector2(150, 24)
+custom_minimum_size = Vector2(176, 26)
 layout_mode = 2
 text = "UI_QUIT"
 
@@ -138,7 +168,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 
 [node name="Rows" type="VBoxContainer" parent="Center/Create"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 4
 
 [node name="Heading" type="Label" parent="Center/Create/Rows"]
 layout_mode = 2
@@ -147,12 +177,12 @@ theme_override_font_sizes/font_size = 10
 text = "UI_NEW_WORLD"
 
 [node name="Difficulties" type="VBoxContainer" parent="Center/Create/Rows"]
-custom_minimum_size = Vector2(260, 0)
+custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 theme_override_constants/separation = 3
 
 [node name="Blurb" type="Label" parent="Center/Create/Rows"]
-custom_minimum_size = Vector2(260, 66)
+custom_minimum_size = Vector2(240, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.701961, 0.760784, 0.819608, 1)
 theme_override_font_sizes/font_size = 10

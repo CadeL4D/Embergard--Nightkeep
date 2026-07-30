@@ -13,12 +13,16 @@ const SEED := 424242
 
 ## Phase to jump to, and how long to let it settle before capturing.
 const SHOTS := [
-	{"name": "01_day_close", "phase": Sim.Phase.DAY, "settle": 1.2, "zoom": 4.0, "panel": ""},
-	{"name": "02_day", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0, "panel": ""},
-	{"name": "03_job_board", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0, "panel": "jobs"},
-	{"name": "04_build_menu", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0, "panel": "build"},
-	{"name": "05_dusk", "phase": Sim.Phase.DUSK, "settle": 0.4, "zoom": 3.0, "panel": ""},
-	{"name": "06_night", "phase": Sim.Phase.NIGHT, "settle": 3.0, "zoom": 2.0, "panel": "", "monsters": 18},
+	{"name": "01_day_close", "phase": Sim.Phase.DAY, "settle": 1.2, "zoom": 2.0, "panel": ""},
+	{"name": "01b_quarry_close", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.5,
+		"panel": "", "focus": "stone"},
+	{"name": "01c_berries_close", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0,
+		"panel": "", "focus": "berries"},
+	{"name": "02_day_default", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.0, "panel": ""},
+	{"name": "03_job_board", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.0, "panel": "jobs"},
+	{"name": "04_build_menu", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.0, "panel": "build"},
+	{"name": "05_dusk", "phase": Sim.Phase.DUSK, "settle": 0.4, "zoom": 1.5, "panel": ""},
+	{"name": "06_night", "phase": Sim.Phase.NIGHT, "settle": 3.0, "zoom": 1.0, "panel": "", "monsters": 18},
 ]
 
 var _run: Node2D
@@ -104,8 +108,8 @@ func _place(id: StringName, anchor: int, parent: Node) -> void:
 func _capture_all() -> void:
 	var camera: Camera2D = _run.get_node("CameraRig")
 	var bottom := _run.get_node("Hud/SafeArea/Layout/BottomRow")
-	var jobs_button: Button = bottom.get_node("Buttons/JobsButton")
-	var build_button: Button = bottom.get_node("Buttons/BuildButton")
+	var jobs_button: Button = bottom.get_node("ButtonsClip/Buttons/JobsButton")
+	var build_button: Button = bottom.get_node("ButtonsClip/Buttons/BuildButton")
 	for shot: Dictionary in SHOTS:
 		var panel: String = shot.get("panel", "")
 		jobs_button.button_pressed = panel == "jobs"
@@ -116,12 +120,50 @@ func _capture_all() -> void:
 		# reached that phase's colour rather than still bleeding from the last one.
 		Sim.phase_elapsed = Sim.PHASE_DURATION[shot["phase"]] * 0.85
 		camera.zoom = Vector2(shot["zoom"], shot["zoom"])
-		camera.center_on_cell(World.keep_cell)
+		var focus_cell := World.keep_cell
+		if shot.get("focus", "") == "stone":
+			focus_cell = _best_resource_focus(Terrain.Feature.STONE)
+		elif shot.get("focus", "") == "berries":
+			focus_cell = _best_resource_focus(Terrain.Feature.BERRIES)
+		camera.center_on_cell(focus_cell)
 
 		await get_tree().create_timer(shot["settle"]).timeout
 		await RenderingServer.frame_post_draw
+
+		var top_row: Control = _run.get_node("Hud/SafeArea/Layout/TopRow")
+		var bottom_row: Control = _run.get_node("Hud/SafeArea/Layout/BottomRow")
+		var resource_bar: Control = _run.get_node(
+			"Hud/SafeArea/Layout/TopRow/ResourceColumn/ResourceBar")
+		var phase_bar: Control = _run.get_node("Hud/SafeArea/Layout/TopRow/PhaseBar")
+		print("layout %s: top=%s visible=%s resource=%s/%s phase=%s/%s bottom=%s" % [
+			shot["name"], top_row.get_global_rect(), top_row.is_visible_in_tree(),
+			resource_bar.get_global_rect(), resource_bar.is_visible_in_tree(),
+			phase_bar.get_global_rect(), phase_bar.is_visible_in_tree(),
+			bottom_row.get_global_rect()])
 
 		var img := get_viewport().get_texture().get_image()
 		var path := "%s/%s.png" % [OUT_DIR, shot["name"]]
 		img.save_png(path)
 		print("wrote %s  (%s)" % [ProjectSettings.globalize_path(path), img.get_size()])
+
+
+func _best_resource_focus(feature: int) -> int:
+	var grid: Grid = World.grid
+	var best := World.keep_cell
+	var best_neighbours := -1
+	for cell in grid.cell_count:
+		if World.feature[cell] != feature:
+			continue
+		var c := grid.coord(cell)
+		var neighbours := 0
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				if dx == 0 and dy == 0:
+					continue
+				var n := c + Vector2i(dx, dy)
+				if grid.is_valid_v(n) and World.feature[grid.index_v(n)] == feature:
+					neighbours += 1
+		if neighbours > best_neighbours:
+			best_neighbours = neighbours
+			best = cell
+	return best

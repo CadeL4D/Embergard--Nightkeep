@@ -386,6 +386,24 @@ func is_walkable(i: int) -> bool:
 	return grid.is_valid_index(i) and move_cost[i] < 255
 
 
+## Can anything stand next to this cell?
+##
+## Necessary the moment trees started blocking movement. A dense clump is now a solid mass, and the
+## cells in the MIDDLE of one cannot be harvested at all — there is nowhere for a woodcutter to stand.
+## Without this check the resource index happily handed out an interior tree, the villager pathed to
+## the nearest walkable cell several tiles away, failed `_within_reach`, dropped the claim and asked
+## for the same tree again: a forest that looked full of work and produced nothing.
+##
+## With it, woodland is eaten from the edge inward, and each felled tree exposes the ones behind it.
+func has_walkable_neighbour(i: int) -> bool:
+	if not grid.is_valid_index(i):
+		return false
+	for n in grid.neighbours_4(i):
+		if is_walkable(n):
+			return true
+	return false
+
+
 func is_blighted(i: int) -> bool:
 	return blight[i] > 0
 

@@ -14,6 +14,7 @@ extends CanvasLayer
 @onready var _unlock_button: Button = $Center/Card/Layout/UnlockButton
 @onready var _new_run: Button = $Center/Card/Layout/NewRun
 @onready var _menu_button: Button = $Center/Card/Layout/MenuButton
+@onready var _card: PanelContainer = $Center/Card
 
 ## The cheapest thing still locked, offered on this card. An `Unlocks.Entry` rather than a
 ## BuildingDef, so powers are offered on the same footing — see Unlocks.
@@ -52,6 +53,14 @@ func _on_run_ended(ascended: bool, shards: int) -> void:
 	_refresh_offer()
 
 	visible = true
+	_card.modulate.a = 0.0
+	_card.scale = Vector2(0.97, 0.97)
+	_card.pivot_offset = _card.size * 0.5
+	var reveal := create_tween().set_parallel(true)
+	reveal.tween_property(_card, "modulate:a", 1.0, 0.24)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	reveal.tween_property(_card, "scale", Vector2.ONE, 0.24)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_new_run.grab_focus()
 
 

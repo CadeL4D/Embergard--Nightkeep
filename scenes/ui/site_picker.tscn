@@ -9,10 +9,18 @@ content_margin_top = 6.0
 content_margin_right = 10.0
 content_margin_bottom = 6.0
 bg_color = Color(0.0392157, 0.0509804, 0.0745098, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.482353, 0.298039, 0.156863, 0.9)
 corner_radius_top_left = 4
 corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
+shadow_color = Color(0, 0, 0, 0.62)
+shadow_size = 5
+shadow_offset = Vector2(0, 2)
 
 [node name="SitePicker" type="CanvasLayer"]
 layer = 60
@@ -41,6 +49,7 @@ mouse_filter = 2
 theme_override_constants/separation = 6
 
 [node name="Panel" type="PanelContainer" parent="SafeArea/Layout"]
+custom_minimum_size = Vector2(380, 0)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -78,13 +87,13 @@ size_flags_horizontal = 4
 theme_override_constants/separation = 8
 
 [node name="SuggestButton" type="Button" parent="SafeArea/Layout/Buttons"]
-custom_minimum_size = Vector2(96, 30)
+custom_minimum_size = Vector2(112, 32)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "SITE_SUGGEST"
 
 [node name="ConfirmButton" type="Button" parent="SafeArea/Layout/Buttons"]
-custom_minimum_size = Vector2(96, 30)
+custom_minimum_size = Vector2(112, 32)
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
 text = "SITE_SETTLE"
