@@ -33,27 +33,30 @@ This pass answered the "128 px buildings" problem without changing the simulatio
   save. Ground noise was reduced at the same time so deliberate details read instead of dissolving
   into salt-and-pepper texture.
 - **Forests and quarries now use 16 connection-mask tiles with eight visual variants each.** Each
-  cell selects a four-bit N/E/S/W connection mask plus an independently mixed edge variant. Shared
-  edges are full-bleed; only exposed edges receive the silhouette and depth bands. Harvesting
-  repaints the changed cell and its four neighbors, so newly cut edges remain correct without adding
-  save state.
-  - The reference-matching refinement adds a near-black rounded forest perimeter, two recessed
-    canopy bands, a dark uninterrupted canopy interior, and warm taupe rock plateaus. Full-width
-    seeded edge profiles replace the old 8 px repeating wave, and dedicated corner chamfers remove
-    the pinched square turns. Tile-local interior contour stamps were deliberately removed after
-    capture review because they exposed a visible pattern at gameplay scale.
-  - **Large surface contours are a separate view-only layer.** `FeatureDetails` places a small,
-    deterministic set of irregular 3-tile-wide canopy lobes and stone shelves only where a resource
-    is solid for one or two cells around the chosen point. They therefore reproduce the reference's
-    broad interior forms without restarting in every atlas cell, never cross an exposed resource
-    edge, and rebuild after harvesting without entering pathing or save data.
+  cell selects a four-bit N/E/S/W connection mask plus an independently mixed surface variant. Shared
+  edges are full-bleed and the atlas retains only the coarse transparent silhouette needed to compose
+  cells. Harvesting repaints the changed cell and its four neighbors without adding save state.
+  - **The visible rim is traced once around each whole connected region.** `FeatureDetails` flood-fills
+    every forest and quarry, traces both outer boundaries and clearing holes, inserts broad seeded
+    variations along long runs, and applies two corner-cutting smoothing passes. Separate culled line
+    items draw the near-black/deep-green forest bands and warm rock bands. The simulation remains
+    exactly cell-based, but the player no longer sees a 16 px staircase or one repeated scallop per
+    tile. The old atlas rim was removed after capture review because drawing both systems produced a
+    doubled cable-like outline.
+  - **Large surface contours use the same view-only layer.** A small deterministic set of irregular
+    3-tile-wide canopy lobes and stone shelves is placed only where a resource is solid for one or two
+    cells around the chosen point. They reproduce the reference's broad interior forms without
+    restarting in every atlas cell, never cross an exposed resource edge, and rebuild after harvesting
+    without entering pathing or save data. Tile-local contour stamps remain deliberately excluded
+    because their repetition was visible at gameplay scale.
   - **Berries do not use the connected terrain system.** Three compact shrub silhouettes occupy
     less than one 16 px cell, leave ground visible around them, and retain bright fruit accents even
     when several berry cells are adjacent.
   - Visual-development reference: `assets/concepts/connected_natural_features_reference.png`.
-  - Resource noise frequency was reduced from 0.06 to 0.045, core fill was raised, and a deterministic
-    cellular cleanup removes isolated tree/stone cells and closes small holes. The result is fewer,
-    larger forests and quarries rather than resources dusted evenly across the map.
+  - Resource noise frequency was reduced from 0.06 to 0.045, core fill was raised, and deterministic
+    cleanup removes isolated cells, closes small holes, and deletes cardinally connected regions below
+    eight cells after the keep clearing is cut. The result is fewer, larger forests and quarries rather
+    than lone props or resources dusted evenly across the map.
 - **World art was re-keyed and re-baked.** The shared `ArtData` palette has clearer stone, timber,
   water and foliage ramps, and every unit/building/blight sprite gets a restrained one-pixel contact
   shadow from the baker. Existing widened building silhouettes and gameplay footprints are kept.
@@ -95,10 +98,12 @@ draw on the global RNG, so other roll-sensitive margins may remain.
 whether or not anyone is watching. Run the suite in a loop and read that file rather than hunting it
 live — that is what finally identifies it.
 
-**Latest connected-terrain validation (2026-07-30):** all four seeds and the live run passed on the
-final smoke rerun. The first run hit the documented live-scene timing margin after construction
-stopped at 9/22 work; its immediate rerun exited cleanly. The iOS pack was rebuilt and
-`verify_export.py` confirmed that every runtime catalog and directly read file is present.
+**Latest rounded-terrain validation (2026-07-30):** the final eight-cell cleanup passed all four
+seeds and the live run, including day-one wood and stone delivery. A 12-cell experiment was rejected
+because it removed seed 2024's practical opening quarry. Before that tuning, one run hit the
+documented live-scene margin at exactly 9/22 construction work; its immediate rerun passed. The final
+iOS pack is 4,273,544 bytes, and `verify_export.py` confirms that every runtime catalog and directly
+read file is present.
 
 ```
 Godot_v4.7-stable_win64_console.exe --headless --import --path .                          # 1

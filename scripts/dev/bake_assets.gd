@@ -301,8 +301,10 @@ func _paint_ground(img: Image, coords: Vector2i, recipe: Dictionary, rng: Random
 					img.set_pixel(px, py, c)
 
 
-## Paint a full-tile natural mass with an irregular exposed rim and full-bleed
-## shared edges. The geometry is deterministic, so the atlas never churns.
+## Paint the full-tile surface and its full-bleed shared edges. The atlas keeps
+## the coarse transparent silhouette needed for cell composition, while
+## FeatureDetails owns the one region-wide visible rim; drawing both here and
+## there produced a doubled, cable-like outline.
 func _paint_connected_feature(
 		img: Image, coords: Vector2i, feature: int, mask: int, variant: int
 	) -> void:
@@ -315,30 +317,12 @@ func _paint_connected_feature(
 			if not _connected_shape_contains(x, y, mask, feature, variant):
 				continue
 
-			var rim_depth := _connected_rim_depth(x, y, mask, feature, variant)
-
 			var ch := "V"
 			match feature:
 				Terrain.Feature.TREE:
-					if rim_depth == 1:
-						ch = "k"
-					elif rim_depth == 2:
-						ch = "v"
-					elif rim_depth == 3:
-						ch = "j"
-					else:
-						ch = _forest_surface_char(x, y, variant)
+					ch = _forest_surface_char(x, y, variant)
 				Terrain.Feature.STONE:
-					if rim_depth == 1:
-						ch = "q"
-					elif rim_depth == 2:
-						ch = "H" if _edge_faces_light(
-							x, y, mask, feature, variant
-						) else "q"
-					elif rim_depth == 3:
-						ch = "Q"
-					else:
-						ch = _rock_surface_char(x, y, variant)
+					ch = _rock_surface_char(x, y, variant)
 			img.set_pixel(ox + x, oy + y, ArtData.color_of(ch))
 
 
@@ -413,29 +397,6 @@ func _edge_anchor(segment: int, feature: int, variant: int, side: int) -> int:
 	if feature == Terrain.Feature.TREE:
 		return [0, 0, 0, 1, 1, 1, 2, 2][h % 8]
 	return [0, 0, 0, 1, 1, 2][h % 6]
-
-
-func _connected_rim_depth(
-		x: int, y: int, mask: int, feature: int, variant: int
-	) -> int:
-	for distance in range(1, 5):
-		if (
-			not _connected_shape_contains(x - distance, y, mask, feature, variant)
-				or not _connected_shape_contains(x + distance, y, mask, feature, variant)
-				or not _connected_shape_contains(x, y - distance, mask, feature, variant)
-				or not _connected_shape_contains(x, y + distance, mask, feature, variant)
-		):
-			return distance
-	return 5
-
-
-func _edge_faces_light(
-		x: int, y: int, mask: int, feature: int, variant: int
-	) -> bool:
-	return (
-		not _connected_shape_contains(x, y - 2, mask, feature, variant)
-			or not _connected_shape_contains(x - 2, y, mask, feature, variant)
-	)
 
 
 func _forest_surface_char(x: int, y: int, variant: int) -> String:

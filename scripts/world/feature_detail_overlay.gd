@@ -1,20 +1,27 @@
 extends Node2D
-## Sparse multi-tile surface contours for the solid interiors of forests and quarries.
+## Region-wide boundaries and sparse surface contours for forests and quarries.
 ##
-## These cannot live in a 16 px atlas cell without becoming a repeated stamp. Instead,
-## this view-only layer chooses deterministic points at least two resource cells from
-## an edge and draws broad, irregular nested shapes spanning roughly three tiles.
+## A connected feature is still made from 16 px simulation cells, but exposing that
+## staircase makes every grove and quarry look boxy. This view-only layer traces the
+## outline of each entire connected region, rounds that path, and draws the perimeter
+## as one continuous contour. It also chooses deterministic solid-interior points for
+## broad, irregular surface shapes that cannot fit in one atlas cell without repeating.
 ## Nothing here enters World.feature, pathing or saves.
 
+const FOREST_EDGE_BASE := Color("1b3823")
+const FOREST_EDGE_DARK := Color("090d13")
 const FOREST_OUTER := Color("102217")
 const FOREST_MIDDLE := Color("32643b")
 const FOREST_SPECK := Color("4e8150")
 
 const ROCK_OUTER := Color("241f1a")
+const ROCK_EDGE_BASE := Color("665847")
 const ROCK_MIDDLE := Color("796b57")
 const ROCK_INNER := Color("8c7a62")
 const ROCK_LINE := Color("17130f")
 
+var _boundaries: Array[Dictionary] = []
+var _boundary_lines: Array[Line2D] = []
 var _details: Array[Dictionary] = []
 var _rebuild_queued := false
 
@@ -37,12 +44,16 @@ func _queue_rebuild() -> void:
 
 func _rebuild() -> void:
 	_rebuild_queued = false
+	_boundaries.clear()
 	_details.clear()
 	var grid: Grid = World.grid
 	if World.feature.size() != grid.cell_count:
+		_sync_boundary_lines()
 		queue_redraw()
 		return
 
+	_build_boundaries(grid)
+	_sync_boundary_lines()
 	var chosen: Array[Vector2] = []
 	for cell in grid.cell_count:
 		var feature := int(World.feature[cell])
@@ -70,6 +81,217 @@ func _rebuild() -> void:
 		_details.append({"feature": feature, "center": center, "seed": seed})
 
 	queue_redraw()
+
+
+func _build_boundaries(grid: Grid) -> void:
+	var visited := PackedByteArray()
+	visited.resize(grid.cell_count)
+	for cell in grid.cell_count:
+		if visited[cell] != 0:
+			continue
+		var feature := int(World.feature[cell])
+		if feature != Terrain.Feature.TREE and feature != Terrain.Feature.STONE:
+			continue
+		var region := _collect_region(cell, feature, grid, visited)
+		var edges: Dictionary = {}
+		for region_cell in region:
+			var c := grid.coord(region_cell)
+			# Edges run with the resource on their right. That orientation keeps
+			# outer rims and clearing/hole rims as independent closed loops.
+			if not _is_feature(c + Vector2i.UP, feature, grid):
+				_add_edge(edges, c, c + Vector2i.RIGHT)
+			if not _is_feature(c + Vector2i.RIGHT, feature, grid):
+				_add_edge(edges, c + Vector2i.RIGHT, c + Vector2i(1, 1))
+			if not _is_feature(c + Vector2i.DOWN, feature, grid):
+				_add_edge(edges, c + Vector2i(1, 1), c + Vector2i.DOWN)
+			if not _is_feature(c + Vector2i.LEFT, feature, grid):
+				_add_edge(edges, c + Vector2i.DOWN, c)
+		_trace_loops(edges, feature)
+
+
+func _sync_boundary_lines() -> void:
+	for line in _boundary_lines:
+		if is_instance_valid(line):
+			line.free()
+	_boundary_lines.clear()
+
+	for boundary in _boundaries:
+		var feature := int(boundary["feature"])
+		var points: PackedVector2Array = boundary["points"]
+		var closed := _closed(points)
+		if feature == Terrain.Feature.TREE:
+			_add_boundary_line(closed, FOREST_EDGE_DARK, 7.0)
+			_add_boundary_line(closed, FOREST_OUTER, 4.0)
+			_add_boundary_line(closed, FOREST_EDGE_BASE, 1.5)
+		else:
+			_add_boundary_line(closed, ROCK_LINE, 7.0)
+			_add_boundary_line(closed, ROCK_OUTER, 4.0)
+			_add_boundary_line(closed, ROCK_EDGE_BASE, 1.5)
+
+
+func _add_boundary_line(points: PackedVector2Array, color: Color, width: float) -> void:
+	var line := Line2D.new()
+	line.points = points
+	line.width = width
+	line.default_color = color
+	line.antialiased = false
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
+	line.round_precision = 4
+	line.show_behind_parent = true
+	add_child(line)
+	_boundary_lines.append(line)
+
+
+func _collect_region(
+	start: int, feature: int, grid: Grid, visited: PackedByteArray
+	) -> PackedInt32Array:
+	var region := PackedInt32Array()
+	var queue := PackedInt32Array([start])
+	visited[start] = 1
+	var head := 0
+	while head < queue.size():
+		var cell := queue[head]
+		head += 1
+		region.append(cell)
+		for neighbor in grid.neighbours_4(cell):
+			if visited[neighbor] == 0 and int(World.feature[neighbor]) == feature:
+				visited[neighbor] = 1
+				queue.append(neighbor)
+	return region
+
+
+func _is_feature(c: Vector2i, feature: int, grid: Grid) -> bool:
+	return grid.is_valid_v(c) and int(World.feature[grid.index_v(c)]) == feature
+
+
+func _add_edge(edges: Dictionary, start: Vector2i, finish: Vector2i) -> void:
+	var outgoing: Array[Vector2i] = []
+	if edges.has(start):
+		outgoing = edges[start]
+	outgoing.append(finish)
+	edges[start] = outgoing
+
+
+func _trace_loops(edges: Dictionary, feature: int) -> void:
+	while not edges.is_empty():
+		var starts: Array = edges.keys()
+		var start := Vector2i(starts[0])
+		var current := start
+		var incoming := Vector2i.ZERO
+		var raw: Array[Vector2i] = [start]
+		var guard := 0
+		while guard < 100000:
+			guard += 1
+			var next := _take_next_edge(edges, current, incoming)
+			if next == Vector2i(-2147483648, -2147483648):
+				break
+			incoming = next - current
+			current = next
+			if current == start:
+				break
+			raw.append(current)
+		if raw.size() < 3:
+			continue
+		var simplified := _simplify_loop(raw)
+		if simplified.size() < 3:
+			continue
+		var natural := _naturalize_loop(simplified, feature)
+		# Two subdivisions turn the remaining right-angle changes into broad
+		# canopy/rock lobes. Each loop is its own CanvasItem, so off-screen
+		# geometry is still culled as a unit.
+		var rounded := _chaikin_closed(natural, 2)
+		_boundaries.append({"feature": feature, "points": rounded})
+
+
+func _take_next_edge(
+	edges: Dictionary, start: Vector2i, incoming: Vector2i
+	) -> Vector2i:
+	var missing := Vector2i(-2147483648, -2147483648)
+	if not edges.has(start):
+		return missing
+	var outgoing: Array[Vector2i] = edges[start]
+	var chosen := 0
+	var best_score := -1
+	for i in outgoing.size():
+		var direction := outgoing[i] - start
+		var score := _turn_score(incoming, direction)
+		if score > best_score:
+			best_score = score
+			chosen = i
+	var finish := outgoing[chosen]
+	outgoing.remove_at(chosen)
+	if outgoing.is_empty():
+		edges.erase(start)
+	else:
+		edges[start] = outgoing
+	return finish
+
+
+func _turn_score(incoming: Vector2i, outgoing: Vector2i) -> int:
+	if incoming == Vector2i.ZERO:
+		return 0
+	var right := Vector2i(-incoming.y, incoming.x)
+	if outgoing == right:
+		return 3
+	if outgoing == incoming:
+		return 2
+	if outgoing == -right:
+		return 1
+	return 0
+
+
+func _simplify_loop(raw: Array[Vector2i]) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	var count := raw.size()
+	for i in count:
+		var before := raw[(i - 1 + count) % count]
+		var current := raw[i]
+		var after := raw[(i + 1) % count]
+		var first := current - before
+		var second := after - current
+		if first.x * second.y - first.y * second.x == 0:
+			continue
+		points.append(Vector2(current * Grid.TILE_SIZE))
+	return points
+
+
+func _naturalize_loop(points: PackedVector2Array, feature: int) -> PackedVector2Array:
+	var natural := PackedVector2Array()
+	var spacing := 18.0 if feature == Terrain.Feature.TREE else 22.0
+	var amplitude := 3.0 if feature == Terrain.Feature.TREE else 2.5
+	for i in points.size():
+		var a := points[i]
+		var b := points[(i + 1) % points.size()]
+		var delta := b - a
+		var length := delta.length()
+		if length <= 0.01:
+			continue
+		var steps := maxi(1, ceili(length / spacing))
+		var outside := Vector2(delta.y, -delta.x).normalized()
+		for step in steps:
+			var t := float(step) / float(steps)
+			var point := a.lerp(b, t)
+			var h := _mix(roundi(point.x), roundi(point.y), feature * 97 + i * 7 + step)
+			# Broad signed changes keep long edges organic without restarting one
+			# scallop in every tile. The line is wide enough to bridge these small
+			# offsets back to the coarse transparent atlas silhouette.
+			var variation := float((h >> 8) % 1024) / 1023.0
+			var offset := amplitude * (variation * 2.0 - 1.0)
+			natural.append(point + outside * offset)
+	return natural
+
+
+func _chaikin_closed(points: PackedVector2Array, iterations: int) -> PackedVector2Array:
+	var rounded := points
+	for _iteration in iterations:
+		var next := PackedVector2Array()
+		for i in rounded.size():
+			var a := rounded[i]
+			var b := rounded[(i + 1) % rounded.size()]
+			next.append(a.lerp(b, 0.25))
+			next.append(a.lerp(b, 0.75))
+		rounded = next
+	return rounded
 
 
 func _is_solid_interior(c: Vector2i, feature: int, radius: int, grid: Grid) -> bool:

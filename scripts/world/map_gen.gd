@@ -48,6 +48,7 @@ const NEST_MIN_DIST := 30
 ## that missed onto the same mid-ring position.
 const NEST_DIST_SPAN := 8.0
 const NEST_COUNT := 4
+const MIN_RESOURCE_REGION := 8
 
 class Result extends RefCounted:
 	var terrain: PackedByteArray
@@ -86,6 +87,7 @@ static func generate(grid: Grid, seed_value: int, keep_override: int = -1) -> Re
 	res.nest_cells = _place_nests(grid, res, rng)
 	_clear_around_keep(grid, res, res.keep_cell)
 	_prune_isolated_resources(grid, res)
+	_prune_small_resource_regions(grid, res)
 	return res
 
 
@@ -281,6 +283,37 @@ static func _prune_isolated_resources(grid: Grid, res: Result) -> void:
 			continue
 		if _matching_resource_neighbours(grid, before, i, feature) <= 1:
 			res.feature[i] = Terrain.Feature.NONE
+
+
+## The neighbour pass above removes dust but can leave diagonal chains whose cells
+## are not actually connected for harvesting or rendering. Remove whole cardinal
+## components below a small 8-cell grove so every starting forest/quarry reads as a grouped
+## destination rather than a lone clover-shaped prop.
+static func _prune_small_resource_regions(grid: Grid, res: Result) -> void:
+	var visited := PackedByteArray()
+	visited.resize(grid.cell_count)
+	for start in grid.cell_count:
+		if visited[start] != 0:
+			continue
+		var feature := int(res.feature[start])
+		if feature != Terrain.Feature.TREE and feature != Terrain.Feature.STONE:
+			continue
+		var region := PackedInt32Array()
+		var queue := PackedInt32Array([start])
+		visited[start] = 1
+		var head := 0
+		while head < queue.size():
+			var cell := queue[head]
+			head += 1
+			region.append(cell)
+			for neighbor in grid.neighbours_4(cell):
+				if visited[neighbor] == 0 and int(res.feature[neighbor]) == feature:
+					visited[neighbor] = 1
+					queue.append(neighbor)
+		if region.size() >= MIN_RESOURCE_REGION:
+			continue
+		for cell in region:
+			res.feature[cell] = Terrain.Feature.NONE
 
 
 static func _matching_resource_neighbours(
