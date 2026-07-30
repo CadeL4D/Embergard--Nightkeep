@@ -582,6 +582,115 @@ func _check_ember_glide(seed_value: int) -> void:
 ## Phase 0 systems: the Ward power, destructible nests, gates, difficulty tiers, the
 ## player-chosen keep site, and the two map-gen bugs that used to erase water and berries
 ## from the starting area.
+## Phase 2's last four systems: the meta library, the enemy's settlement, the map size floor, and the
+## dense-interior feature tiles.
+func _check_phase2_tail(seed_value: int) -> void:
+	# --- the meta library actually gates content ------------------------------------------
+	# The failure this guards is specific and was real: exactly one building had a shard cost, a run
+	# earned more than that, so after ONE run the summary said "everything is unlocked" forever.
+	_expect(Unlocks.total() >= 8, seed_value,
+		"the meta layer has enough to buy to outlast a few runs (%d items)" % Unlocks.total())
+	_expect(Unlocks.total_cost() >= 600, seed_value,
+		"buying everything takes many runs (%d shards)" % Unlocks.total_cost())
+	_expect(Unlocks.duplicate_ids().is_empty(), seed_value,
+		"no id is shared between a building and a power (Meta.unlocked is one flat list)")
+	# Powers must be purchasable, not just buildings — that was the whole point of Unlocks.
+	var power_offers := 0
+	for def: PowerDef in Powers.all():
+		if def.unlock_cost > 0:
+			power_offers += 1
+	_expect(power_offers > 0, seed_value, "powers are shard-purchasable too (%d)" % power_offers)
+
+	# --- the map is small enough to read, and big enough to survive -------------------------
+	# Both bounds are load-bearing. See World.MAP_WIDTH: below 112 the nest ring falls outside the
+	# island's land radius, the fallback bunches every nest onto one position, and the colony is
+	# wiped outright.
+	_expect(World.MAP_WIDTH >= 112, seed_value,
+		"the map is at least 112 wide, or the nest ring falls in open water (%d)" % World.MAP_WIDTH)
+	_expect(MapGen.NEST_MIN_DIST >= 28, seed_value,
+		"nests are far enough out to give the player warning (%d tiles)" % MapGen.NEST_MIN_DIST)
+	var land_radius := 0.62 * float(World.MAP_WIDTH) * 0.5
+	_expect(float(MapGen.NEST_MIN_DIST) < land_radius, seed_value,
+		"the nest ring sits inside the coastline (%d vs ~%.0f)" % [
+			MapGen.NEST_MIN_DIST, land_radius])
+
+	# --- resources form masses with interiors ----------------------------------------------
+	# The renderer's dense-interior tile only appears for a cell whose four neighbours share its
+	# feature. If clumping is too sparse none ever qualifies and a wood stays a lattice of separate
+	# trees — which is exactly what the old flat 55% fill produced.
+	var interiors := 0
+	for i in World.grid.cell_count:
+		var f := World.feature[i]
+		if f == Terrain.Feature.NONE or not TileAtlas.has_dense(f):
+			continue
+		var c := World.grid.coord(i)
+		var solid := true
+		for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := c + offset
+			if World.grid.is_valid_v(n) and World.feature[World.grid.index_v(n)] != f:
+				solid = false
+				break
+		if solid:
+			interiors += 1
+	_expect(interiors > 40, seed_value,
+		"resource clumps have solid interiors to draw as a mass (%d cells)" % interiors)
+	for f: int in TileAtlas.DENSE_FEATURES:
+		_expect(TileAtlas.dense_coords(f).y == TileAtlas.DENSE_ROW, seed_value,
+			"feature %d has a dense tile in the atlas" % f)
+
+	# --- the Blight builds -----------------------------------------------------------------
+	_expect(BlightStructures.all().size() >= 3, seed_value,
+		"the Blight has structures to raise (%d kinds)" % BlightStructures.all().size())
+	var early := BlightStructures.roll(1)
+	_expect(early == null, seed_value, "nothing is buildable on night 1")
+	var later := BlightStructures.roll(9)
+	_expect(later != null, seed_value, "something is buildable by night 9")
+
+	# Raise one for real, next to a nest, and check every consequence.
+	if later != null and not World.nest_cells.is_empty():
+		var site := -1
+		var near := World.grid.coord(World.nest_cells[0])
+		for r in range(2, 7):
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if site != -1:
+						break
+					var x := near.x + dx
+					var y := near.y + dy
+					if not World.grid.is_valid(x, y):
+						continue
+					var candidate := World.grid.index(x, y)
+					if World.is_walkable(candidate) \
+							and World.feature_at(candidate) == Terrain.Feature.NONE \
+							and not World.has_blight_structure(candidate):
+						site = candidate
+			if site != -1:
+				break
+
+		if site == -1:
+			_fail(seed_value, "nowhere to raise a Blight structure near a nest")
+			return
+		var before_threat := World.blight_threat_bonus()
+		_expect(World.add_blight_structure(site, later), seed_value, "a Blight structure is raised")
+		_expect(World.has_blight_structure(site), seed_value, "and the world knows it is there")
+		# It has to be an OBSTACLE, or the enemy's village is scenery.
+		_expect(not World.is_walkable(site), seed_value, "a Blight structure blocks the ground")
+		_expect(World.blight_threat_bonus() > before_threat, seed_value,
+			"it makes the night worse (%.1f -> %.1f)" % [
+				before_threat, World.blight_threat_bonus()])
+
+		# A glancing blow wounds it; enough damage levels it and gives the ground back.
+		_expect(not World.damage_blight_structure(site, later.max_hp * 0.4), seed_value,
+			"a glancing blow does not level it")
+		_expect(World.damage_blight_structure(site, later.max_hp), seed_value,
+			"enough damage levels it")
+		_expect(not World.has_blight_structure(site), seed_value, "and it is gone")
+		_expect(World.is_walkable(site), seed_value,
+			"the ground it stood on opens up immediately")
+		_expect(is_equal_approx(World.blight_threat_bonus(), before_threat), seed_value,
+			"and it stops paying into the night the moment it falls")
+
+
 func _check_phase0(seed_value: int) -> void:
 	# --- content is actually on disk -----------------------------------------------------
 	var ward := Powers.get_power(&"ward")
@@ -972,6 +1081,9 @@ func _run_seed(seed_value: int) -> void:
 	# field that had since been rebuilt, and every check after it would be measuring
 	# nonsense.
 	_check_phase0(seed_value)
+	# Runs after phase 0, which is where the nest checks live — this raises and levels a Blight
+	# structure of its own and must not be interleaved with those.
+	_check_phase2_tail(seed_value)
 
 	Colony.reset()
 	Divine.reset()

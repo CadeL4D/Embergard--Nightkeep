@@ -16,6 +16,15 @@ extends Node2D
 ## Atlas source id inside terrain_tiles.tres. Only one source, so it is always 0.
 const SOURCE_ID := 0
 
+## The four orthogonal offsets, as a TYPED const.
+##
+## Typed because an inline `[Vector2i(1, 0), ...]` literal yields Variant elements, so `coord +
+## offset` could not be inferred and the parser refused it. Hoisted because these loops run once per
+## feature cell on a full repaint — 12k iterations that would otherwise rebuild the array each time.
+const NEIGHBOURS_4: Array[Vector2i] = [
+	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+]
+
 
 func _ready() -> void:
 	Events.map_generated.connect(_on_map_generated)
@@ -62,7 +71,7 @@ func _paint_feature(cell: int, c: Vector2i) -> void:
 func _is_surrounded(cell: int, feature: int) -> bool:
 	var grid: Grid = World.grid
 	var c := grid.coord(cell)
-	for offset in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+	for offset in NEIGHBOURS_4:
 		var n := c + offset
 		if not grid.is_valid_v(n):
 			continue
@@ -107,7 +116,7 @@ func _on_terrain_changed(cell: int) -> void:
 	var grid: Grid = World.grid
 	_paint_feature(cell, grid.coord(cell))
 	var c := grid.coord(cell)
-	for offset in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+	for offset in NEIGHBOURS_4:
 		var n := c + offset
 		if grid.is_valid_v(n):
 			_paint_feature(grid.index_v(n), n)

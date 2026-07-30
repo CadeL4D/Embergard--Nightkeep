@@ -204,18 +204,33 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: Ran
 		var t := res.terrain[i]
 		var c := grid.coord(i)
 		var n := (clump.get_noise_2d(c.x, c.y) + 1.0) * 0.5
+		# Two densities per clump rather than one, so a wood has a SOLID CORE and a ragged fringe.
+		#
+		# The old single test filled 55% of a clump, which is close to the worst possible number:
+		# too dense to look scattered and far too sparse for any cell to have all four neighbours
+		# wooded, so the renderer's dense-interior tile would essentially never have been used and a
+		# forest stayed a lattice of separate trees. A near-solid core plus a thin fringe gives the
+		# eye a mass to read and the player something to cut into — see WorldView._paint_feature.
 		match t:
 			Terrain.Type.GRASS:
-				if n > 0.58 and rng.randf() < 0.55:
-					res.feature[i] = Terrain.Feature.TREE
+				if n > 0.70:
+					if rng.randf() < 0.93:
+						res.feature[i] = Terrain.Feature.TREE
+				elif n > 0.58:
+					if rng.randf() < 0.42:
+						res.feature[i] = Terrain.Feature.TREE
 				# Raised from 0.012. Berries are the only food on the map before a farm
 				# exists, and at just over one percent of grass tiles the opening of every
 				# run was the same scramble regardless of where the player settled.
 				elif rng.randf() < 0.035:
 					res.feature[i] = Terrain.Feature.BERRIES
 			Terrain.Type.ROCK:
-				if n > 0.5 and rng.randf() < 0.4:
-					res.feature[i] = Terrain.Feature.STONE
+				if n > 0.62:
+					if rng.randf() < 0.88:
+						res.feature[i] = Terrain.Feature.STONE
+				elif n > 0.5:
+					if rng.randf() < 0.32:
+						res.feature[i] = Terrain.Feature.STONE
 			Terrain.Type.DIRT:
 				if n > 0.72 and rng.randf() < 0.18:
 					res.feature[i] = Terrain.Feature.TREE

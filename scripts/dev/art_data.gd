@@ -1238,6 +1238,17 @@ static func feature_maps() -> Dictionary:
 	}
 
 
+## Dense interiors, keyed by feature. Must cover exactly TileAtlas.DENSE_FEATURES — a feature listed
+## there with no map here bakes an empty tile, which would punch transparent holes in the middle of
+## every wood.
+static func dense_feature_maps() -> Dictionary:
+	return {
+		Terrain.Feature.TREE: TREE_DENSE,
+		Terrain.Feature.STONE: STONE_DENSE,
+		Terrain.Feature.BERRIES: BERRIES_DENSE,
+	}
+
+
 ## Alternate silhouettes for a feature type, in the order TileAtlas expects. Only
 ## trees have them so far — they are the only feature dense enough for repetition
 ## to be obvious.
