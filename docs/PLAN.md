@@ -3,7 +3,7 @@
 **Living document.** Update it when work lands or a decision changes. If this file and the code
 disagree, the file is wrong — fix it.
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ---
 
@@ -14,28 +14,42 @@ Last updated: 2026-07-29
 | **0** | Close dead systems, menu, difficulty, gates, site picker, pause, audio plumbing | ✅ **done** |
 | **1** | Population growth, threat curve, needs + thirst, dead air, kill rewards, rate ledger | ✅ **done** |
 | **3** | Localization scaffolding | ✅ **done** |
-| **2** | Colony depth | 🟡 **in progress** — 2.1–2.6 and 2.8 done; 2.7 meta unlocks, 2.9 blight villages, smaller grid, edge-masked clusters pending |
+| **2** | Colony depth | ✅ **done** — 2.1–2.9, smaller grid, resource masses |
 | **4** | The Realm — world map + constellation | ⬜ pending |
 | **5** | Audio content, onboarding, accessibility, desktop parity, stats | ⬜ pending |
 | **6** | Biomes, storyteller events, weather | ⬜ pending |
 
 ## Verified state
 
-Phases 0–3 and Phase 2 are **engine-verified**: the whole project parses, the smoke test passes
+Phases 0–3 are **engine-verified**: the whole project parses with zero errors, the smoke test passes
 **all checks across 4 seeds**, and the stress test shows no regression.
 
+**One caveat, stated because it is real.** Over 15 consecutive smoke runs, one run reported two
+failures and the cause was not captured; it has not reproduced in the 12 runs since. The suite is not
+fully deterministic — blight growth, Tome scribing and migrant timing all use the global RNG — so
+there is at least one assertion left whose margin depends on a roll. The migration check was already
+found to be flaky this way and fixed. Treat a single red run as worth investigating rather than as
+noise, and capture the failure text when it happens.
+
 ```
-Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/bake_assets.tscn
-Godot_v4.7-stable_win64_console.exe --headless --import --path .
+Godot_v4.7-stable_win64_console.exe --headless --import --path .                          # 1
+Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/bake_assets.tscn # 2
+Godot_v4.7-stable_win64_console.exe --headless --import --path .                          # 3
 Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/smoke.tscn
 Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/stress.tscn
 ```
 
-**The `--import` step is not optional, and its absence fails silently.** A headless bake writes the
-PNGs but only the editor generates `.import` files, and without one `load()` fails — so the
-catalogs skip the entry with no error at the point of use. It presented as *"building catalog
-loaded (6 defs)"* when 19 exist and *"monster catalog loaded (2 defs)"* when 6 do, which looks like
-a content bug and is not one. Run it after every bake that adds a new sprite.
+**Import, bake, import — in that order, and every step earns its place.** Only the editor writes
+`.import` files and registers `class_name` scripts; a headless bake does neither. So:
+
+- **without step 1**, a bake that references a newly added `class_name` fails to parse it
+  (`Could not find type "BlightStructureDef"`) and takes half the autoloads down with it
+- **without step 3**, `load()` on the freshly written PNGs fails and *the catalogs skip the entry
+  with no error at the point of use* — it presented as `building catalog loaded (6 defs)` when 19
+  exist, which looks exactly like a content bug and is not one. It also leaves the imported atlas at
+  its old size, so a new tileset row is "outside the texture" and every tile in it fails to create.
+
+All three failure modes are silent or misleading at the place they surface. Run the full sequence.
 
 **Performance:** 6.90 ms average at 60 villagers + 120 monsters, against a 5.5 ms desktop target.
 Measured against a stashed pre-Phase-2 baseline of **6.92 ms**, so the whole phase — the influence
@@ -201,7 +215,7 @@ than itself — which is what makes a typo in a `.tres` a test failure rather th
 
 ---
 
-## Phase 2 — colony depth (in progress)
+## Phase 2 — colony depth — done
 
 ### Landed so far
 
@@ -269,6 +283,47 @@ than itself — which is what makes a typo in a `.tres` a test failure rather th
   every board row amber and inflating the unmet work that draws migrants. Defaults now sum to
   exactly the starting population.
 
+### The last four items
+
+- **2.7 Meta unlocks.** 1 → **11 unlockables, 1255 shards**, which at 40–70 shards a run is 18–31
+  runs of progression instead of one. New `Unlocks` puts buildings and powers behind one interface,
+  because the summary card offered `Buildings.locked()` and nothing else — the moment powers gained
+  a price there were two unlock systems and the player could buy a Watchtower but never a Dawnbreak.
+  `Meta.ascension` is finally **written**: `threat_dial()` has always read it and nothing ever set
+  it, so baseline difficulty could only climb 0.03 per unlock and topped out at 1.03 forever. It now
+  counts a run banked deliberately and taken past day 5 — not a death (losing is already a payout
+  and should not also be progress) and not a day-2 exit (or the optimal play is to ascend
+  immediately and repeatedly).
+  - **What is locked is breadth, never the spine.** The whole production chain up to a Great Hall is
+    free, so run 1 can still work it. My first pass locked the **Gate**, which was wrong and I
+    reverted it: palisade is free from run 1, so a gate-less player walls their own woodcutters away
+    from the trees. An unlock that makes the game worse until you buy it is not content. Two upgrade
+    tiers took its place, which also needed `Colony.upgrade_check` to honour shard locks — otherwise
+    an upgrade could be sold and then gate nothing.
+- **2.9 Blight settlements.** The Blight now spends its nights building: Hovels (night 2, cheap,
+  more bodies), Spires (4, seed corruption into the ground), Totems (6, empower the horde and glow
+  while doing it). Implemented as **nests with different art and effects** — a Dictionary of
+  cell → hp, exactly like `nest_hp` — which is why they inherit tower targeting, Wrath, Ward,
+  Consecrate, occupancy and save/load with no new integration. Grown at **dawn**, so it is something
+  the player wakes up to rather than something that creeps while they watch a wall, and never inside
+  the player's sphere, so encroachment is always something you can go out and meet.
+- **Smaller grid: 128 → 112, and 96 was tried and rejected.** Two numbers fight. The island falloff
+  puts the coastline at ~0.62 of the half-width; `NEST_MIN_DIST` is not a layout figure at all but
+  the horde's **approach time**, which is the player's entire warning. At 96 the nest ring lands in
+  open water, the fallback bunches every nest onto one position, and the colony is wiped — all-green
+  to nine failures with the whole population dead. Scaling the ring down proportionally instead
+  halved the approach time and overran the colony a different way. Going below 112 needs the falloff
+  widened, not a constant retuned; recorded as a Phase 6 item.
+- **Resource masses.** Two states — **interior and edge** — rather than the sixteen a full
+  neighbour-mask autotile needs: 3 new tiles instead of 48. A cell whose four neighbours share its
+  feature gets a full-bleed, outline-free tile that merges with them; everything else keeps its
+  outlined silhouette, which becomes the mass's ragged rim. It maintains itself — felling a tree
+  repaints its four neighbours, so the hole is edged for free, which is exactly "gets eaten into".
+  Clump generation had to change too: the old flat 55% fill was the worst possible number, too dense
+  to read as scattered and far too sparse for any cell to have four wooded neighbours, so the dense
+  tile would essentially never have appeared. Now a near-solid core with a thin fringe, giving
+  120–170 interior cells per map.
+
 ### Bugs the first real test run caught
 
 Worth recording, because every one of them was invisible to inspection and three were latent long
@@ -321,22 +376,21 @@ before Phase 2:
 
 ### Still to do
 
-- **2.7 Meta unlocks.** Exactly one building has a shard cost (Watchtower, 30) and a run earns
-  30–50, so after one run everything is unlocked forever and `threat_dial()` tops out at 1.03.
-  `Meta.ascension` is read by `threat_dial()` and **never written**. Needs 12–20 unlockables at
-  30–400 shards across buildings, powers and starting bonuses, plus `ascension` wired to world
-  completions. Powers now have `unlock_cost`, so they can join the same pool — all eight currently
-  sit at 0.
-- **2.9 Blight settlements.** Nests grow villages. Art exists (Spire, Hovel, Totem); behaviour does
-  not.
-- **Smaller grid.** 128 → ~96, to make the map read as a settlement rather than a plain. Requires
-  dropping `NEST_MIN_DIST` from 34 to ~26; the smoke test asserts nest distance ≥ 20.
-- **Edge-masked resource masses.** Trees, rocks and berries as solid clusters with uneven edges that
-  get eaten into: neighbour-mask → tile variant, ~16 tiles × 3 features ≈ 6 atlas rows.
-- **A Tome library panel**, if the automated version above proves not to be enough.
+Nothing. Phase 2 is complete. Two items were deliberately deferred rather than dropped:
+
+- **A Tome library panel.** Combining and installing are automated (see the deviations below). If the
+  mechanic proves worth more player agency, this is the addition.
+- **A map smaller than 112.** Needs `MapGen._fill_terrain`'s island falloff widened so the land
+  radius stops fighting the nest ring. A Phase 6 job, not a constant to retune.
 
 Largest phase. **All of it lands before Phase 4**, because the Realm's `ColonyLedger` must
 serialize the finished colony state — building the abstractor twice is waste.
+
+### Original per-item specification
+
+Everything below is the spec Phase 2 was built from, kept for reference. It is **not** a
+to-do list — see "The last four items" and "Decisions that differ from the original spec"
+above for what actually shipped and where it diverged.
 
 ### 2.1 Production chain
 `JobDef` has `cycle_yield` but no inputs. **Add `cycle_cost: Dictionary`** — one field turns the
