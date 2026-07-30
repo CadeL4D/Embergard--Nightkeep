@@ -51,6 +51,28 @@ Godot_v4.7-stable_win64_console.exe --headless --path . res://scenes/dev/stress.
 
 All three failure modes are silent or misleading at the place they surface. Run the full sequence.
 
+### Verify the EXPORT, not just the project
+
+```
+Godot_v4.7-stable_win64_console.exe --headless --path . --export-pack "iOS" build/verify/test.pck
+python tools/verify_export.py build/verify/test.pck
+```
+
+**The smoke test runs from source, so it structurally cannot catch a file the exporter drops.** One
+was, and it shipped: `content/locale/embergard.csv.import` carried `importer="csv_translation"`, which
+makes Godot treat the CSV as the *source* of an imported resource and ship only the generated
+`.translation`. The `Locale` autoload reads the CSV itself, so on device it found nothing, registered
+zero translations, and **every label and button in the game rendered as its own key** — `UI_NEW_WORLD`,
+`RESOURCE_WOOD`, the entire UI. In the editor it was completely invisible.
+
+Fixed three ways, deliberately redundant because the failure is silent, total, and only visible on a
+device: the `.import` is now `importer="keep"`, `export_presets.cfg` sets `include_filter="*.csv"`, and
+`Locale` falls back to any `.translation` resources it can find and reports `healthy()`.
+
+**Anything the game opens with `FileAccess` rather than `load()` has this exposure.** `verify_export.py`
+checks the pack for those paths *and* for their content — a path can sit in the index while the payload
+is an imported stub — plus every content catalog. Run it before any store build.
+
 **Performance:** 6.90 ms average at 60 villagers + 120 monsters, against a 5.5 ms desktop target.
 Measured against a stashed pre-Phase-2 baseline of **6.92 ms**, so the whole phase — the influence
 layer, the road cost table, per-tile speed sampling, six monster types — cost nothing detectable.
@@ -323,6 +345,23 @@ than itself — which is what makes a typo in a `.tres` a test failure rather th
   to read as scattered and far too sparse for any cell to have four wooded neighbours, so the dense
   tile would essentially never have appeared. Now a near-solid core with a thin fringe, giving
   120–170 interior cells per map.
+
+### From device feedback
+
+- **The Job Board hides jobs it cannot staff.** `Jobs.available()` — a workplace job with nowhere to
+  work is not a choice, it is noise: the board opened with ten rows, six of which needed a building
+  that did not exist. Worse than cosmetic, because a quota on an unstaffable job sent villagers
+  looking for a workplace they would never find and they fell through to `_wander()` while there were
+  trees to fell, *and* it inflated `Colony.work_slots_free()`, which is one of the things that draws
+  migrants. `rebalance()` now frees anyone holding such a job, and the board grows with the
+  settlement — raise a sawmill and the Sawyer row appears. The quota itself is skipped, not zeroed, so
+  the player's setting survives losing the building and returns with it.
+- **The Job Board scrolls.** Rows are 26px and there are ten of them; on a 360-tall screen the board
+  covered the game. A 132px vertical `ScrollContainer` shows five. Horizontal scrolling is disabled —
+  on a touch panel it steals the drag from the sliders, which are the entire control surface.
+- **Rebuilt only when the visible set changes**, guarded by a signature like the ability buttons: this
+  now runs on every building completion, and a slider destroyed and recreated under a thumb is a
+  slider that drops the drag.
 
 ### Bugs the first real test run caught
 

@@ -25,6 +25,44 @@ static func all() -> Array[JobDef]:
 	return _ordered
 
 
+## Jobs the colony can actually put someone to work at, right now.
+##
+## A workplace job with nowhere to work is not a choice, it is noise: the board opened on day one
+## with ten rows, six of which — sawing, stonecutting, toolmaking, priest, farming — needed a
+## building that did not exist, and a slider that cannot do anything is worse than a missing one
+## because the player spends time deciding about it.
+##
+## Worse than cosmetic, in fact. A quota on an unstaffable job sends villagers to look for a
+## workplace they will never find, so they fall through to `_wander()` while the colony has trees to
+## fell — and it inflates `Colony.work_slots_free()`, which is one of the things that draws migrants.
+##
+## So the board GROWS with the settlement: raise a sawmill and the Sawyer row appears. Same teaching
+## pattern as the resource readout's groups, and it means the player meets each job at the moment it
+## first becomes useful rather than all ten at once with no context.
+static func available() -> Array[JobDef]:
+	var out: Array[JobDef] = []
+	for job: JobDef in all():
+		if has_workplace(job):
+			out.append(job)
+	return out
+
+
+## Is there a finished building this job could be worked at? True for every field job — they work
+## the map, so they always have somewhere to go.
+static func has_workplace(job: JobDef) -> bool:
+	if job == null:
+		return false
+	if job.workplace.is_empty():
+		return true
+	for b in Colony.buildings:
+		if not is_instance_valid(b) or b.is_site():
+			continue
+		var def: BuildingDef = b.def
+		if def.workplace_key() == job.workplace:
+			return true
+	return false
+
+
 ## The job that harvests a given map feature, or an empty name if nothing does.
 static func for_feature(feature: int) -> StringName:
 	_ensure_loaded()

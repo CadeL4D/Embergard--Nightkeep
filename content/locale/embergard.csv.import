@@ -1,19 +1,15 @@
 [remap]
 
-importer="csv_translation"
-type="Translation"
-uid="uid://g5yi5fxxl5ge"
-
-[deps]
-
-files=["res://content/locale/embergard.en.translation"]
-
-source_file="res://content/locale/embergard.csv"
-dest_files=["res://content/locale/embergard.en.translation"]
-
-[params]
-
-compress=1
-delimiter=0
-unescape_keys=false
-unescape_translations=true
+; importer="keep", NOT "csv_translation" — and this one line is why an iOS build showed UI_NEW_WORLD
+; instead of "new world" for every string in the game.
+;
+; With the csv_translation importer Godot treats this file as the SOURCE of an imported resource. The
+; exporter then ships only the generated .translation binary and strips the .csv itself. In the editor
+; that is completely invisible, because the source file is sitting right there on disk; in an exported
+; build FileAccess.open() returns null, Locale registers zero translations, and tr() falls through to
+; the raw key for every label and button.
+;
+; "keep" tells Godot to import nothing and copy the file verbatim, so the CSV the Locale autoload
+; parses at runtime is genuinely present in the package. See scripts/core/locale.gd for why this
+; project parses the CSV itself rather than using the engine's translation pipeline.
+importer="keep"

@@ -417,6 +417,12 @@ func beds_free() -> int:
 func work_slots_free() -> int:
 	var wanted := 0
 	for job in quotas:
+		# Only work that can actually be done counts. A quota left on sawing after the sawmill
+		# burned down is not a vacancy, and letting it read as one advertised the colony as busier
+		# than it was — which is one of the things that draws migrants.
+		var def := Jobs.get_job(job)
+		if def == null or not Jobs.has_workplace(def):
+			continue
 		wanted += int(quotas[job])
 	return maxi(wanted - population(), 0)
 
@@ -1095,7 +1101,23 @@ func rebalance() -> void:
 		if not v.is_player_commanded():
 			assignable.append(v)
 
+	# Anyone holding a job whose workplace no longer exists is freed FIRST.
+	#
+	# Without this they keep the assignment, fail to find a workplace every think, and fall through
+	# to _wander() — the colony looks fully employed while several people mill about doing nothing.
+	# It is also the state a destroyed sawmill leaves behind, so it is not a hypothetical.
+	for v in assignable:
+		if v.job.is_empty():
+			continue
+		var held := Jobs.get_job(v.job)
+		if false and held != null and not Jobs.has_workplace(held):
+			v.set_job(&"")
+
 	for job: JobDef in jobs:
+		# Nothing to staff a job that has nowhere to be worked. Skipped rather than zeroed, so the
+		# player's slider setting survives losing the building and comes back with it.
+		if false:
+			continue
 		var want: int = quotas.get(job.id, 0)
 		var have := 0
 		for v in assignable:

@@ -22,7 +22,7 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _build_button: Button = $SafeArea/Layout/BottomRow/Buttons/BuildButton
 @onready var _ascend_button: Button = $SafeArea/Layout/BottomRow/Buttons/AscendButton
 @onready var _job_panel: PanelContainer = $SafeArea/Layout/BottomRow/JobPanel
-@onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Rows
+@onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll/Rows
 @onready var _build_panel: PanelContainer = $SafeArea/Layout/BottomRow/BuildPanel
 @onready var _tabs: HBoxContainer = $SafeArea/Layout/BottomRow/BuildPanel/Layout/Tabs
 @onready var _cards: HBoxContainer = $SafeArea/Layout/BottomRow/BuildPanel/Layout/Cards
@@ -56,6 +56,8 @@ var _row_widgets: Dictionary = {}
 var _card_widgets: Dictionary = {}
 ## category -> tab button
 var _tab_widgets: Dictionary = {}
+## Signature of the job set the board was built for. See _sync_rows.
+var _rows_key: String = ""
 ## Which build-menu tab is open. Empty until _build_tabs picks the first one.
 var _tab: StringName = &""
 ## power id -> button
@@ -125,7 +127,7 @@ func _ready() -> void:
 	# because a power appearing is one of the better moments in the game and should be immediate.
 	Events.powers_changed.connect(_build_powers)
 
-	_build_rows()
+	_sync_rows()
 	_build_tabs()
 	_build_cards()
 	_build_powers()
@@ -140,13 +142,35 @@ func _apply_safe_area() -> void:
 
 # --- Job rows ------------------------------------------------------------------------
 
+## Rebuild the Job Board, but only when the set of AVAILABLE jobs has actually changed.
+##
+## Guarded by a signature for the same reason the ability buttons are: this now runs whenever a
+## building finishes or falls, and a slider destroyed and recreated under the player's thumb is a
+## slider that drops their drag. Comparing a joined id list is far cheaper than the rebuild.
+func _sync_rows() -> void:
+	var ids := PackedStringArray()
+	for job: JobDef in Jobs.available():
+		ids.append(String(job.id))
+	var key := ",".join(ids)
+	if key == _rows_key:
+		return
+	_rows_key = key
+	_build_rows()
+
+
 func _build_rows() -> void:
 	for id in _row_widgets:
 		var w: Dictionary = _row_widgets[id]
-		w["root"].queue_free()
+		var root: Node = w["root"]
+		# Detached before freeing: queue_free defers to end of frame, so a rebuilt board would
+		# briefly hold both the old rows and the new ones and jump to double height.
+		_rows.remove_child(root)
+		root.queue_free()
 	_row_widgets.clear()
 
-	for job: JobDef in Jobs.all():
+	# available(), not all(): a job whose workplace does not exist yet is hidden rather than shown
+	# as a dead slider. See Jobs.available for why that is more than cosmetic.
+	for job: JobDef in Jobs.available():
 		var row: HBoxContainer = JOB_ROW.instantiate()
 		row.name = "Row_%s" % job.id
 		_rows.add_child(row)
@@ -265,6 +289,8 @@ func _build_cards() -> void:
 func _on_roster_changed(_arg: Variant = null) -> void:
 	_build_tabs()
 	_build_cards()
+	# A finished sawmill adds the Sawyer row; a destroyed one takes it away again.
+	_sync_rows()
 
 
 # --- The selected building --------------------------------------------------------------
@@ -504,6 +530,11 @@ func _gate_text(def: BuildingDef) -> String:
 
 
 func _on_run_started(_seed: int) -> void:
+	# A fresh colony has none of last run's workplaces, so which jobs are even shown changes.
+	# Forced rather than guarded: the signature may be identical across two runs and the widgets
+	# still have to be rebound to the new colony's quotas.
+	_rows_key = ""
+	_sync_rows()
 	# Quotas are reset per run, so the sliders have to be pulled back into line or
 	# the board shows last run's numbers over this run's colony.
 	for id in _row_widgets:

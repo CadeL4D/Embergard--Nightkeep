@@ -1021,6 +1021,18 @@ func _check_ledger(seed_value: int) -> void:
 func _check_locale(seed_value: int) -> void:
 	_expect(Locale.keys.size() > 50, seed_value,
 		"the translation table loaded (%d keys)" % Locale.keys.size())
+	_expect(Locale.healthy(), seed_value, "at least one language registered")
+
+	# The CSV has to be READABLE THROUGH res://, not merely present on disk.
+	#
+	# This is the check that would have caught the iOS build shipping with every label showing its own
+	# key. The cause was the csv_translation importer claiming the file, which makes the exporter ship
+	# the generated .translation and strip the source the Locale autoload actually reads — invisible in
+	# the editor, total on device. It cannot fully be caught here (the suite runs before export, where
+	# the file is always present), so this only guards the path and the real check is the pack
+	# inspection documented in docs/PLAN.md.
+	_expect(FileAccess.file_exists(Locale.CSV_PATH), seed_value,
+		"the locale CSV is reachable at %s" % Locale.CSV_PATH)
 
 	# Gather every key the content layer references, with a label for the failure message.
 	var refs: Array = []
@@ -1037,6 +1049,14 @@ func _check_locale(seed_value: int) -> void:
 		refs.append(["difficulty %s desc" % def.id, def.description])
 	for def: MonsterDef in Monsters.all():
 		refs.append(["monster %s name" % def.id, def.display_name])
+	# Phase 2's two new content types. Omitted at first, which is exactly how a whole category of
+	# strings goes unchecked — the list has to grow with the catalogs.
+	for def: TomeDef in Tomes.all():
+		refs.append(["tome %s name" % def.id, def.display_name])
+		refs.append(["tome %s desc" % def.id, def.description])
+	for def: BlightStructureDef in BlightStructures.all():
+		refs.append(["blight %s name" % def.id, def.display_name])
+		refs.append(["blight %s desc" % def.id, def.description])
 
 	var missing := 0
 	for entry in refs:
