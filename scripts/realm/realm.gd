@@ -61,6 +61,8 @@ func _ready() -> void:
 
 func start_new(seed_value: int) -> void:
 	world_seed = seed_value
+	Climate.reset(seed_value)
+	Storyteller.reset(seed_value)
 	sites.clear()
 	colonies.clear()
 	awake_id = &""

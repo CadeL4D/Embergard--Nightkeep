@@ -23,6 +23,7 @@ signal light_grid_changed(dirty_rect: Rect2i)
 signal blight_changed(cell: int, blighted: bool)
 signal terrain_changed(cell: int)
 signal nest_destroyed(cell: int)
+signal climate_changed(season: StringName, weather: StringName, severity: float)
 ## The Blight raised or lost one of its own buildings. The view spawns and frees sprites from these
 ## rather than polling World.blight_structures, which changes a handful of times a night.
 signal blight_structure_raised(cell: int, kind: StringName)
@@ -66,6 +67,7 @@ signal breach_detected(world_pos: Vector2)
 
 # --- Meta / UI -------------------------------------------------------------------
 signal storyteller_event(event_id: StringName, payload: Dictionary)
+signal storyteller_resolved(event_id: StringName, choice_id: StringName)
 ## The player has entered or left building placement. The sphere-of-influence boundary is only
 ## DRAWN during placement: it is a placement aid, and a permanent glowing ring around the village
 ## would be six hours of decoration nobody asked for.

@@ -117,19 +117,31 @@ func _advance_one_day(day_number: int) -> void:
 	var stock: Dictionary = state.get("stock", {}).duplicate()
 	var quotas: Dictionary = state.get("quotas", {})
 	var feature: PackedByteArray = state.get("feature", PackedByteArray()).duplicate()
+	var site := Realm.site(id)
+	var biome_id := StringName(site.get("biome", Biomes.DEFAULT_ID))
+	var climate := Climate.daily_snapshot(Realm.world_seed, seed_value, day_number, biome_id)
+	var climate_effects: Dictionary = climate.get("effects", {})
+	var gather_mult := float(climate_effects.get("gather", 1.0))
+	var farm_mult := float(climate_effects.get("farm", 1.0))
+	var thirst_mult := float(climate_effects.get("thirst", 1.0))
+	var mood_offset := float(climate_effects.get("mood", 0.0))
+	var blight_mult := float(climate_effects.get("blight", 1.0))
 
 	# Sleeping gatherers really remove features from their map. This makes their output finite and
 	# guarantees that returning to the colony shows the trees and rocks they used are gone.
 	_harvest(feature, Terrain.Feature.TREE, &"wood",
-		mini(int(quotas.get(&"woodcutting", 0)), villagers.size()), stock, rng)
+		mini(int(quotas.get(&"woodcutting", 0)), villagers.size()), stock, rng,
+		gather_mult * Biomes.yield_multiplier(biome_id, Terrain.Feature.TREE))
 	_harvest(feature, Terrain.Feature.STONE, &"stone",
-		mini(int(quotas.get(&"quarrying", 0)), villagers.size()), stock, rng)
+		mini(int(quotas.get(&"quarrying", 0)), villagers.size()), stock, rng,
+		gather_mult * Biomes.yield_multiplier(biome_id, Terrain.Feature.STONE))
 	_harvest(feature, Terrain.Feature.BERRIES, &"food",
-		mini(int(quotas.get(&"foraging", 0)), villagers.size()), stock, rng)
+		mini(int(quotas.get(&"foraging", 0)), villagers.size()), stock, rng,
+		gather_mult * Biomes.yield_multiplier(biome_id, Terrain.Feature.BERRIES))
 
 	# Workshops use the same input/output declarations as the live jobs. A worker only receives
 	# credit when its completed workplace is present.
-	_run_cycles(&"farming", &"farm", quotas, villagers.size(), stock, 2)
+	_run_cycles(&"farming", &"farm", quotas, villagers.size(), stock, 2, farm_mult)
 	_run_cycles(&"sawing", &"sawmill", quotas, villagers.size(), stock, 2)
 	_run_cycles(&"stonecutting", &"stonecutter", quotas, villagers.size(), stock, 2)
 	_run_cycles(&"toolmaking", &"toolsmith", quotas, villagers.size(), stock, 1)
@@ -141,9 +153,9 @@ func _advance_one_day(day_number: int) -> void:
 	var losses := 0
 	for row: Dictionary in villagers:
 		row["food"] = clampf(float(row.get("food", 80.0)) - 20.0 + fed_ratio * 22.0, 0.0, 100.0)
-		row["water"] = clampf(float(row.get("water", 80.0)) - 5.0, 30.0, 100.0)
+		row["water"] = clampf(float(row.get("water", 80.0)) - 5.0 * thirst_mult, 30.0, 100.0)
 		row["rest"] = clampf(float(row.get("rest", 80.0)) + 6.0, 25.0, 100.0)
-		var mood_target := 68.0 if fed_ratio >= 0.8 else 34.0
+		var mood_target := (68.0 if fed_ratio >= 0.8 else 34.0) + mood_offset
 		row["mood"] = lerpf(float(row.get("mood", 60.0)), mood_target, 0.18)
 		if fed_ratio < 0.5:
 			row["health"] = float(row.get("health", 100.0)) - (1.0 - fed_ratio) * 18.0
@@ -156,7 +168,7 @@ func _advance_one_day(day_number: int) -> void:
 	# Corruption keeps moving when nobody is watching. The exact byte field is changed, not just
 	# a display percentage, so reconstitution cannot roll this consequence away.
 	_advance_blight(state.get("terrain", PackedByteArray()), state.get("blight", PackedByteArray()),
-		rng, 30 + int(pressure * 18.0))
+		rng, roundi((30.0 + pressure * 18.0) * blight_mult))
 	var blight: PackedByteArray = state.get("blight", PackedByteArray())
 	var blighted := 0
 	for value in blight:
@@ -182,7 +194,8 @@ func _advance_one_day(day_number: int) -> void:
 
 
 func _harvest(feature: PackedByteArray, feature_id: int, resource: StringName,
-		workers: int, stock: Dictionary, rng: RandomNumberGenerator) -> void:
+		workers: int, stock: Dictionary, rng: RandomNumberGenerator,
+		yield_multiplier: float = 1.0) -> void:
 	if workers <= 0 or feature.is_empty():
 		return
 	var candidates := PackedInt32Array()
@@ -196,11 +209,13 @@ func _harvest(feature: PackedByteArray, feature_id: int, resource: StringName,
 		candidates.remove_at(pick)
 		feature[cell] = Terrain.Feature.NONE
 		var yield_row: Dictionary = Terrain.FEATURE_YIELD.get(feature_id, {})
-		stock[resource] = int(stock.get(resource, 0)) + int(yield_row.get(resource, 0))
+		var amount := maxi(roundi(float(yield_row.get(resource, 0)) * yield_multiplier), 1)
+		stock[resource] = int(stock.get(resource, 0)) + amount
 
 
 func _run_cycles(job_id: StringName, workplace: StringName, quotas: Dictionary,
-		population_size: int, stock: Dictionary, cycles_per_worker: int) -> void:
+		population_size: int, stock: Dictionary, cycles_per_worker: int,
+		output_multiplier: float = 1.0) -> void:
 	var workers := mini(int(quotas.get(job_id, 0)), population_size)
 	if workers <= 0 or not _has_complete_building(workplace):
 		return
@@ -218,7 +233,8 @@ func _run_cycles(job_id: StringName, workplace: StringName, quotas: Dictionary,
 		for kind: StringName in def.cycle_cost:
 			stock[kind] = int(stock.get(kind, 0)) - int(def.cycle_cost[kind])
 		for kind: StringName in def.cycle_yield:
-			stock[kind] = int(stock.get(kind, 0)) + int(def.cycle_yield[kind])
+			var amount := maxi(roundi(float(def.cycle_yield[kind]) * output_multiplier), 1)
+			stock[kind] = int(stock.get(kind, 0)) + amount
 
 
 func _has_complete_building(building_id: StringName) -> bool:

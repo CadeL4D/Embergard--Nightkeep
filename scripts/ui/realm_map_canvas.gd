@@ -119,8 +119,9 @@ func _update_tooltip(id: StringName) -> void:
 		tooltip_text = ""
 		return
 	var row := Realm.site(id)
-	var biome := String(row.get("biome", &"unknown")).capitalize()
-	tooltip_text = "%s · %s · click to inspect" % [row.get("name", id), biome]
+	var biome_id := StringName(row.get("biome", Biomes.DEFAULT_ID))
+	var biome := tr(Biomes.name_key(biome_id))
+	tooltip_text = L10n.t(&"REALM_INSPECT_TOOLTIP", [row.get("name", id), biome])
 
 
 func _overview_rect() -> Rect2:

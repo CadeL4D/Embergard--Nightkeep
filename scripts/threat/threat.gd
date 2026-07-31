@@ -181,7 +181,8 @@ func set_growth_progress(value: float) -> void:
 func _grow_settlements(night: int) -> void:
 	# Scales with the same dial that scales corruption spread, so a tier that makes the Blight
 	# advance faster also makes it build faster. One knob, two consequences.
-	_growth_progress += GROWTH_PER_DAWN * Difficulties.blight_mult()
+	_growth_progress += GROWTH_PER_DAWN * Difficulties.blight_mult() \
+		* Climate.blight_multiplier()
 	while _growth_progress >= 1.0:
 		_growth_progress -= 1.0
 		if not _raise_one(night):
@@ -426,7 +427,8 @@ func _update_pressure(delta: float) -> void:
 ## invisible stat multipliers.
 func budget_for_night(night: int) -> float:
 	var base := 4.0 + float(night) * 2.5 + pow(1.18, float(night)) * 1.5
-	return base * (0.75 + pressure * 0.5) * Meta.threat_dial() * Difficulties.threat_mult()
+	return base * (0.75 + pressure * 0.5) * Meta.threat_dial() \
+		* Difficulties.threat_mult() * Climate.threat_multiplier()
 
 
 # --- Registry ----------------------------------------------------------------------

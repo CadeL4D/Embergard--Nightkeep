@@ -9,8 +9,9 @@ extends Node
 
 const SAVE_PATH := "user://profile.cfg"
 const SECTION := "profile"
-const SCHEMA_VERSION := 2
+const SCHEMA_VERSION := 3
 const HISTORY_LIMIT := 24
+const ACHIEVEMENT_TOTAL := 8
 
 var shards: int = 0
 var unlocked: Array[StringName] = []
@@ -25,6 +26,7 @@ var lifetime_stats: Dictionary = {
 	"monsters": 0,
 	"villagers_lost": 0,
 	"realms_completed": 0,
+	"events": 0,
 }
 var achievements: Array[StringName] = []
 ## The tier the player last chose, so the New World screen opens on it rather than
@@ -137,6 +139,8 @@ func record_run(record: Dictionary) -> Array[StringName]:
 		+ int(clean.get("monsters", 0))
 	lifetime_stats["villagers_lost"] = int(lifetime_stats.get("villagers_lost", 0)) \
 		+ int(clean.get("villagers_lost", 0))
+	lifetime_stats["events"] = int(lifetime_stats.get("events", 0)) \
+		+ int(clean.get("events", 0))
 	if bool(clean.get("realm_completed", false)):
 		lifetime_stats["realms_completed"] = int(lifetime_stats.get("realms_completed", 0)) + 1
 
@@ -147,6 +151,8 @@ func record_run(record: Dictionary) -> Array[StringName]:
 	_unlock_achievement(&"survivor", int(clean.get("day", 0)) >= 10, newly_unlocked)
 	_unlock_achievement(&"realmkeeper", bool(clean.get("realm_completed", false)), newly_unlocked)
 	_unlock_achievement(&"network", int(clean.get("colonies", 0)) >= 4, newly_unlocked)
+	_unlock_achievement(&"weathered", int(clean.get("day", 0)) >= 21, newly_unlocked)
+	_unlock_achievement(&"chronicler", int(clean.get("events", 0)) >= 4, newly_unlocked)
 	clean["new_achievements"] = newly_unlocked
 	save_profile()
 	return newly_unlocked

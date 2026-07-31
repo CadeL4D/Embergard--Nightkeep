@@ -4,8 +4,8 @@ extends RefCounted
 
 const SAVE_PATH := "user://run.dat"
 const TEMP_PATH := "user://run.tmp"
-## 4 replaces the fixed Realm graph with a seeded continuous world divided into local regions.
-const SCHEMA_VERSION := 4
+## 5 saves Realm-wide climate mitigation and deterministic storyteller state.
+const SCHEMA_VERSION := 5
 
 
 static func has_save() -> bool:
@@ -28,6 +28,8 @@ static func save() -> bool:
 		"phase": int(Sim.phase),
 		"phase_elapsed": Sim.phase_elapsed,
 		"realm": Realm.to_dict(),
+		"climate": Climate.to_dict(),
+		"storyteller": Storyteller.to_dict(),
 	}
 	var f := FileAccess.open(TEMP_PATH, FileAccess.WRITE)
 	if f == null:
@@ -52,7 +54,7 @@ static func load_into(_run: Node, entities: Node) -> bool:
 	var version := int(data.get("version", 0))
 	if version == 2:
 		data = _migrate_v2(data)
-	elif version != 3 and version != SCHEMA_VERSION:
+	elif version not in [3, 4, SCHEMA_VERSION]:
 		push_warning("RunSave: schema %d is not supported" % version)
 		return false
 
@@ -69,6 +71,11 @@ static func load_into(_run: Node, entities: Node) -> bool:
 	Sim.day = int(data.get("day", 1))
 	Sim.phase = int(data.get("phase", Sim.Phase.DAY))
 	Sim.phase_elapsed = float(data.get("phase_elapsed", 0.0))
+	Climate.load_dict(data.get("climate", {"world_seed": Realm.world_seed}))
+	Storyteller.load_dict(data.get("storyteller", {
+		"world_seed": Realm.world_seed,
+		"next_event_day": Sim.day + 2,
+	}))
 	Events.phase_changed.emit(Sim.phase, Sim.PHASE_DURATION[Sim.phase])
 	Events.colony_awakened.emit(Realm.awake_id)
 	return true
@@ -131,4 +138,6 @@ static func _migrate_v2(old: Dictionary) -> Dictionary:
 		"phase": int(old.get("phase", Sim.Phase.DAY)),
 		"phase_elapsed": float(old.get("phase_elapsed", 0.0)),
 		"realm": Realm.to_dict(),
+		"climate": {"world_seed": Realm.world_seed},
+		"storyteller": {"world_seed": Realm.world_seed, "next_event_day": 3},
 	}

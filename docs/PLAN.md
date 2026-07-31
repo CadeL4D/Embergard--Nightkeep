@@ -778,13 +778,47 @@ itself, sounds intentional, supports different players and remembers the worlds 
 
 ---
 
-## Phase 6 — long tail
+## Phase 6 — living world ✅ complete
 
-- **Biome depth.** Macro biomes and local resource bias shipped with Phase 4. Still vary local
-  `NEST_COUNT`, nest distance, water topology, weather and unique regional hazards by biome tier.
-- **Storyteller events.** `Events.storyteller_event` is declared and **never emitted**. Caravans,
-  refugee bands, blight surges, storms that dim light, droughts that dry wells.
-- **Weather / seasons** affecting light, yield and spread.
+### 6.1 Biome depth
+
+- All seven settleable biomes now have authored local identities rather than resource tint alone:
+  distinct water and ground topology, clustered richness, gathering yields, movement costs,
+  corruption resistance, threat pressure, nest count and nest distance.
+- Coast, grassland, deep forest, marsh, highland, badlands and tundra each explain their regional
+  hazard in the zoomed Realm preview before the player inhabits the square.
+- The same biome rules run in awake and sleeping colonies. Visiting a colony cannot change the
+  outcome it would have received while simulated off-screen.
+
+### 6.2 Weather and seasons
+
+- A deterministic five-day calendar cycles through spring, summer, autumn and winter. Every
+  region draws reproducible weather from a biome-weighted table: clear, rain, storm, fog, drought,
+  snow and heatwave.
+- Climate changes light, farming, raw gathering, movement, thirst, mood, corruption growth and
+  enemy pressure. Rain and spring help crops while feeding corruption; storms dim the Ember's
+  reach; drought and heat strain water and farms; snow slows work and suppresses the Blight.
+- Rain, snow, fog and dry heat have lightweight procedural screen treatment below every menu.
+  The two-line clock names the current season and weather, with exact production effects in help.
+
+### 6.3 Storyteller events
+
+- Pressure-aware deterministic events now arrive every two or three days: caravans, refugee
+  bands, blight surges, storm fronts and droughts.
+- Each event pauses safely on a fitted three-choice card with readable costs, consequences,
+  disabled states and one stock-free fallback. Outcomes can move people and resources, change
+  morale and Faith, repel or seed corruption, alter enemy pressure, or prepare for bad weather.
+- Pending events, the next event day, resolved count and weather preparations survive save/load.
+  The run save schema is now 5 with migration from existing schemas 2–4.
+
+### 6.4 Guidance and progression
+
+- Two contextual Field Guide cards explain climate and storyteller decisions, bringing the guide
+  to eleven event-driven cards.
+- The Chronicle records resolved events and adds Four Seasons and Keeper of Tales, bringing the
+  persistent achievement set to eight.
+- The English catalog now contains 492 explicit translated strings, including every biome hazard,
+  climate name, event choice and consequence.
 
 ---
 
@@ -811,6 +845,15 @@ state, all three fixed settings tabs, the red/green-safe shader, the first Field
 run summary at 1600×720. The final focused Realm suite and four-seed smoke suite pass, and the
 4,215,100-byte iOS pack audit verifies all 411 translations, twelve audio cues and every runtime
 content catalog.
+
+Phase 6 adds focused assertions for all seven biome profiles, translated hazards, varied nest
+pressure, deterministic weather, the four-season calendar, storm gameplay effects, event
+resolution, achievement count and schema-5 climate/story persistence. The expanded four-seed
+suite and focused Realm suite pass. A real renderer captures `artifacts/phase6_storm.png` and
+`artifacts/phase6_story_event.png` at 1600×720; both the two-line climate HUD and the three-choice
+event card are visually checked for overlap and readability. The final 4,257,508-byte iOS pack
+boots directly under Godot 4.7 with all 492 translations and the biome, climate, storyteller,
+weather and event-card resources present.
 
 ### Manual checks that automation cannot cover
 - **Sphere geometry:** Watchtower east, Stockpile west — the boundary should bulge strongly east

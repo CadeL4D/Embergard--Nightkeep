@@ -55,6 +55,8 @@ func _ready() -> void:
 	_check_locale(SEEDS[0])
 	print("\n-- Phase 5 polish --")
 	_check_phase5(SEEDS[0])
+	print("\n-- Phase 6 living world --")
+	_check_phase6(SEEDS[0])
 	print("\n-- migration and pacing --")
 	_check_migration(SEEDS[SEEDS.size() - 1])
 	await _check_live_colony()
@@ -110,6 +112,7 @@ func _check_live_colony() -> void:
 	await _check_economy(seed_value)
 	await _check_building(seed_value, run)
 	await _check_needs(seed_value, run)
+	await _check_phase6_live(seed_value)
 	await _check_night(seed_value, run)
 	await _check_lifecycle(seed_value, run)
 
@@ -127,6 +130,9 @@ func _check_lifecycle(seed_value: int, run: Node2D) -> void:
 	var pop := Colony.population()
 	var day := Sim.day
 	var building_count := Colony.buildings.size()
+	Climate.set_mitigation(&"storm_ward", Sim.day + 3)
+	var mitigation_until := int(Climate.mitigations.get("storm_ward", 0))
+	var events_resolved := Storyteller.resolved_count
 	# Fell a tree so the saved feature layer differs from a fresh generation — if
 	# features were not persisted this is exactly what would silently come back.
 	var felled := -1
@@ -156,6 +162,10 @@ func _check_lifecycle(seed_value: int, run: Node2D) -> void:
 	_expect(Colony.buildings.size() == building_count, seed_value,
 		"buildings survive the round trip (%d/%d)" % [Colony.buildings.size(), building_count])
 	_expect(Sim.day == day, seed_value, "the calendar survives the round trip")
+	_expect(int(Climate.mitigations.get("storm_ward", 0)) == mitigation_until, seed_value,
+		"weather preparations survive the round trip")
+	_expect(Storyteller.resolved_count == events_resolved, seed_value,
+		"storyteller history survives the round trip")
 	if felled != -1:
 		_expect(World.feature_at(felled) == Terrain.Feature.NONE, seed_value,
 			"harvested ground stays harvested after a load")
@@ -1089,6 +1099,59 @@ func _check_phase5(seed_value: int) -> void:
 		"contextual onboarding is present and loadable")
 	_expect(Meta.HISTORY_LIMIT >= 20, seed_value,
 		"the Chronicle retains a useful number of completed worlds")
+
+
+func _check_phase6(seed_value: int) -> void:
+	_expect(Biomes.DEFINITIONS.size() == 7, seed_value,
+		"all seven settleable biomes have authored rules")
+	var nest_counts := {}
+	for id: StringName in Biomes.DEFINITIONS:
+		nest_counts[Biomes.nest_count(id)] = true
+		_expect(Locale.has_key(Biomes.name_key(id)) and Locale.has_key(Biomes.hazard_key(id)),
+			seed_value, "%s has a translated identity and hazard" % id)
+	_expect(nest_counts.size() >= 3, seed_value,
+		"biomes vary enemy nest pressure instead of sharing one ring")
+	_expect(Biomes.yield_multiplier(&"forest", Terrain.Feature.TREE) \
+		> Biomes.yield_multiplier(&"badlands", Terrain.Feature.TREE), seed_value,
+		"deep forest timber is richer than badlands timber")
+	_expect(Biomes.movement_multiplier(&"marsh", Terrain.Type.DIRT) < 1.0, seed_value,
+		"marsh ground carries a real travel cost")
+
+	var first := Climate.daily_snapshot(seed_value, 991, 1, &"marsh")
+	var repeated := Climate.daily_snapshot(seed_value, 991, 1, &"marsh")
+	_expect(first == repeated, seed_value,
+		"the same region and day reproduce the same weather")
+	_expect(Climate.season_for_day(1) == &"spring"
+		and Climate.season_for_day(6) == &"summer"
+		and Climate.season_for_day(11) == &"autumn"
+		and Climate.season_for_day(16) == &"winter", seed_value,
+		"the four-season calendar advances every five days")
+	_expect(Climate.WEATHER_IDS.size() == 7, seed_value,
+		"the weather table includes clear skies and six consequential conditions")
+	_expect(load("res://scenes/world/weather_view.tscn") != null, seed_value,
+		"the procedural weather layer is present")
+	_expect(load("res://scenes/ui/story_event_panel.tscn") != null, seed_value,
+		"the storyteller decision panel is present")
+	_expect(Meta.ACHIEVEMENT_TOTAL == 8, seed_value,
+		"the Chronicle includes the two Phase 6 achievements")
+
+
+func _check_phase6_live(seed_value: int) -> void:
+	_expect(Climate.biome == World.biome_id, seed_value,
+		"live weather follows the selected Realm biome")
+	Climate.force_weather(&"storm", 1.0)
+	_expect(Climate.light_multiplier() < 0.8 and Climate.movement_multiplier(Terrain.Type.GRASS) < 0.9,
+		seed_value, "storms visibly dim the map and slow exposed travel")
+	_expect(Climate.blight_multiplier() > Biomes.blight_multiplier(Climate.biome), seed_value,
+		"storms feed local corruption pressure")
+	Climate.clear_forced_weather()
+
+	var before := Storyteller.resolved_count
+	Colony.add(&"food", 18)
+	_expect(Storyteller.force_event(&"caravan"), seed_value,
+		"a deterministic caravan event can enter the live run")
+	_expect(Storyteller.resolved_count == before + 1 and Storyteller.pending.is_empty(),
+		seed_value, "headless event resolution takes one valid choice and clears the card")
 
 
 func _check_locale(seed_value: int) -> void:

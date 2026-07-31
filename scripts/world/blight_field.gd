@@ -149,7 +149,8 @@ func step(tick: int) -> void:
 	var night_mult: float = NIGHT_MULTIPLIER if Sim.is_dark() else 1.0
 	# Hoisted with night_mult: both are constant for the whole pass, and this loop runs
 	# a couple of hundred times per pass.
-	var base_chance: float = BASE_SPREAD * night_mult * Difficulties.blight_mult()
+	var base_chance: float = BASE_SPREAD * night_mult * Difficulties.blight_mult() \
+		* Climate.blight_multiplier()
 
 	var examined := 0
 	var samples := mini(SAMPLES_PER_PASS, _frontier.size())

@@ -92,6 +92,8 @@ var _influence_any: bool = false
 
 var seed_value: int = 0
 var keep_cell: int = -1
+var region_profile: Dictionary = {}
+var biome_id: StringName = Biomes.DEFAULT_ID
 ## Every nest site the map generated, live or cleared. Kept whole rather than pruned so
 ## the end-of-run tally can still count how many were destroyed — ask
 ## `live_nest_cells()` for the ones that still matter.
@@ -147,6 +149,8 @@ func tick_hint() -> int:
 ## makes a new map reflect the selected macro biome and its resources.
 func generate(new_seed: int, keep_override: int = -1, region_profile: Dictionary = {}) -> void:
 	seed_value = new_seed
+	self.region_profile = region_profile.duplicate(true)
+	biome_id = StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
 	grid.resize(MAP_WIDTH, MAP_HEIGHT)
 
 	var result := MapGen.generate(grid, new_seed, keep_override, region_profile)
@@ -305,9 +309,9 @@ func speed_at(i: int) -> float:
 	if not grid.is_valid_index(i):
 		return 1.0
 	var road := path_tier[i]
-	if road == 0:
-		return 1.0
-	return float(PATH_COST[0]) / float(PATH_COST[mini(road, PATH_COST.size() - 1)])
+	var road_multiplier := 1.0 if road == 0 else \
+		float(PATH_COST[0]) / float(PATH_COST[mini(road, PATH_COST.size() - 1)])
+	return road_multiplier * Climate.movement_multiplier(terrain_at(i))
 
 
 # --- Sphere of influence ------------------------------------------------------------------
@@ -452,7 +456,39 @@ func is_blighted(i: int) -> bool:
 
 
 func light_at(i: int) -> int:
-	return light[i] if grid.is_valid_index(i) else 0
+	return int(float(light[i]) * Climate.light_multiplier()) if grid.is_valid_index(i) else 0
+
+
+## Event-scale interventions. Both walk the byte field once, which is acceptable for a
+## deliberate choice but would be inappropriate inside the regular simulation tick.
+func repel_blight(cells_to_clean: int) -> int:
+	var candidates: Array[int] = []
+	for i in blight.size():
+		if blight[i] > 0:
+			candidates.append(i)
+	candidates.sort_custom(func(a: int, b: int) -> bool: return blight[a] > blight[b])
+	var cleaned := 0
+	for i in mini(cells_to_clean, candidates.size()):
+		if blight_field.purify(candidates[i], 255):
+			cleaned += 1
+	return cleaned
+
+
+func seed_blight_surge(cells_to_seed: int) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value ^ (Sim.day * 65537) ^ 0xB117
+	var seeded := 0
+	var candidates := PackedInt32Array()
+	for i in grid.cell_count:
+		if blight[i] == 0 and is_walkable(i) and grid.chebyshev(i, keep_cell) > 14:
+			candidates.append(i)
+	for _i in mini(cells_to_seed, candidates.size()):
+		var pick := rng.randi_range(0, candidates.size() - 1)
+		var cell := candidates[pick]
+		candidates.remove_at(pick)
+		blight_field.seed_at(cell, 64)
+		seeded += 1
+	return seeded
 
 
 func terrain_at(i: int) -> int:

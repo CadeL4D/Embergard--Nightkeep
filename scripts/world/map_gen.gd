@@ -86,7 +86,7 @@ static func generate(grid: Grid, seed_value: int, keep_override: int = -1,
 	res.keep_cell = keep_override if grid.is_valid_index(keep_override) else scored
 	_flatten_keep(grid, res, res.keep_cell)
 	_scatter_features(grid, res, seed_value, rng, region_profile)
-	res.nest_cells = _place_nests(grid, res, rng)
+	res.nest_cells = _place_nests(grid, res, rng, region_profile)
 	_clear_around_keep(grid, res, res.keep_cell)
 	if not region_profile.is_empty():
 		_ensure_starting_stone(grid, res)
@@ -149,6 +149,10 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 	moisture.seed = seed_value + 7919
 	moisture.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	moisture.frequency = 0.03
+	var hydrology := FastNoiseLite.new()
+	hydrology.seed = seed_value + 22093
+	hydrology.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	hydrology.frequency = 0.042
 
 	# Radial falloff pushes the map edges toward water so the playfield reads as an
 	# island. It also gives monsters clean approach lanes instead of a hard border.
@@ -157,9 +161,28 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 	var max_r := minf(cx, cy)
 	var elevation_bias := 0.0
 	var moisture_bias := 0.0
+	var biome_id := StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
 	if not region_profile.is_empty():
 		elevation_bias = (float(region_profile.get("elevation", 0.5)) - 0.5) * 0.30
 		moisture_bias = (float(region_profile.get("moisture", 0.5)) - 0.5) * 0.42
+	match biome_id:
+		&"coast":
+			elevation_bias -= 0.055
+			moisture_bias += 0.08
+		&"forest":
+			moisture_bias += 0.08
+		&"marsh":
+			elevation_bias -= 0.035
+			moisture_bias += 0.15
+		&"highland":
+			elevation_bias += 0.10
+			moisture_bias -= 0.04
+		&"badlands":
+			elevation_bias += 0.025
+			moisture_bias -= 0.20
+		&"tundra":
+			elevation_bias += 0.035
+			moisture_bias -= 0.08
 
 	for y in grid.height:
 		for x in grid.width:
@@ -168,6 +191,7 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 				0.0, 1.0)
 			var r := Vector2(x - cx, y - cy).length() / max_r
 			e -= smoothstep(0.62, 1.0, r) * 0.55
+			var h := (hydrology.get_noise_2d(x, y) + 1.0) * 0.5
 
 			var t: int
 			if e < 0.22:
@@ -182,6 +206,35 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 				t = Terrain.Type.DIRT
 			else:
 				t = Terrain.Type.GRASS
+			# Each region keeps the shared tileset but arranges it differently. Broad ponds,
+			# tidal cuts, scree and dry rubble make the biome readable before one resource is
+			# harvested, while the keep flattening pass below still guarantees a safe opening.
+			match biome_id:
+				&"coast":
+					if r > 0.38 and r < 0.82 and absf(h - 0.50) < 0.030 \
+							and t in [Terrain.Type.SAND, Terrain.Type.GRASS, Terrain.Type.DIRT]:
+						t = Terrain.Type.WATER
+				&"marsh":
+					if r < 0.78 and h > 0.73 \
+							and t in [Terrain.Type.GRASS, Terrain.Type.DIRT, Terrain.Type.SAND]:
+						t = Terrain.Type.WATER
+					elif t == Terrain.Type.GRASS and h < 0.38:
+						t = Terrain.Type.DIRT
+				&"highland":
+					if t in [Terrain.Type.GRASS, Terrain.Type.DIRT] and h > 0.55:
+						t = Terrain.Type.ROCK
+					elif t == Terrain.Type.ROCK and h > 0.78:
+						t = Terrain.Type.RUBBLE
+				&"badlands":
+					if t == Terrain.Type.GRASS:
+						t = Terrain.Type.DIRT
+					if t in [Terrain.Type.DIRT, Terrain.Type.ROCK] and h > 0.82:
+						t = Terrain.Type.RUBBLE
+				&"tundra":
+					if t == Terrain.Type.GRASS and h < 0.48:
+						t = Terrain.Type.DIRT
+					elif t == Terrain.Type.GRASS and h > 0.76:
+						t = Terrain.Type.ROCK
 			res.terrain[grid.index(x, y)] = t
 
 
@@ -267,10 +320,14 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int,
 	var forest_bias := 0.0
 	var stone_bias := 0.0
 	var food_bias := 0.0
+	var biome_id := StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
 	if not region_profile.is_empty():
 		forest_bias = (float(region_profile.get("forest", 0.5)) - 0.5) * 0.24
 		stone_bias = (float(region_profile.get("stone", 0.5)) - 0.5) * 0.24
 		food_bias = (float(region_profile.get("food", 0.5)) - 0.5) * 0.04
+	forest_bias += Biomes.richness_bonus(biome_id, &"forest") * 0.55
+	stone_bias += Biomes.richness_bonus(biome_id, &"stone") * 0.55
+	food_bias += Biomes.richness_bonus(biome_id, &"food") * 0.35
 
 	for i in grid.cell_count:
 		var t := res.terrain[i]
@@ -452,24 +509,31 @@ static func _matching_resource_neighbours(
 ## Nests ring the keep at distance. They are the blight's spread origins and the
 ## reason the player must eventually go on the offensive. Spread by angle so waves
 ## never all arrive from one side.
-static func _place_nests(grid: Grid, res: Result, rng: RandomNumberGenerator) -> PackedInt32Array:
+static func _place_nests(grid: Grid, res: Result, rng: RandomNumberGenerator,
+		region_profile: Dictionary = {}) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	var keep := grid.coord(res.keep_cell)
-	var angle_step := TAU / float(NEST_COUNT)
+	var biome_id := StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
+	var nest_count := NEST_COUNT if region_profile.is_empty() else Biomes.nest_count(biome_id)
+	var nest_min := NEST_MIN_DIST if region_profile.is_empty() \
+		else Biomes.nest_min_distance(biome_id)
+	var nest_span := NEST_DIST_SPAN if region_profile.is_empty() \
+		else Biomes.nest_distance_span(biome_id)
+	var angle_step := TAU / float(nest_count)
 
-	for n in NEST_COUNT:
+	for n in nest_count:
 		var base_angle := angle_step * n + rng.randf_range(-0.3, 0.3)
 		var cell := -1
 
 		# Try the ideal ring position first, jittering the distance.
 		for _attempt in 24:
-			var dist := rng.randf_range(NEST_MIN_DIST, NEST_MIN_DIST + NEST_DIST_SPAN)
+			var dist := rng.randf_range(nest_min, nest_min + nest_span)
 			var x := keep.x + int(cos(base_angle) * dist)
 			var y := keep.y + int(sin(base_angle) * dist)
 			if not grid.is_valid(x, y):
 				continue
 			var i := grid.index(x, y)
-			if _nest_site_ok(grid, res, i, keep):
+			if _nest_site_ok(grid, res, i, keep, nest_min):
 				cell = i
 				break
 
@@ -478,10 +542,10 @@ static func _place_nests(grid: Grid, res: Result, rng: RandomNumberGenerator) ->
 		# which quietly halves the Blight's spread rate and leaves one side of the
 		# map with nothing to push back against.
 		if cell == -1:
-			var mid := NEST_MIN_DIST + NEST_DIST_SPAN * 0.5
+			var mid := nest_min + nest_span * 0.5
 			var tx := keep.x + int(cos(base_angle) * mid)
 			var ty := keep.y + int(sin(base_angle) * mid)
-			cell = _find_nest_site_near(grid, res, tx, ty, keep)
+			cell = _find_nest_site_near(grid, res, tx, ty, keep, nest_min)
 
 		if cell != -1:
 			res.feature[cell] = Terrain.Feature.NEST
@@ -490,17 +554,19 @@ static func _place_nests(grid: Grid, res: Result, rng: RandomNumberGenerator) ->
 	return out
 
 
-static func _nest_site_ok(grid: Grid, res: Result, i: int, keep: Vector2i) -> bool:
+static func _nest_site_ok(grid: Grid, res: Result, i: int, keep: Vector2i,
+		nest_min: int = NEST_MIN_DIST) -> bool:
 	if not Terrain.WALKABLE.get(res.terrain[i], false):
 		return false
 	if res.feature[i] == Terrain.Feature.NEST:
 		return false
-	return grid.chebyshev(i, grid.index(keep.x, keep.y)) >= NEST_MIN_DIST - 6
+	return grid.chebyshev(i, grid.index(keep.x, keep.y)) >= nest_min - 6
 
 
 ## Spiral outward from a target point looking for a valid nest site. Rings are walked
 ## in a fixed order so the result stays deterministic for a given seed.
-static func _find_nest_site_near(grid: Grid, res: Result, tx: int, ty: int, keep: Vector2i) -> int:
+static func _find_nest_site_near(grid: Grid, res: Result, tx: int, ty: int,
+		keep: Vector2i, nest_min: int = NEST_MIN_DIST) -> int:
 	for r in range(0, 30):
 		for dy in range(-r, r + 1):
 			for dx in range(-r, r + 1):
@@ -511,7 +577,7 @@ static func _find_nest_site_near(grid: Grid, res: Result, tx: int, ty: int, keep
 				if not grid.is_valid(x, y):
 					continue
 				var i := grid.index(x, y)
-				if _nest_site_ok(grid, res, i, keep):
+				if _nest_site_ok(grid, res, i, keep, nest_min):
 					return i
 	return -1
 

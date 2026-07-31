@@ -50,6 +50,7 @@ var _ended: bool = false
 var _buildings_raised: int = 0
 var _monsters_defeated: int = 0
 var _villagers_lost: int = 0
+var _story_events: int = 0
 
 
 func _ready() -> void:
@@ -59,6 +60,9 @@ func _ready() -> void:
 	Events.building_completed.connect(_on_building_completed)
 	Events.monster_died.connect(_on_monster_died)
 	Events.realm_victory.connect(_on_realm_victory)
+	Events.storyteller_resolved.connect(func(_event_id: StringName, _choice_id: StringName) -> void:
+		_story_events += 1
+	)
 
 	# An explicit request from the main menu wins over anything on disk: the player asked
 	# for a new world, and silently resuming their old one instead would be maddening.
@@ -82,6 +86,7 @@ func _resume() -> bool:
 	if not RunSave.load_into(self, entities):
 		return false
 	_ended = false
+	_story_events = Storyteller.resolved_count
 	camera.center_on_cell(World.keep_cell)
 	_sky_from = SKY_COLORS[Sim.phase]
 	_sky_to = _sky_from
@@ -104,6 +109,7 @@ func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool
 	_buildings_raised = 0
 	_monsters_defeated = 0
 	_villagers_lost = 0
+	_story_events = 0
 	_pending_seed = seed_value
 	RunSave.clear()
 
@@ -493,6 +499,7 @@ func _end_run(ascended: bool, message: String, realm_completed: bool = false) ->
 		"nests": nests_cleared,
 		"monsters": _monsters_defeated,
 		"villagers_lost": _villagers_lost,
+		"events": _story_events,
 		"shards": shards,
 		"ascended": ascended,
 		"realm_completed": realm_completed,

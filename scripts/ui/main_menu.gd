@@ -185,7 +185,7 @@ func _refresh_history() -> void:
 	for id: StringName in Meta.achievements:
 		achievement_names.append(tr(StringName("ACHIEVEMENT_" + String(id).to_upper())))
 	_history_achievements.text = L10n.t(&"HISTORY_ACHIEVEMENTS", [
-		Meta.achievements.size(), 6,
+		Meta.achievements.size(), Meta.ACHIEVEMENT_TOTAL,
 		", ".join(achievement_names) if not achievement_names.is_empty() else tr(&"HISTORY_NONE"),
 	])
 	for child in _history_records.get_children():

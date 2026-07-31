@@ -416,3 +416,84 @@ ACHIEVEMENT_PURIFIER,Root and Branch
 ACHIEVEMENT_SURVIVOR,Ten-Day Vigil
 ACHIEVEMENT_REALMKEEPER,Realmkeeper
 ACHIEVEMENT_NETWORK,Many Hearths
+ACHIEVEMENT_WEATHERED,Four Seasons
+ACHIEVEMENT_CHRONICLER,Keeper of Tales
+RESOURCE_FAITH,Faith
+BIOME_COAST,Coast
+BIOME_COAST_HAZARD,Tidal channels slow expansion but sea berries are plentiful.
+BIOME_GRASSLAND,Grassland
+BIOME_GRASSLAND_HAZARD,Open ground grows food well but gives the Blight no natural resistance.
+BIOME_FOREST,Deep Forest
+BIOME_FOREST_HAZARD,Dense timber yields more wood while roots slow travel and shelter corruption.
+BIOME_MARSH,Marsh
+BIOME_MARSH_HAZARD,"Bog paths are slow and corruption thrives, but food grows abundantly."
+BIOME_HIGHLAND,Highland
+BIOME_HIGHLAND_HAZARD,Rocky slopes slow travel and farming while rich stone and thin soil resist corruption.
+BIOME_BADLANDS,Badlands
+BIOME_BADLANDS_HAZARD,"Dry ground strains food and water, and hostile nests gather quickly."
+BIOME_TUNDRA,Tundra
+BIOME_TUNDRA_HAZARD,"Cold travel and short harvests demand preparation, but corruption struggles here."
+SEASON_SPRING,Spring
+SEASON_SUMMER,Summer
+SEASON_AUTUMN,Autumn
+SEASON_WINTER,Winter
+WEATHER_CLEAR,Clear skies
+WEATHER_RAIN,Rain
+WEATHER_STORM,Storm
+WEATHER_FOG,Fog
+WEATHER_DROUGHT,Drought
+WEATHER_SNOW,Snow
+WEATHER_HEATWAVE,Heatwave
+CLIMATE_HUD,{0} · {1}
+CLIMATE_TOOLTIP,"{0}, {1} — farm output {2}% · timber gathering {3}%"
+REALM_INSPECT_TOOLTIP,{0} · {1} · select to inspect
+TUTORIAL_CLIMATE_TITLE,Read the season and sky
+TUTORIAL_CLIMATE_BODY,"The clock now names the season and weather. Rain feeds farms but helps corruption; snow slows travel and crops; drought drains water. The Realm's biome changes these effects."
+TUTORIAL_STORIES_TITLE,The Realm answers back
+TUTORIAL_STORIES_BODY,"World events pause the colony and offer three responses. Costs and consequences are shown before you choose, and there is always a response that needs no stock."
+STORY_EVENT,World event
+STORY_KICKER,THE REALM STIRS
+STORY_PROMPT,Choose how the colony responds
+STORY_RECOMMENDED,Recommended
+STORY_COST,cost: {0}
+STORY_RESOLVED,The colony has chosen.
+STORY_PASS,Let them pass
+STORY_PASS_DETAIL,Keep your stores and make no bargain.
+STORY_CARAVAN_TITLE,Lanterns on the old road
+STORY_CARAVAN_BODY,A weathered caravan reaches the Hearth with useful cargo and little patience.
+STORY_CARAVAN_TOOLS,Trade for tools
+STORY_CARAVAN_TOOLS_DETAIL,Exchange provisions for tools and sawn boards.
+STORY_CARAVAN_PROVISIONS,Buy their provisions
+STORY_CARAVAN_PROVISIONS_DETAIL,Trade timber for a full larder.
+STORY_REFUGEES_TITLE,Figures beyond the firelight
+STORY_REFUGEES_BODY,{0} exhausted survivors ask to join the settlement before nightfall.
+STORY_REFUGEES_WELCOME,Welcome them
+STORY_REFUGEES_WELCOME_DETAIL,Open the gate and accept the extra mouths immediately.
+STORY_REFUGEES_PROVISION,Provision their journey
+STORY_REFUGEES_PROVISION_DETAIL,Feed them well; their gratitude strengthens Faith and morale.
+STORY_REFUGEES_REFUSE,Turn them away
+STORY_REFUGEES_REFUSE_DETAIL,Preserve the stockpile at a cost to colony morale.
+STORY_BLIGHT_TITLE,A pulse beneath the roots
+STORY_BLIGHT_BODY,The ground answers a distant call and new corruption strains toward the Hearth.
+STORY_BLIGHT_WARD,Raise an Ember ward
+STORY_BLIGHT_WARD_DETAIL,Spend Faith to burn back the strongest corrupted ground.
+STORY_BLIGHT_STOCKADE,Reinforce the stockade
+STORY_BLIGHT_STOCKADE_DETAIL,Spend boards to reduce the enemy settlement's pressure.
+STORY_BLIGHT_ENDURE,Hold what we have
+STORY_BLIGHT_ENDURE_DETAIL,Save supplies but allow corruption and pressure to grow.
+STORY_STORM_TITLE,A black front approaches
+STORY_STORM_BODY,Wind tears at the treeline as a hard storm bears down on the settlement.
+STORY_STORM_REINFORCE,Brace the settlement
+STORY_STORM_REINFORCE_DETAIL,Use timber to protect movement and hold back storm-fed corruption.
+STORY_STORM_SHELTER,Shelter all hands
+STORY_STORM_SHELTER_DETAIL,Stop exposed work and protect morale through the worst of it.
+STORY_STORM_WORK,Work through it
+STORY_STORM_WORK_DETAIL,Keep every hand outside and accept greater pressure.
+STORY_DROUGHT_TITLE,The wells sink
+STORY_DROUGHT_BODY,Heat cracks the soil and the waterline falls faster than the colony can drink.
+STORY_DROUGHT_CISTERN,Line a deep cistern
+STORY_DROUGHT_CISTERN_DETAIL,Spend stone to protect farms and thirst for several days.
+STORY_DROUGHT_RATION,Ration water
+STORY_DROUGHT_RATION_DETAIL,Reduce thirst at the cost of farm output and morale.
+STORY_DROUGHT_ENDURE,Trust the clouds
+STORY_DROUGHT_ENDURE_DETAIL,Keep all supplies and bear the full drought.

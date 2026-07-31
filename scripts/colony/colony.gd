@@ -253,7 +253,8 @@ func farm_supply_per_second() -> float:
 			var bdef: BuildingDef = b.def
 			if bdef.workplace_key() == job.workplace:
 				workers += _slot_users(_work_users, b).size()
-		rate += float(workers) * per_worker_second * job.work_rate * FARM_DUTY_CYCLE
+		rate += float(workers) * per_worker_second * job.work_rate * FARM_DUTY_CYCLE \
+			* Climate.farm_multiplier()
 	return rate
 
 
@@ -461,6 +462,25 @@ func _admit_migrant(born: bool = false) -> void:
 	if spawn_villager(cell) != null:
 		Events.migrant_arrived.emit(cell)
 		Events.notice.emit(tr(&"NOTICE_CHILD_BORN" if born else &"NOTICE_SURVIVOR_ARRIVES"), 0)
+
+
+## Admit a storyteller refugee band through the same safe edge-placement path as ordinary
+## migrants. Returns the number that actually reached the map.
+func admit_event_survivors(count: int) -> int:
+	var admitted := 0
+	for _i in maxi(count, 0):
+		var cell := _arrival_cell()
+		if cell != -1 and spawn_villager(cell) != null:
+			admitted += 1
+	if admitted > 0:
+		Events.notice.emit(L10n.t(&"NOTICE_MIGRANTS_JOINED", [admitted]), 0)
+	return admitted
+
+
+func adjust_mood(amount: float) -> void:
+	for v in villagers:
+		if is_instance_valid(v) and v.alive:
+			v.mood = clampf(v.mood + amount, 0.0, 100.0)
 
 
 ## A walkable edge cell that can actually reach the keep. An arrival stranded across water

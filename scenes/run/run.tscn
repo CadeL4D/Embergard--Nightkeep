@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/run/run.gd" id="1_run"]
 [ext_resource type="Script" path="res://scripts/divine/god_hand.gd" id="8_god_hand"]
@@ -16,6 +16,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="11_summary"]
 [ext_resource type="PackedScene" path="res://scenes/ui/realm_map.tscn" id="16_realm"]
 [ext_resource type="PackedScene" path="res://scenes/ui/onboarding.tscn" id="17_onboarding"]
+[ext_resource type="PackedScene" path="res://scenes/world/weather_view.tscn" id="18_weather"]
+[ext_resource type="PackedScene" path="res://scenes/ui/story_event_panel.tscn" id="19_story"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_blight"]
 shader = ExtResource("4_blight")
@@ -104,11 +106,15 @@ script = ExtResource("10_placement")
 visible = false
 centered = false
 
+[node name="WeatherView" parent="." instance=ExtResource("18_weather")]
+
 [node name="Hud" parent="." instance = ExtResource("9_hud")]
 
 [node name="RunSummary" parent="." instance = ExtResource("11_summary")]
 
 [node name="RealmMap" parent="." instance = ExtResource("16_realm")]
+
+[node name="StoryEventPanel" parent="." instance=ExtResource("19_story")]
 
 [node name="Onboarding" parent="." instance = ExtResource("17_onboarding")]
 

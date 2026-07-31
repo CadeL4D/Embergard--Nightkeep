@@ -12,6 +12,8 @@ const CARDS := {
 	&"production": [&"TUTORIAL_PRODUCTION_TITLE", &"TUTORIAL_PRODUCTION_BODY"],
 	&"colonies": [&"TUTORIAL_COLONIES_TITLE", &"TUTORIAL_COLONIES_BODY"],
 	&"blight": [&"TUTORIAL_BLIGHT_TITLE", &"TUTORIAL_BLIGHT_BODY"],
+	&"climate": [&"TUTORIAL_CLIMATE_TITLE", &"TUTORIAL_CLIMATE_BODY"],
+	&"stories": [&"TUTORIAL_STORIES_TITLE", &"TUTORIAL_STORIES_BODY"],
 }
 
 @onready var _card: PanelContainer = $Dim/Center/Card
@@ -45,6 +47,9 @@ func _ready() -> void:
 	)
 	Events.building_completed.connect(_on_building_completed)
 	Events.realm_changed.connect(_on_realm_changed)
+	Events.storyteller_event.connect(func(_id: StringName, _payload: Dictionary) -> void:
+		show_once(&"stories")
+	)
 	Events.blight_changed.connect(func(_cell: int, blighted: bool) -> void:
 		if blighted and Sim.day > 1:
 			show_once(&"blight")
@@ -55,6 +60,7 @@ func _on_run_started(_seed: int) -> void:
 	show_once(&"welcome")
 	show_once(&"ember")
 	show_once(&"jobs")
+	show_once(&"climate")
 
 
 func _on_building_completed(building: Node) -> void:

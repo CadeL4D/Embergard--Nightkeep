@@ -130,7 +130,9 @@ func _refresh() -> void:
 	var is_settled := ledger != null and not ledger.fallen
 	var is_connected := Realm.connected(Realm.awake_id, _selected)
 	var coord: Vector2i = row["coord"]
-	var biome := String(row.get("biome", &"unknown")).capitalize()
+	var biome_id := StringName(row.get("biome", Biomes.DEFAULT_ID))
+	var biome := tr(Biomes.name_key(biome_id))
+	var hazard := tr(Biomes.hazard_key(biome_id))
 
 	if _choosing_first:
 		_realm_state.text = tr(&"REALM_FIRST_HEADER").format([Realm.world_seed])
@@ -152,6 +154,7 @@ func _refresh() -> void:
 			int(round(float(row.get("forest", 0.0)) * 100.0)),
 			int(round(float(row.get("stone", 0.0)) * 100.0)),
 			int(round(float(row.get("food", 0.0)) * 100.0))])
+		_summary.text += "\n" + hazard
 		if not _choosing_first:
 			_summary.text += "\n\n" + tr(&"REALM_SITE_SUMMARY").format([
 				int(Realm.SETTLEMENT_COST[&"wood"]),

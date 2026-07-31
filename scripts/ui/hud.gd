@@ -86,6 +86,7 @@ func _ready() -> void:
 	_cancel_button.pressed.connect(_on_cancel)
 	Events.resources_changed.connect(_on_resources_changed)
 	Events.run_started.connect(_on_run_started)
+	Climate.changed.connect(_refresh_phase)
 
 	# The placement controller lives in the run scene because it needs world space;
 	# the HUD only drives it. Looked up rather than exported so the HUD can also be
@@ -616,6 +617,12 @@ func _refresh_phase() -> void:
 		extra = L10n.t(&"HUD_HOSTILES", [Threat.alive_count()])
 	_phase_label.text = L10n.t(&"HUD_CLOCK", [
 		Sim.day, tr(names[Sim.phase]), int(Sim.seconds_remaining()), extra])
+	_phase_label.text += "\n" + Climate.hud_text()
+	_phase_label.tooltip_text = L10n.t(&"CLIMATE_TOOLTIP", [
+		Climate.name_of_season(), Climate.name_of_weather(),
+		int(round(Climate.farm_multiplier() * 100.0)),
+		int(round(Climate.gather_multiplier(Terrain.Feature.TREE) * 100.0)),
+	])
 	_phase_label.add_theme_color_override("font_color", UiPalette.phase_color(Sim.phase))
 
 

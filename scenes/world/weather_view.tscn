@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/weather_view.gd" id="1_view"]
+[ext_resource type="Script" path="res://scripts/world/weather_particles.gd" id="2_particles"]
+
+[node name="WeatherView" type="CanvasLayer"]
+layer = 12
+script = ExtResource("1_view")
+
+[node name="Tint" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Particles" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("2_particles")

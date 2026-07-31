@@ -695,7 +695,9 @@ func _tick_working(delta: float) -> void:
 	var yields := Terrain.yield_of(feature)
 	for kind: StringName in yields:
 		carry_kind = kind
-		carry_amount = mini(int(yields[kind]), def.carry_capacity)
+		var climate_yield := maxi(roundi(float(yields[kind]) \
+			* Climate.gather_multiplier(feature)), 1)
+		carry_amount = mini(climate_yield, def.carry_capacity)
 
 	World.clear_feature(_target_cell)
 	_release_target()
@@ -927,7 +929,9 @@ func _tick_workplace(def: JobDef, delta: float) -> void:
 
 	for kind: StringName in def.cycle_yield:
 		carry_kind = kind
-		carry_amount = mini(int(def.cycle_yield[kind]), def.carry_capacity)
+		var climate_yield := maxi(roundi(float(def.cycle_yield[kind]) \
+			* Climate.production_multiplier(def, kind)), 1)
+		carry_amount = mini(climate_yield, def.carry_capacity)
 	_begin_haul()
 
 
@@ -980,7 +984,7 @@ func _decay_needs(delta: float) -> void:
 
 	var wear := Difficulties.needs_mult()
 	food = maxf(food - HUNGER_RATE * wear * delta, 0.0)
-	water = maxf(water - THIRST_RATE * wear * delta, 0.0)
+	water = maxf(water - THIRST_RATE * wear * Climate.thirst_multiplier() * delta, 0.0)
 	rest = maxf(rest - REST_RATE * wear * delta, 0.0)
 
 	# Empty stomach and nothing to eat: this is the only way a villager dies of
@@ -1017,6 +1021,7 @@ func _decay_needs(delta: float) -> void:
 	# Faith output, since mood is what generates Faith in the first place — which is the point of
 	# giving some tomes a real cost instead of pure upside.
 	target -= Divine.tome_mood_penalty()
+	target += Climate.mood_offset()
 
 	target = clampf(target, 0.0, NEED_MAX)
 	var rate := MOOD_DRIFT if target > mood else MOOD_DRIFT * MOOD_FALL_SCALE
