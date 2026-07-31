@@ -88,8 +88,9 @@ static func generate(grid: Grid, seed_value: int, keep_override: int = -1,
 	_scatter_features(grid, res, seed_value, rng, region_profile)
 	res.nest_cells = _place_nests(grid, res, rng, region_profile)
 	_clear_around_keep(grid, res, res.keep_cell)
-	if not region_profile.is_empty():
-		_ensure_starting_stone(grid, res)
+	# Every playable local map gets a reachable quarry, including standalone and
+	# developer maps that do not carry a Realm region profile.
+	_ensure_starting_stone(grid, res)
 	# The guaranteed starting quarry is added after the main feature scatter,
 	# so perform the visual separation here, once every resource is final.
 	_separate_berry_thickets(grid, res)
@@ -102,7 +103,18 @@ static func generate(grid: Grid, seed_value: int, keep_override: int = -1,
 ## settleable local map therefore receives one modest, reachable quarry near the Hearth. Rich
 ## highlands still contain vastly more; this is the handhold that lets any region reach them.
 static func _ensure_starting_stone(grid: Grid, res: Result) -> void:
-	const MIN_STONE := 20
+	const QUARRY_SHAPE: Array[Vector2i] = [
+		Vector2i(-1, -3), Vector2i(0, -3), Vector2i(1, -3),
+		Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2),
+		Vector2i(1, -2), Vector2i(2, -2),
+		Vector2i(-3, -1), Vector2i(-2, -1), Vector2i(-1, -1),
+		Vector2i(0, -1), Vector2i(1, -1), Vector2i(2, -1),
+		Vector2i(-3, 0), Vector2i(-2, 0), Vector2i(-1, 0),
+		Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0),
+		Vector2i(-2, 1), Vector2i(-1, 1), Vector2i(0, 1),
+		Vector2i(1, 1), Vector2i(2, 1),
+		Vector2i(-2, 2), Vector2i(-1, 2), Vector2i(0, 2), Vector2i(1, 2),
+	]
 	var keep := grid.coord(res.keep_cell)
 	for radius in range(11, 24):
 		for dy in range(-radius, radius + 1):
@@ -149,13 +161,12 @@ static func _ensure_starting_stone(grid: Grid, res: Result) -> void:
 					var route_feature := int(res.feature[route_cell])
 					if route_feature in [Terrain.Feature.TREE, Terrain.Feature.BERRIES]:
 						res.feature[route_cell] = Terrain.Feature.NONE
-				var stamped := 0
-				for oy in range(-2, 3):
-					for ox in range(-2, 2):
-						res.feature[grid.index_v(center + Vector2i(ox, oy))] = Terrain.Feature.STONE
-						stamped += 1
-						if stamped >= MIN_STONE:
-							return
+				# A broad, asymmetric connected face rather than a rectangular
+				# 4x5 stamp. It supplies more stone and gives the contour renderer
+				# enough silhouette for one quarry to read as a landform.
+				for offset in QUARRY_SHAPE:
+					res.feature[grid.index_v(center + offset)] = Terrain.Feature.STONE
+				return
 
 
 ## Cardinal route across ground the founding settlers can open. Trees and berries may be cleared;
@@ -407,7 +418,14 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int,
 	# Berries use a tighter field than forests and quarries. That creates small
 	# forage thickets inside otherwise open grass instead of evenly scattered
 	# single pickup points.
-	berry_clump.frequency = 0.095
+	berry_clump.frequency = 0.12
+	var stone_clump := FastNoiseLite.new()
+	stone_clump.seed = seed_value + 55217
+	stone_clump.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	# Independent from the forest field so ordinary regions receive several
+	# coherent outcrops rather than stone existing only where the terrain pass
+	# happened to produce a rare rock tile.
+	stone_clump.frequency = 0.052
 	var forest_bias := 0.0
 	var stone_bias := 0.0
 	var food_bias := 0.0
@@ -442,7 +460,7 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int,
 					res.feature[i] = Terrain.Feature.STONE
 				continue
 			if int(macro.get("berry_mark", 0)) > 0 and t == Terrain.Type.GRASS:
-				if rng.randf() < (0.58 if int(macro["berry_mark"]) == 2 else 0.22):
+				if rng.randf() < (0.48 if int(macro["berry_mark"]) == 2 else 0.16):
 					res.feature[i] = Terrain.Feature.BERRIES
 				continue
 		# Two densities per clump rather than one, so a wood has a SOLID CORE and a ragged fringe.
@@ -467,11 +485,11 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int,
 					var berry_roll := rng.randf()
 					# Two densities give each patch a packed center and a
 					# ragged edge. Food-rich regions lower both thresholds.
-					if berry_n > 0.69 - food_bias * 2.0:
-						if berry_roll < 0.76:
+					if berry_n > 0.72 - food_bias * 2.0:
+						if berry_roll < 0.68:
 							res.feature[i] = Terrain.Feature.BERRIES
-					elif berry_n > 0.63 - food_bias * 2.0:
-						if berry_roll < 0.28:
+					elif berry_n > 0.67 - food_bias * 2.0:
+						if berry_roll < 0.20:
 							res.feature[i] = Terrain.Feature.BERRIES
 			Terrain.Type.ROCK:
 				if n > 0.60 - stone_bias:
@@ -487,8 +505,47 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int,
 				if rng.randf() < 0.3:
 					res.feature[i] = Terrain.Feature.RUIN_WALL
 
+	_seed_secondary_stone_masses(grid, res, stone_clump, stone_bias)
 	_consolidate_resource_masses(grid, res)
 	_consolidate_berry_thickets(grid, res)
+
+
+## Add a restrained second layer of connected stone across otherwise open land.
+##
+## Terrain ROCK still carries the richest quarries, but tying every mineable cell
+## to that terrain made lowland and forest regions contain only the emergency
+## starting deposit. A separate low-frequency field produces a few broad outcrops
+## throughout the map while preserving biome richness and leaving existing forests,
+## berries, ruins, and water untouched.
+static func _seed_secondary_stone_masses(
+		grid: Grid, res: Result, stone_clump: FastNoiseLite, stone_bias: float
+	) -> void:
+	var regional_shift := clampf(stone_bias * 0.45, -0.04, 0.07)
+	for cell in grid.cell_count:
+		if int(res.feature[cell]) != Terrain.Feature.NONE:
+			continue
+		var threshold := 1.0
+		match int(res.terrain[cell]):
+			Terrain.Type.ROCK:
+				threshold = 0.61
+			Terrain.Type.DIRT:
+				threshold = 0.69
+			Terrain.Type.GRASS:
+				threshold = 0.72
+			Terrain.Type.SAND:
+				threshold = 0.76
+			_:
+				continue
+		var c := grid.coord(cell)
+		var value := (stone_clump.get_noise_2d(c.x, c.y) + 1.0) * 0.5
+		# A tiny stable threshold wobble roughens the level-set boundary without
+		# consuming the shared RNG that determines nests and other gameplay.
+		var hash := absi(
+			c.x * 73856093 ^ c.y * 19349663 ^ 55217
+		)
+		var edge_wobble := (float(hash % 1024) / 1023.0 - 0.5) * 0.035
+		if value > threshold - regional_shift + edge_wobble:
+			res.feature[cell] = Terrain.Feature.STONE
 
 
 ## Remove one-off resource props and close small gaps inside a mass. This is a

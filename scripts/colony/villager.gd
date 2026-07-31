@@ -653,6 +653,11 @@ func _tick_seeking() -> void:
 		_release_target()
 		state = State.IDLE
 		return
+	var def := Jobs.get_job(job)
+	if def == null or not DefenseControl.gathering_is_designated(def.id, _target_cell):
+		_release_target()
+		state = State.IDLE
+		return
 	if is_moving():
 		return
 	if _within_reach(_target_cell):
@@ -713,6 +718,10 @@ func _tick_working(delta: float) -> void:
 
 	var feature := World.feature_at(_target_cell)
 	if not Terrain.is_harvestable(feature):
+		_release_target()
+		state = State.IDLE
+		return
+	if not DefenseControl.gathering_is_designated(def.id, _target_cell):
 		_release_target()
 		state = State.IDLE
 		return

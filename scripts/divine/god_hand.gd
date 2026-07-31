@@ -59,6 +59,10 @@ var _touch_start_time: float = 0.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# The resource brush owns world input while active. Letting God Hand also see a
+	# paint stroke would move the Ember or select villagers underneath it.
+	if DefenseControl.gather_job != &"":
+		return
 	if event.is_action_pressed(&"game_cancel"):
 		_cancel_desktop_action()
 		get_viewport().set_input_as_handled()

@@ -6,6 +6,7 @@ extends Node
 
 signal changed
 signal paint_mode_changed(mode: int)
+signal gather_mode_changed(job_id: StringName, erasing: bool, radius: int)
 
 enum PaintMode { NONE, FORBIDDEN, WORK, GUARD, ERASE }
 enum StockFilter { ALL, FOOD, MATERIALS, FINISHED }
@@ -15,6 +16,8 @@ const CLEANSE_FAITH := 30.0
 const CLEANSE_DAWNS := 3
 const CLEANSE_MAX_COVERAGE := 0.20
 const SAFE_LIGHT := 110
+const GATHER_RADIUS_MIN := 1
+const GATHER_RADIUS_MAX := 6
 
 var forbidden: PackedByteArray = PackedByteArray()
 var work: PackedByteArray = PackedByteArray()
@@ -26,6 +29,13 @@ var cleanse_dawns_left: int = 0
 var cleanse_completed: bool = false
 ## stockpile centre cell -> {"filter": StockFilter, "priority": 1..3}
 var stockpile_rules: Dictionary = {}
+## Per-field-job resource orders. A set byte means that specific resource cell may
+## be harvested by that job. Empty masks are intentional: gathering never starts
+## until the player paints an order.
+var gather_designations: Dictionary = {}
+var gather_job: StringName = &""
+var gather_erasing: bool = false
+var gather_radius: int = 2
 
 var _work_count := 0
 var _guard_count := 0
@@ -34,6 +44,7 @@ var _guard_count := 0
 func _ready() -> void:
 	Events.phase_changed.connect(_on_phase_changed)
 	Events.nest_destroyed.connect(_on_nest_destroyed)
+	Events.terrain_changed.connect(_on_terrain_changed)
 	reset_for_map()
 
 
@@ -51,13 +62,28 @@ func reset_for_map() -> void:
 	cleanse_dawns_left = 0
 	cleanse_completed = false
 	stockpile_rules.clear()
+	gather_designations.clear()
+	for job: JobDef in Jobs.all():
+		if job.target_features.is_empty():
+			continue
+		var mask := PackedByteArray()
+		mask.resize(count)
+		gather_designations[job.id] = mask
+	gather_job = &""
+	gather_erasing = false
+	gather_radius = 2
 	_work_count = 0
 	_guard_count = 0
 	changed.emit()
 	paint_mode_changed.emit(paint_mode)
+	gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
 
 
 func to_dict() -> Dictionary:
+	var packed_gather := {}
+	for job_id in gather_designations:
+		var mask: PackedByteArray = gather_designations[job_id]
+		packed_gather[String(job_id)] = mask.duplicate()
 	return {
 		"forbidden": forbidden.duplicate(),
 		"work": work.duplicate(),
@@ -67,6 +93,7 @@ func to_dict() -> Dictionary:
 		"cleanse_dawns_left": cleanse_dawns_left,
 		"cleanse_completed": cleanse_completed,
 		"stockpile_rules": stockpile_rules.duplicate(true),
+		"gather_designations": packed_gather,
 	}
 
 
@@ -80,6 +107,15 @@ func load_dict(data: Dictionary) -> void:
 	cleanse_dawns_left = int(data.get("cleanse_dawns_left", 0))
 	cleanse_completed = bool(data.get("cleanse_completed", false))
 	stockpile_rules = data.get("stockpile_rules", {}).duplicate(true)
+	var saved_gather: Dictionary = data.get("gather_designations", {})
+	for raw_job_id in saved_gather:
+		var job_id := StringName(raw_job_id)
+		if not gather_designations.has(job_id):
+			continue
+		var target: PackedByteArray = gather_designations[job_id]
+		var source: PackedByteArray = saved_gather[raw_job_id]
+		_copy_mask(source, target)
+		gather_designations[job_id] = target
 	_recount()
 	changed.emit()
 
@@ -101,6 +137,9 @@ func _recount() -> void:
 
 
 func set_paint_mode(value: PaintMode) -> void:
+	if gather_job != &"":
+		gather_job = &""
+		gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
 	paint_mode = PaintMode.NONE if paint_mode == value else value
 	paint_mode_changed.emit(paint_mode)
 	changed.emit()
@@ -110,6 +149,119 @@ func cancel_paint() -> void:
 	if paint_mode != PaintMode.NONE:
 		paint_mode = PaintMode.NONE
 		paint_mode_changed.emit(paint_mode)
+		changed.emit()
+
+
+# --- Gathering designations -----------------------------------------------------------
+
+## Enter the resource brush for one field job. Selecting the active job again exits
+## the mode, which makes the small Area button work as both open and close.
+func set_gather_mode(job_id: StringName) -> void:
+	var job := Jobs.get_job(job_id)
+	if job == null or job.target_features.is_empty():
+		return
+	if paint_mode != PaintMode.NONE:
+		paint_mode = PaintMode.NONE
+		paint_mode_changed.emit(paint_mode)
+	gather_job = &"" if gather_job == job_id else job_id
+	gather_erasing = false
+	gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
+	changed.emit()
+
+
+func cancel_gather_paint() -> void:
+	if gather_job == &"":
+		return
+	gather_job = &""
+	gather_erasing = false
+	gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
+	changed.emit()
+
+
+func set_gather_erasing(value: bool) -> void:
+	if gather_job == &"":
+		return
+	gather_erasing = value
+	gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
+	changed.emit()
+
+
+func adjust_gather_radius(delta: int) -> void:
+	var next := clampi(gather_radius + delta, GATHER_RADIUS_MIN, GATHER_RADIUS_MAX)
+	if next == gather_radius:
+		return
+	gather_radius = next
+	gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
+	changed.emit()
+
+
+## Apply the current circular brush. Adding only marks resources that this job can
+## actually harvest; erasing clears every marked cell under the brush.
+func paint_gather(center_cell: int, erase_override: int = -1) -> bool:
+	if gather_job == &"" or not World.grid.is_valid_index(center_cell):
+		return false
+	var job := Jobs.get_job(gather_job)
+	if job == null:
+		return false
+	var mask: PackedByteArray = gather_designations.get(gather_job, PackedByteArray())
+	if mask.size() != World.grid.cell_count:
+		mask.resize(World.grid.cell_count)
+	var erasing := gather_erasing if erase_override < 0 else erase_override != 0
+	var center := World.grid.coord(center_cell)
+	var changed_any := false
+	for dy in range(-gather_radius, gather_radius + 1):
+		for dx in range(-gather_radius, gather_radius + 1):
+			if dx * dx + dy * dy > gather_radius * gather_radius:
+				continue
+			var point := center + Vector2i(dx, dy)
+			if not World.grid.is_valid_v(point):
+				continue
+			var cell := World.grid.index_v(point)
+			var next := 0 if erasing else (
+				1 if job.harvests(World.feature_at(cell)) else int(mask[cell]))
+			if int(mask[cell]) == next:
+				continue
+			mask[cell] = next
+			changed_any = true
+	gather_designations[gather_job] = mask
+	if changed_any:
+		for villager in Colony.villagers:
+			if is_instance_valid(villager) and villager.job == gather_job:
+				villager.think_urgent = true
+		changed.emit()
+	return changed_any
+
+
+func gathering_is_designated(job_id: StringName, cell: int) -> bool:
+	if not World.grid.is_valid_index(cell) or not gather_designations.has(job_id):
+		return false
+	var mask: PackedByteArray = gather_designations[job_id]
+	return cell < mask.size() and mask[cell] != 0
+
+
+func gathering_count(job_id: StringName) -> int:
+	if not gather_designations.has(job_id):
+		return 0
+	var total := 0
+	var mask: PackedByteArray = gather_designations[job_id]
+	for value in mask:
+		if value != 0:
+			total += 1
+	return total
+
+
+func _on_terrain_changed(cell: int) -> void:
+	if not World.grid.is_valid_index(cell) \
+			or World.feature_at(cell) != Terrain.Feature.NONE:
+		return
+	var changed_any := false
+	for job_id in gather_designations:
+		var mask: PackedByteArray = gather_designations[job_id]
+		if cell < mask.size() and mask[cell] != 0:
+			mask[cell] = 0
+			gather_designations[job_id] = mask
+			changed_any = true
+	if changed_any:
 		changed.emit()
 
 

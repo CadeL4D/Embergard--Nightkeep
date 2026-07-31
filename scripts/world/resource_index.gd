@@ -102,6 +102,11 @@ func nearest(from: int, job: JobDef, is_free: Callable, max_rings: int = 8) -> i
 				for cell in list:
 					if not job.harvests(_world.feature[cell]):
 						continue
+					# Field workers only act on resources explicitly painted for
+					# their job. An empty brush mask means "no gathering orders",
+					# never "harvest the whole map".
+					if not DefenseControl.gathering_is_designated(job.id, cell):
+						continue
 					if not is_free.call(cell):
 						continue
 					var d := grid.dist_sq(from, cell)

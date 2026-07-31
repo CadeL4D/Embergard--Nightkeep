@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=28 format=3]
 
 [ext_resource type="Script" path="res://scripts/run/run.gd" id="1_run"]
 [ext_resource type="Script" path="res://scripts/divine/god_hand.gd" id="8_god_hand"]
@@ -21,6 +21,10 @@
 [ext_resource type="Script" path="res://scripts/world/control_zone_view.gd" id="20_zones"]
 [ext_resource type="Script" path="res://scripts/divine/power_effects.gd" id="21_power_fx"]
 [ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="22_pause"]
+[ext_resource type="PackedScene" path="res://scenes/ui/site_picker.tscn" id="23_site_picker"]
+[ext_resource type="Script" path="res://scripts/world/gather_designation_view.gd" id="24_gather_view"]
+[ext_resource type="Script" path="res://scripts/world/terrain_transition_overlay.gd" id="25_terrain_edges"]
+[ext_resource type="Script" path="res://scripts/world/path_surface_view.gd" id="26_path_surface"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_blight"]
 shader = ExtResource("4_blight")
@@ -54,6 +58,10 @@ script = ExtResource("2_world_view")
 z_index = -2
 tile_set = ExtResource("3_tileset")
 
+[node name="TerrainTransitions" type="Node2D" parent="WorldView"]
+z_index = -1
+script = ExtResource("25_terrain_edges")
+
 [node name="DecorLayer" type="TileMapLayer" parent="WorldView"]
 z_index = -1
 tile_set = ExtResource("3_tileset")
@@ -68,6 +76,9 @@ tile_set = ExtResource("3_tileset")
 [node name="FeatureDetails" type="Node2D" parent="WorldView"]
 z_index = 1
 script = ExtResource("15_feature_details")
+
+[node name="PathSurface" type="Node2D" parent="WorldView"]
+script = ExtResource("26_path_surface")
 
 [node name="Entities" type="Node2D" parent="WorldView/Sorted"]
 z_index = 2
@@ -97,6 +108,10 @@ mouse_filter = 2
 z_index = 4
 script = ExtResource("20_zones")
 
+[node name="GatherDesignations" type="Node2D" parent="WorldView"]
+z_index = 5
+script = ExtResource("24_gather_view")
+
 [node name="PowerEffects" type="Node2D" parent="WorldView"]
 z_index = 9
 script = ExtResource("21_power_fx")
@@ -124,6 +139,8 @@ centered = false
 [node name="RunSummary" parent="." instance = ExtResource("11_summary")]
 
 [node name="RealmMap" parent="." instance = ExtResource("16_realm")]
+
+[node name="SitePicker" parent="." instance = ExtResource("23_site_picker")]
 
 [node name="StoryEventPanel" parent="." instance=ExtResource("19_story")]
 

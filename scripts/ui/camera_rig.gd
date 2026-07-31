@@ -57,6 +57,14 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Painted orders own drag input while active. Desktop wheel zoom remains
+	# available because it does not compete with a brush stroke.
+	if DefenseControl.gather_job != &"" \
+			or DefenseControl.paint_mode != DefenseControl.PaintMode.NONE:
+		if not (event is InputEventMouseButton) \
+				or (event as InputEventMouseButton).button_index not in [
+					MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			return
 	if event is InputEventScreenTouch:
 		_handle_touch(event)
 	elif event is InputEventScreenDrag:

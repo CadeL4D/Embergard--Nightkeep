@@ -45,6 +45,7 @@ const NODE_SPRITE_SIZE := 32
 const NODE_ATLAS_COLS := 8
 const TREE_VARIANTS := 8
 const BERRY_VARIANTS := 4
+const STONE_SHELF_SPACING := 34.0
 
 var _boundaries: Array[Dictionary] = []
 var _boundary_lines: Array[Line2D] = []
@@ -167,7 +168,11 @@ func _build_stone_details(grid: Grid) -> void:
 			if distance < primary_distance:
 				primary_distance = distance
 				primary = cell
-			if _is_solid_interior(c, Terrain.Feature.STONE, 1, grid):
+			# A full 3x3 test left the guaranteed quarry with only one viable
+			# shelf center. Cardinal support is enough to keep a terrace tied to
+			# the rock body while allowing the several broad raised tops used by
+			# the approved concept.
+			if _is_cross_interior(c, Terrain.Feature.STONE, grid):
 				interior.append(cell)
 		if not interior.is_empty():
 			primary = interior[0]
@@ -180,22 +185,30 @@ func _build_stone_details(grid: Grid) -> void:
 					primary = cell
 
 		var chosen: Array[Vector2] = []
+		var wanted := 1
+		if region.size() >= 18:
+			wanted = clampi(roundi(float(region.size()) / 28.0), 2, 5)
 		var shelf_scale := clampf(
-			sqrt(float(region.size()) / 38.0), 0.68, 1.15
+			sqrt(float(region.size()) / float(wanted * 18)), 0.74, 1.16
 		)
 		_add_stone_detail(primary, grid, chosen, shelf_scale)
-		if region.size() < 38:
-			continue
-		for cell in interior:
-			if cell == primary:
-				continue
-			var c := grid.coord(cell)
-			var seed := _mix(
-				c.x, c.y, World.seed_value + Terrain.Feature.STONE * 97
-			)
-			if seed % 3 != 0:
-				continue
-			_add_stone_detail(cell, grid, chosen, shelf_scale)
+		while chosen.size() < wanted:
+			var next_cell := -1
+			var next_distance := -1.0
+			for cell in interior:
+				if cell == primary:
+					continue
+				var candidate := grid.to_world(grid.coord(cell))
+				var nearest := INF
+				for existing in chosen:
+					nearest = minf(nearest, candidate.distance_squared_to(existing))
+				if nearest > next_distance:
+					next_distance = nearest
+					next_cell = cell
+			if next_cell == -1 \
+					or next_distance < STONE_SHELF_SPACING * STONE_SHELF_SPACING:
+				break
+			_add_stone_detail(next_cell, grid, chosen, shelf_scale)
 
 
 func _add_stone_detail(
@@ -204,15 +217,19 @@ func _add_stone_detail(
 	var c := grid.coord(cell)
 	var center := grid.to_world(c)
 	for other in chosen:
-		if center.distance_squared_to(other) < 68.0 * 68.0:
+		if center.distance_squared_to(other) \
+				< STONE_SHELF_SPACING * STONE_SHELF_SPACING:
 			return
 	chosen.append(center)
 	var seed := _mix(
 		c.x, c.y, World.seed_value + Terrain.Feature.STONE * 97
 	)
+	var scale_variation := lerpf(
+		0.90, 1.08, float((seed >> 8) % 1024) / 1023.0
+	)
 	_details.append({
 		"feature": Terrain.Feature.STONE, "center": center, "seed": seed,
-		"scale": shelf_scale,
+		"scale": shelf_scale * scale_variation,
 	})
 
 
@@ -411,6 +428,18 @@ func _is_solid_interior(c: Vector2i, feature: int, radius: int, grid: Grid) -> b
 	return true
 
 
+func _is_cross_interior(c: Vector2i, feature: int, grid: Grid) -> bool:
+	const CARDINALS: Array[Vector2i] = [
+		Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT,
+	]
+	if not _is_feature(c, feature, grid):
+		return false
+	for offset in CARDINALS:
+		if not _is_feature(c + offset, feature, grid):
+			return false
+	return true
+
+
 func _draw() -> void:
 	for node in _tree_nodes:
 		_draw_tree_node(node)
@@ -440,20 +469,37 @@ func _draw_tree_node(node: Dictionary) -> void:
 
 
 func _draw_rock_shelf(center: Vector2, seed: int, scale: float) -> void:
-	var outer := _organic_blob(
-		center, seed, 25.0 * scale, 17.0 * scale,
-		16, 3.2 * scale
+	var width_variation := lerpf(
+		0.88, 1.14, float((seed >> 3) % 1024) / 1023.0
 	)
-	var shadow := _offset_points(outer, Vector2(1, 2))
-	var middle := _scaled_points(outer, center, 0.90)
-	var inner := _scaled_points(outer, center + Vector2(-1, -2), 0.68)
-	draw_colored_polygon(shadow, ROCK_LEDGE_SHADOW)
-	draw_colored_polygon(outer, ROCK_EDGE_BASE)
-	draw_colored_polygon(middle, ROCK_MIDDLE)
-	draw_colored_polygon(inner, ROCK_INNER)
-	draw_polyline(_closed(outer), ROCK_OUTER, 1.25, false)
-	draw_polyline(_closed(middle), ROCK_EDGE_BASE, 1.0, false)
-	draw_polyline(_upper_arc(inner), ROCK_HIGHLIGHT, 1.25, false)
+	var height_variation := lerpf(
+		0.88, 1.10, float((seed >> 14) % 1024) / 1023.0
+	)
+	var outer := _organic_blob(
+		center, seed,
+		30.0 * scale * width_variation,
+		21.0 * scale * height_variation,
+		20, 5.0 * scale
+	)
+	# Four stepped layers make this read as raised bedrock instead of a loose
+	# boulder laid on a flat brown patch. The lower offset is intentionally
+	# heavier than the upper highlight: light comes from above-left throughout
+	# the tileset.
+	var shadow := _offset_points(outer, Vector2(0, 3.5 * scale))
+	var bevel := _scaled_points(
+		outer, center + Vector2(-1.0, -1.5) * scale, 0.91
+	)
+	var top := _scaled_points(
+		outer, center + Vector2(-2.0, -3.25) * scale, 0.78
+	)
+	draw_colored_polygon(shadow, ROCK_OUTER)
+	draw_colored_polygon(outer, ROCK_LEDGE_SHADOW)
+	draw_colored_polygon(bevel, ROCK_EDGE_BASE)
+	draw_colored_polygon(top, ROCK_INNER)
+	draw_polyline(_closed(outer), ROCK_OUTER, 1.5, false)
+	draw_polyline(_lower_arc(bevel), ROCK_OUTER, 2.0, false)
+	draw_polyline(_closed(top), ROCK_EDGE_BASE, 1.5, false)
+	draw_polyline(_upper_arc(top), ROCK_HIGHLIGHT, 2.0, false)
 
 
 func _draw_berry_node(node: Dictionary) -> void:
@@ -628,11 +674,18 @@ func _organic_blob(
 		point_count: int, wobble: float
 	) -> PackedVector2Array:
 	var points := PackedVector2Array()
+	var phase_a := float(seed % 628) / 100.0
+	var phase_b := float((seed >> 7) % 628) / 100.0
 	for i in point_count:
 		var angle := TAU * float(i) / float(point_count)
 		var wobble_hash := _mix(i, seed & 0xffff, point_count + 19)
 		var variation := float((wobble_hash >> 10) % 1024) / 1023.0
-		var offset := (variation * 2.0 - 1.0) * wobble
+		# Broad two- and three-lobed waves produce the irregular plateaus in the
+		# concept. A small hashed component keeps separate shelves from sharing
+		# an obvious mathematical outline.
+		var offset := sin(angle * 2.0 + phase_a) * wobble * 0.52 \
+			+ sin(angle * 3.0 - phase_b) * wobble * 0.34 \
+			+ (variation * 2.0 - 1.0) * wobble * 0.28
 		var px := center.x + cos(angle) * (radius_x + offset)
 		var py := center.y + sin(angle) * (radius_y + offset * 0.65)
 		points.append(Vector2(roundf(px), roundf(py)))
@@ -673,6 +726,16 @@ func _upper_arc(points: PackedVector2Array) -> PackedVector2Array:
 	for i in range(halfway, points.size()):
 		arc.append(points[i])
 	arc.append(points[0])
+	return arc
+
+
+func _lower_arc(points: PackedVector2Array) -> PackedVector2Array:
+	var arc := PackedVector2Array()
+	if points.is_empty():
+		return arc
+	var halfway := points.size() / 2
+	for i in range(0, halfway + 1):
+		arc.append(points[i])
 	return arc
 
 

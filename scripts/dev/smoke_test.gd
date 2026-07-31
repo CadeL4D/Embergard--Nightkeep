@@ -73,7 +73,17 @@ func _check_live_colony() -> void:
 	var run: Node2D = RUN_SCENE.instantiate()
 	add_child(run)
 	await get_tree().process_frame
-	run.start_run(2024, TEST_DIFFICULTY)
+	run.start_run(2024, TEST_DIFFICULTY, true)
+	var first_region := Realm.suggested_first_region()
+	_expect(run.found_first_region(first_region), 2024,
+		"the chosen Realm region opens as a local map")
+	await get_tree().process_frame
+	_expect(Colony.population() == 0 and not Sim.running, 2024,
+		"choosing a region does not place the settlement automatically")
+	var picker: CanvasLayer = run.get_node("SitePicker")
+	_expect(picker.visible, 2024, "the local Hearth-site picker opens")
+	run.get_node("RealmMap")._finish_first_selection()
+	run.confirm_site(World.keep_cell)
 	await get_tree().process_frame
 
 	var seed_value := 2024
@@ -142,6 +152,7 @@ func _check_lifecycle(seed_value: int, run: Node2D) -> void:
 			break
 	if felled != -1:
 		World.clear_feature(felled)
+	var wood_orders := DefenseControl.gathering_count(&"woodcutting")
 
 	_expect(RunSave.save(), seed_value, "run saves to disk")
 
@@ -166,6 +177,8 @@ func _check_lifecycle(seed_value: int, run: Node2D) -> void:
 		"weather preparations survive the round trip")
 	_expect(Storyteller.resolved_count == events_resolved, seed_value,
 		"storyteller history survives the round trip")
+	_expect(DefenseControl.gathering_count(&"woodcutting") == wood_orders, seed_value,
+		"gathering designations survive the round trip")
 	if felled != -1:
 		_expect(World.feature_at(felled) == Terrain.Feature.NONE, seed_value,
 			"harvested ground stays harvested after a load")
@@ -214,6 +227,19 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 		"monster catalog loaded (%d defs)" % Monsters.all().size())
 	_expect(Powers.all().size() > 0, seed_value,
 		"power catalog loaded (%d defs)" % Powers.all().size())
+
+	# Earlier live checks deliberately fast-forward the working day. On a slower
+	# runner they remain in DAY; on a faster runner they can reach a natural night
+	# before this isolated first-night check begins. Normalize the director and
+	# clock so the assertion below always measures the night it names. Keep the
+	# existing flow field: rebuilding the entire director here would also erase
+	# the live colony's current navigation state, which this check needs.
+	Sim.set_phase(Sim.Phase.DAY)
+	for monster in Threat.monsters.duplicate():
+		if is_instance_valid(monster):
+			monster.queue_free()
+	await get_tree().process_frame
+	Threat.night_index = 0
 
 	# --- Flow field ------------------------------------------------------------------
 	Threat.mark_field_dirty()
@@ -567,6 +593,25 @@ func _check_building(seed_value: int, run: Node2D) -> void:
 func _check_economy(seed_value: int) -> void:
 	_expect(World.resources.count() > 0, seed_value,
 		"map has harvestable resources (%d)" % World.resources.count())
+	_expect(DefenseControl.gathering_count(&"woodcutting") == 0 \
+			and DefenseControl.gathering_count(&"quarrying") == 0,
+		seed_value, "fresh field jobs have no automatic gathering orders")
+
+	# Exercise the real brush once, then broaden the masks directly for this
+	# time-compressed whole-economy check. The direct fill keeps the test from
+	# spending hundreds of signal emissions painting a 112x112 map.
+	var first_tree := -1
+	for cell in World.grid.cell_count:
+		if World.feature_at(cell) == Terrain.Feature.TREE:
+			first_tree = cell
+			break
+	if first_tree != -1:
+		DefenseControl.set_gather_mode(&"woodcutting")
+		DefenseControl.paint_gather(first_tree)
+		_expect(DefenseControl.gathering_is_designated(&"woodcutting", first_tree),
+			seed_value, "the woodcutting brush marks a tree")
+	DefenseControl.cancel_gather_paint()
+	_designate_all_gathering()
 
 	Colony.set_quota(&"woodcutting", 4)
 	Colony.set_quota(&"quarrying", 2)
@@ -591,6 +636,19 @@ func _check_economy(seed_value: int) -> void:
 		if v.job != &"":
 			working += 1
 	_expect(working > 0, seed_value, "villagers hold job assignments (%d)" % working)
+
+
+func _designate_all_gathering() -> void:
+	for job: JobDef in Jobs.all():
+		if job.target_features.is_empty():
+			continue
+		var mask := PackedByteArray()
+		mask.resize(World.grid.cell_count)
+		for cell in World.grid.cell_count:
+			if job.harvests(World.feature_at(cell)):
+				mask[cell] = 1
+		DefenseControl.gather_designations[job.id] = mask
+	DefenseControl.changed.emit()
 
 
 ## Squared distance from the keep to whichever monster is nearest it.
@@ -819,10 +877,17 @@ func _check_phase0(seed_value: int) -> void:
 	# food source out of the starting area on every single seed.
 	var grid: Grid = World.grid
 	var berries := 0
+	var stone_cells := 0
 	for i in grid.cell_count:
 		if World.feature_at(i) == Terrain.Feature.BERRIES:
 			berries += 1
+		elif World.feature_at(i) == Terrain.Feature.STONE:
+			stone_cells += 1
 	_expect(berries > 0, seed_value, "the map has berries on it (%d)" % berries)
+	_expect(berries < 400, seed_value,
+		"berry thickets stay compact rather than taking over the map (%d)" % berries)
+	_expect(stone_cells >= 29, seed_value,
+		"every local map has at least one substantial quarry (%d cells)" % stone_cells)
 
 	# Water used to be filled in out to radius 7, so a lakeside site had its lake paved
 	# over. Only the pad is guaranteed dry now.

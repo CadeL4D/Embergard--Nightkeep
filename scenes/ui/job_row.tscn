@@ -11,12 +11,19 @@ size_flags_vertical = 3
 color = Color(1, 1, 1, 1)
 
 [node name="JobName" type="Label" parent="."]
-custom_minimum_size = Vector2(70, 0)
+custom_minimum_size = Vector2(58, 0)
 layout_mode = 2
 size_flags_vertical = 1
 theme_override_font_sizes/font_size = 10
 text = "Job"
 vertical_alignment = 1
+
+[node name="AreaButton" type="Button" parent="."]
+custom_minimum_size = Vector2(36, 22)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 8
+text = "UI_MARK_AREA"
 
 [node name="MinusButton" type="Button" parent="."]
 custom_minimum_size = Vector2(22, 22)
@@ -26,7 +33,7 @@ theme_override_font_sizes/font_size = 12
 text = "−"
 
 [node name="Slider" type="HSlider" parent="."]
-custom_minimum_size = Vector2(64, 22)
+custom_minimum_size = Vector2(52, 22)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 1
@@ -41,7 +48,7 @@ theme_override_font_sizes/font_size = 12
 text = "+"
 
 [node name="Count" type="Label" parent="."]
-custom_minimum_size = Vector2(34, 0)
+custom_minimum_size = Vector2(30, 0)
 layout_mode = 2
 size_flags_vertical = 1
 theme_override_font_sizes/font_size = 10

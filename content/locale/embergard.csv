@@ -23,7 +23,7 @@ UI_MASTER,Master
 UI_MUSIC,Music
 UI_SOUND,Sound
 UI_AUDIO_PENDING,Sound design is not in yet — these are wired and waiting.
-UI_JOB_BOARD_HINT,assign survivors — unassigned drift to the lowest job
+UI_JOB_BOARD_HINT,assign survivors · Area marks resources they may gather
 UI_PLACEMENT_HINT,drag to move · tap to build
 UI_PLACEMENT_TAP_TO_BUILD,{0} · tap to build
 UI_SPEED,{0}x
@@ -383,7 +383,7 @@ TUTORIAL_WELCOME_BODY,"Drag to pan and pinch or use the mouse wheel to zoom. The
 TUTORIAL_EMBER_TITLE,Carry the Ember
 TUTORIAL_EMBER_BODY,Tap empty ground to move the Ember. Its light protects survivors and burns the Blight at night. Drag the bright flame directly when you need precise control.
 TUTORIAL_JOBS_TITLE,Guide work with quotas
-TUTORIAL_JOBS_BODY,"Open the Job Board and use minus, plus or the sliders to decide how many survivors take each role. People change jobs instead of receiving constant individual orders."
+TUTORIAL_JOBS_BODY,"Open the Job Board and use minus, plus or the sliders to assign roles. Gathering jobs wait for orders: tap Area then paint the trees, stone or berries they may take. Change the brush radius or erase marks at any time."
 TUTORIAL_BUILD_TITLE,Place with confidence
 TUTORIAL_BUILD_BODY,Move the green ghost to valid ground and confirm it. On desktop you can drag roads and palisades into a whole line; right-click or Escape cancels.
 TUTORIAL_DUSK_TITLE,Dusk is your warning
@@ -549,3 +549,11 @@ PAUSE_SAVE_MENU,Save and return to main menu
 PAUSE_SAVE_NOTE,Your active colony and Realm will be saved before leaving.
 SUMMARY_NO_SURVIVORS,Game over · no survivors
 SUMMARY_NO_SURVIVORS_BODY,The last villager has fallen. This run has ended and its active save has been retired.
+UI_MARK_AREA,Area
+UI_DONE,Done
+GATHER_PAINT,Mark
+GATHER_ERASE,Erase
+GATHER_RADIUS,Radius {0}
+GATHER_BRUSH_HINT,Paint resources to gather
+GATHER_BRUSH_STATUS,{0} · {1} marked
+GATHER_AREA_TOOLTIP,Choose where {0} may gather

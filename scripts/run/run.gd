@@ -36,12 +36,16 @@ const SKY_COLORS := {
 @onready var sky: CanvasModulate = $Sky
 @onready var ember: Node2D = $Ember
 @onready var realm_map: Node = get_node_or_null("RealmMap")
+@onready var site_picker: Node = get_node_or_null("SitePicker")
 
 var _sky_from: Color = Color.WHITE
 var _sky_to: Color = Color.WHITE
 ## The seed being played. Held because confirming a site has to regenerate with it, and by
 ## then the caller's argument is long gone.
 var _pending_seed: int = 0
+## The realm square chosen on the macro map. Choosing the region only opens its
+## local map; the colony is not founded until the player confirms a Hearth site.
+var _pending_first_region: StringName = &""
 
 ## Set once the run is over, so the end sequence cannot fire twice — a keep can be
 ## destroyed on the same frame its last villager dies.
@@ -105,12 +109,19 @@ func _resume() -> bool:
 ## working unchanged and headlessly; only the New World flow turns it on.
 func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool = false) -> void:
 	_clear_entities()
+	# Site selection is pre-game, not the previous colony continuing behind a
+	# modal map. Clear all live run state and halt the clock before either picker.
+	Sim.stop_run()
+	Colony.reset()
+	Divine.reset()
+	Threat.reset()
 	_ended = false
 	_buildings_raised = 0
 	_monsters_defeated = 0
 	_villagers_lost = 0
 	_story_events = 0
 	_pending_seed = seed_value
+	_pending_first_region = &""
 	RunSave.clear()
 
 	# Settled before anything reads it: the founding band size and the first night's
@@ -147,15 +158,39 @@ func _begin_region_selection() -> void:
 		realm_map.open_for_first_settlement()
 
 
-## Commit to one macro square and raise the first colony on its derived local map.
+## Open one macro square as a local map. This deliberately stops short of founding:
+## the player still has to choose the Hearth's exact tile on that map.
 func found_first_region(site_id: StringName) -> bool:
 	var check := Realm.can_found_first(site_id)
 	if not bool(check["ok"]):
 		return false
 	var region := Realm.site(site_id)
 	World.generate(int(region["seed"]), -1, region)
-	_found_colony(_pending_seed, site_id)
+	_pending_first_region = site_id
+	camera.center_on_cell(World.keep_cell)
+	if site_picker != null:
+		site_picker.begin(World.keep_cell)
+	else:
+		# A stripped-down developer scene may omit the picker. Preserve a usable
+		# fallback there without skipping the choice in the shipped run scene.
+		_found_colony(_pending_seed, site_id)
 	return true
+
+
+## Confirm the local tile selected by SitePicker, regenerate all keep-dependent
+## passes around it, and only now create the colony.
+func confirm_site(cell: int) -> void:
+	if _pending_first_region == &"" or not World.grid.is_valid_index(cell):
+		return
+	var region := Realm.site(_pending_first_region)
+	if region.is_empty():
+		return
+	var site_id := _pending_first_region
+	_pending_first_region = &""
+	World.generate(int(region["seed"]), cell, region)
+	if site_picker != null:
+		site_picker.finish()
+	_found_colony(_pending_seed, site_id)
 
 
 func _found_colony(seed_value: int, site_id: StringName) -> void:

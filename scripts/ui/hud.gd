@@ -37,6 +37,16 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Cleanse
 @onready var _job_panel: PanelContainer = $SafeArea/Layout/BottomRow/JobPanel
 @onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll/Rows
+@onready var _gather_bar: PanelContainer = $SafeArea/Layout/BottomRow/GatherBar
+@onready var _gather_done: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/DoneButton
+@onready var _gather_status: Label = $SafeArea/Layout/BottomRow/GatherBar/Row/Status
+@onready var _gather_radius_minus: Button = \
+	$SafeArea/Layout/BottomRow/GatherBar/Row/RadiusMinus
+@onready var _gather_radius_label: Label = $SafeArea/Layout/BottomRow/GatherBar/Row/Radius
+@onready var _gather_radius_plus: Button = \
+	$SafeArea/Layout/BottomRow/GatherBar/Row/RadiusPlus
+@onready var _gather_paint: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/PaintButton
+@onready var _gather_erase: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/EraseButton
 @onready var _build_panel: PanelContainer = $SafeArea/Layout/BottomRow/BuildPanel
 @onready var _tabs: HBoxContainer = $SafeArea/Layout/BottomRow/BuildPanel/Layout/Tabs
 @onready var _cards: HBoxContainer = \
@@ -153,9 +163,15 @@ func _ready() -> void:
 	_shelter_button.pressed.connect(DefenseControl.toggle_shelter)
 	_dusk_button.pressed.connect(DefenseControl.toggle_dusk_lock)
 	_cleanse_button.pressed.connect(DefenseControl.start_cleanse)
+	_gather_done.pressed.connect(DefenseControl.cancel_gather_paint)
+	_gather_radius_minus.pressed.connect(DefenseControl.adjust_gather_radius.bind(-1))
+	_gather_radius_plus.pressed.connect(DefenseControl.adjust_gather_radius.bind(1))
+	_gather_paint.pressed.connect(DefenseControl.set_gather_erasing.bind(false))
+	_gather_erase.pressed.connect(DefenseControl.set_gather_erasing.bind(true))
 	DefenseControl.changed.connect(_refresh_control_panel)
 	DefenseControl.paint_mode_changed.connect(func(_mode: int) -> void:
 		_refresh_control_panel())
+	DefenseControl.gather_mode_changed.connect(_on_gather_mode_changed)
 	# The build menu is gated on the Village Center tier and on headcount, so raising the Hearth or
 	# taking in survivors can unlock cards mid-run. Rebuilding on those two events is what makes
 	# that moment visible — an unlock nobody notices is not a reward.
@@ -216,6 +232,7 @@ func _build_rows() -> void:
 
 		var swatch: ColorRect = row.get_node("Swatch")
 		var name_label: Label = row.get_node("JobName")
+		var area_button: Button = row.get_node("AreaButton")
 		var minus_button: Button = row.get_node("MinusButton")
 		var slider: HSlider = row.get_node("Slider")
 		var plus_button: Button = row.get_node("PlusButton")
@@ -224,6 +241,10 @@ func _build_rows() -> void:
 		swatch.color = job.color
 		name_label.text = tr(job.display_name)
 		name_label.add_theme_color_override("font_color", job.color)
+		area_button.visible = not job.target_features.is_empty()
+		area_button.tooltip_text = L10n.t(&"GATHER_AREA_TOOLTIP", [tr(job.display_name)])
+		if area_button.visible:
+			area_button.pressed.connect(_on_gather_area.bind(job.id))
 		slider.value = Colony.quota_of(job.id)
 		slider.value_changed.connect(_on_slider_changed.bind(job.id))
 		minus_button.pressed.connect(_nudge_job.bind(job.id, -1))
@@ -233,6 +254,7 @@ func _build_rows() -> void:
 			"root": row,
 			"slider": slider,
 			"count": count,
+			"area": area_button,
 			"minus": minus_button,
 			"plus": plus_button,
 		}
@@ -255,11 +277,44 @@ func _nudge_job(job_id: StringName, delta: int) -> void:
 func _on_jobs_toggled(pressed: bool) -> void:
 	_job_panel.visible = pressed
 	if pressed:
+		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
 		_build_button.button_pressed = false
 		_control_button.button_pressed = false
 	_refresh_selection()
 	_refresh_building_card()
+
+
+func _on_gather_area(job_id: StringName) -> void:
+	DefenseControl.set_gather_mode(job_id)
+
+
+func _on_gather_mode_changed(job_id: StringName, erasing: bool, radius: int) -> void:
+	if not is_node_ready():
+		return
+	var active := job_id != &""
+	_gather_bar.visible = active
+	if not active:
+		return
+	_job_panel.visible = false
+	_jobs_button.set_pressed_no_signal(false)
+	_build_button.set_pressed_no_signal(false)
+	_control_button.set_pressed_no_signal(false)
+	_build_panel.visible = false
+	_control_panel.visible = false
+	_breakdown.visible = false
+	if _placement != null and _placement.active:
+		_placement.cancel()
+	var job := Jobs.get_job(job_id)
+	_gather_status.text = L10n.t(&"GATHER_BRUSH_STATUS", [
+		tr(job.display_name) if job != null else String(job_id),
+		DefenseControl.gathering_count(job_id),
+	])
+	_gather_radius_label.text = L10n.t(&"GATHER_RADIUS", [radius])
+	_gather_radius_minus.disabled = radius <= DefenseControl.GATHER_RADIUS_MIN
+	_gather_radius_plus.disabled = radius >= DefenseControl.GATHER_RADIUS_MAX
+	_gather_paint.set_pressed_no_signal(not erasing)
+	_gather_erase.set_pressed_no_signal(erasing)
 
 
 # --- Build menu ------------------------------------------------------------------------
@@ -466,6 +521,7 @@ func _on_storage_priority() -> void:
 func _on_build_toggled(pressed: bool) -> void:
 	_build_panel.visible = pressed
 	if pressed:
+		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
 		_jobs_button.button_pressed = false
 		_control_button.button_pressed = false
@@ -479,6 +535,7 @@ func _on_build_toggled(pressed: bool) -> void:
 func _on_control_toggled(pressed: bool) -> void:
 	_control_panel.visible = pressed
 	if pressed:
+		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
 		_jobs_button.button_pressed = false
 		_build_button.button_pressed = false
@@ -534,6 +591,7 @@ func _on_cancel() -> void:
 
 
 func _on_realm() -> void:
+	DefenseControl.cancel_gather_paint()
 	var realm_map := get_node_or_null("../RealmMap")
 	if realm_map != null and realm_map.has_method("open"):
 		realm_map.open()
@@ -548,6 +606,7 @@ func _on_placement_changed(active: bool, status: String, valid: bool) -> void:
 		_refresh_selection()
 		_refresh_building_card()
 		return
+	DefenseControl.cancel_gather_paint()
 	_breakdown.visible = false
 	_jobs_button.button_pressed = false
 	_control_button.button_pressed = false
@@ -598,6 +657,7 @@ func _on_power_pressed(def: PowerDef) -> void:
 	_jobs_button.button_pressed = false
 	_build_button.button_pressed = false
 	_control_button.button_pressed = false
+	DefenseControl.cancel_gather_paint()
 	_god_hand.arm(def)
 
 
@@ -707,6 +767,11 @@ func _process(delta: float) -> void:
 	_refresh_building_card()
 	if _job_panel.visible:
 		_refresh_counts()
+	if _gather_bar.visible:
+		_on_gather_mode_changed(
+			DefenseControl.gather_job,
+			DefenseControl.gather_erasing,
+			DefenseControl.gather_radius)
 	if _build_panel.visible:
 		_refresh_cards()
 	if _control_panel.visible:
@@ -767,6 +832,7 @@ func _on_resource_bar_input(event: InputEvent) -> void:
 	_tap_frame = frame
 	var opening := not _breakdown.visible
 	if opening:
+		DefenseControl.cancel_gather_paint()
 		_jobs_button.button_pressed = false
 		_build_button.button_pressed = false
 		_control_button.button_pressed = false
@@ -790,6 +856,7 @@ func _on_migrants_arrived(count: int) -> void:
 	# Closing them keeps the prompt inside the safe area even when the resource
 	# ledger or job board had been open on a short phone display.
 	_breakdown.visible = false
+	DefenseControl.cancel_gather_paint()
 	_jobs_button.button_pressed = false
 	_build_button.button_pressed = false
 	_control_button.button_pressed = false
@@ -852,6 +919,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed(&"game_cancel"):
 		if _placement != null and _placement.active:
 			_placement.cancel()
+		elif DefenseControl.gather_job != &"":
+			DefenseControl.cancel_gather_paint()
 		else:
 			_jobs_button.button_pressed = false
 			_build_button.button_pressed = false
@@ -897,7 +966,8 @@ func _refresh_selection() -> void:
 ## rule and a hard layout guarantee for the 360 px-tall mobile viewport.
 func _action_panel_open() -> bool:
 	return _breakdown.visible or _job_panel.visible or _build_panel.visible \
-		or _control_panel.visible or _placement_bar.visible or _migrant_prompt.visible
+		or _control_panel.visible or _placement_bar.visible or _gather_bar.visible \
+		or _migrant_prompt.visible
 
 
 func _refresh() -> void:

@@ -11,7 +11,7 @@ shader_type canvas_item;
 // coloured fog hovering above the world. Corruption is supposed to BE the terrain: the soil itself
 // has turned. So:
 //
-//   * no UV warp, so edges land on tile boundaries like every other tile in the game
+//   * quantised pixel jitter at the frontier, so the edge is rugged without becoming fog
 //   * fully OPAQUE where the ground has been taken — clean grass does not show through
 //   * the frontier fades by ORDERED DITHER, dropping whole pixels, which is how pixel art fades
 //   * per-pixel speckle at the game's 16px tile resolution, so corrupted ground carries the same
@@ -65,16 +65,23 @@ float bayer4(vec2 p) {
 }
 
 void fragment() {
-	// One intensity per TILE. The texture is one texel per tile and sampled nearest, so this is
-	// already quantised — the old version's warp is what smeared it across boundaries.
-	float intensity = texture(blight_tex, UV).r;
+	// Sample with a stable, whole-pixel offset. Only pixels within two game pixels
+	// of a changed texel can cross a boundary, producing a chipped pixel-art edge
+	// while interiors remain exactly one intensity per tile.
+	vec2 px = floor(UV * grid_size * tile_px);
+	vec2 block = floor(px * 0.5);
+	vec2 jitter = floor(vec2(
+		hash12(block + vec2(13.0, 41.0)),
+		hash12(block + vec2(71.0, 19.0))) * 5.0) - 2.0;
+	vec2 sample_px = clamp(px + jitter, vec2(0.0), grid_size * tile_px - vec2(1.0));
+	vec2 sample_uv = (sample_px + vec2(0.5)) / (grid_size * tile_px);
+	float intensity = texture(blight_tex, sample_uv).r;
 	if (intensity <= 0.003) {
 		discard;
 	}
 
 	// World pixel coordinate, so speckle is stable in the world rather than swimming with the
 	// camera, and always lands on whole game pixels.
-	vec2 px = floor(UV * grid_size * tile_px);
 
 	// Above the takeover line the TILE is corrupted terrain, baked from CORRUPT_GROUND — so this
 	// steps aside entirely. The shader's only remaining job is the band between "just infected"

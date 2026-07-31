@@ -600,10 +600,15 @@ func _flash() -> void:
 
 func _refresh_visuals() -> void:
 	if state == State.COMPLETE:
+		# Finished paths are rendered as one connected surface by PathSurfaceView.
+		# Keep their ordinary sprite for blueprints so placement remains legible.
+		_sprite.visible = def.path_tier <= 0
 		_sprite.modulate = Color.WHITE
 		_progress_back.visible = false
 		_progress_fill.visible = false
 		return
+
+	_sprite.visible = true
 
 	# Being pulled apart. Warm and fading rather than the cold blue of a blueprint, so a teardown
 	# never reads as something going up — the two are opposite intentions and the player has to be

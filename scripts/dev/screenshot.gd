@@ -18,8 +18,14 @@ const SHOTS := [
 		"panel": "", "focus": "stone"},
 	{"name": "01c_berries_close", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0,
 		"panel": "", "focus": "berries"},
+	{"name": "01d_blight_edge", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0,
+		"panel": "", "focus": "blight"},
 	{"name": "02_day_default", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.0, "panel": ""},
+	{"name": "02b_paths_close", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0,
+		"panel": "", "focus": "paths"},
 	{"name": "03_job_board", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.0, "panel": "jobs"},
+	{"name": "03b_gather_brush", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.5,
+		"panel": "gather", "focus": "trees"},
 	{"name": "04_build_menu", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.0, "panel": "build"},
 	{"name": "05_dusk", "phase": Sim.Phase.DUSK, "settle": 0.4, "zoom": 1.5, "panel": ""},
 	{"name": "06_night", "phase": Sim.Phase.NIGHT, "settle": 3.0, "zoom": 1.0, "panel": "", "monsters": 18},
@@ -30,6 +36,9 @@ var _run: Node2D
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
+	# Developer captures must show the world being inspected, never a profile's
+	# contextual guidance card. This is in-memory only and does not change settings.
+	Accessibility.tutorials_enabled = false
 	_run = RUN_SCENE.instantiate()
 	add_child(_run)
 	await get_tree().process_frame
@@ -64,6 +73,13 @@ func _seed_buildings() -> void:
 	# A short palisade run, to check that walls tile into a readable line.
 	for i in range(-5, 6):
 		_place(&"palisade", grid.index(keep.x + i, keep.y + 4), entities)
+
+	# Finished path/road surfaces are rendered as connected world geometry, so keep
+	# a short bend in the standard capture for transition regressions.
+	for i in range(-5, 5):
+		_place(&"path", grid.index(keep.x + i, keep.y + 6), entities)
+	for i in range(0, 5):
+		_place(&"path", grid.index(keep.x + 4, keep.y + 6 + i), entities)
 
 
 ## Drop attackers near the keep so a night shot shows an actual assault rather than
@@ -112,8 +128,11 @@ func _capture_all() -> void:
 	var build_button: Button = bottom.get_node("ButtonsClip/Buttons/BuildButton")
 	for shot: Dictionary in SHOTS:
 		var panel: String = shot.get("panel", "")
+		DefenseControl.cancel_gather_paint()
 		jobs_button.button_pressed = panel == "jobs"
 		build_button.button_pressed = panel == "build"
+		if panel == "gather":
+			DefenseControl.set_gather_mode(&"woodcutting")
 		_seed_monsters(int(shot.get("monsters", 0)))
 		Sim.set_phase(shot["phase"])
 		# Push the phase most of the way through so the sky tint has actually
@@ -125,6 +144,14 @@ func _capture_all() -> void:
 			focus_cell = _best_resource_focus(Terrain.Feature.STONE)
 		elif shot.get("focus", "") == "berries":
 			focus_cell = _best_resource_focus(Terrain.Feature.BERRIES)
+		elif shot.get("focus", "") == "trees":
+			focus_cell = _best_resource_focus(Terrain.Feature.TREE)
+			DefenseControl.paint_gather(focus_cell)
+		elif shot.get("focus", "") == "paths":
+			var keep := World.grid.coord(World.keep_cell)
+			focus_cell = World.grid.index(keep.x, keep.y + 6)
+		elif shot.get("focus", "") == "blight" and not World.nest_cells.is_empty():
+			focus_cell = World.nest_cells[0]
 		camera.center_on_cell(focus_cell)
 
 		await get_tree().create_timer(shot["settle"]).timeout
@@ -150,20 +177,36 @@ func _capture_all() -> void:
 func _best_resource_focus(feature: int) -> int:
 	var grid: Grid = World.grid
 	var best := World.keep_cell
-	var best_neighbours := -1
-	for cell in grid.cell_count:
-		if World.feature[cell] != feature:
+	var best_size := 0
+	var visited := PackedByteArray()
+	visited.resize(grid.cell_count)
+	for start in grid.cell_count:
+		if visited[start] != 0 or World.feature[start] != feature:
 			continue
-		var c := grid.coord(cell)
-		var neighbours := 0
-		for dy in range(-1, 2):
-			for dx in range(-1, 2):
-				if dx == 0 and dy == 0:
+		var region := PackedInt32Array([start])
+		var queue := PackedInt32Array([start])
+		visited[start] = 1
+		var centroid := Vector2.ZERO
+		var head := 0
+		while head < queue.size():
+			var cell := queue[head]
+			head += 1
+			var c := grid.coord(cell)
+			centroid += Vector2(c)
+			for neighbour in grid.neighbours_4(cell):
+				if visited[neighbour] != 0 or World.feature[neighbour] != feature:
 					continue
-				var n := c + Vector2i(dx, dy)
-				if grid.is_valid_v(n) and World.feature[grid.index_v(n)] == feature:
-					neighbours += 1
-		if neighbours > best_neighbours:
-			best_neighbours = neighbours
-			best = cell
+				visited[neighbour] = 1
+				queue.append(neighbour)
+				region.append(neighbour)
+		if region.size() <= best_size:
+			continue
+		best_size = region.size()
+		centroid /= float(region.size())
+		var nearest := INF
+		for cell in region:
+			var distance := Vector2(grid.coord(cell)).distance_squared_to(centroid)
+			if distance < nearest:
+				nearest = distance
+				best = cell
 	return best
