@@ -13,6 +13,7 @@ category = &"logistics"
 tier = 1
 footprint = Vector2i(1, 1)
 blocks_movement = false
+drag_placeable = true
 max_blight = 90
 path_tier = 1
 cost = {

@@ -239,3 +239,10 @@ func start_run() -> void:
 func stop_run() -> void:
 	running = false
 	agents.clear()
+
+
+## Resume after swapping the awake colony without resetting the Realm-wide calendar.
+func resume_run() -> void:
+	_accum = 0.0
+	running = true
+	Events.speed_changed.emit(speed_scale(), paused)

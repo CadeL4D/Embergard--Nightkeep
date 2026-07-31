@@ -344,6 +344,8 @@ func _spawn_one(def: MonsterDef, stat_scale: float) -> void:
 	var cell := _spawn_cell()
 	if cell == -1:
 		return
+	if Realm.intercept_threat(cell, def.threat_cost):
+		return
 	var m: Monster = MONSTER_SCENE.instantiate()
 	# Totems empower the horde. Folded into the same stat_scale the overflow director already uses,
 	# rather than a second multiplier on Monster — one place decides how tough a spawn is.

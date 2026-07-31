@@ -143,13 +143,13 @@ func tick_hint() -> int:
 
 # --- Generation ---------------------------------------------------------------------
 
-## Build the world. `keep_override` forces the keep site; -1 lets the generator score one.
-## See MapGen.generate — the site picker regenerates with the player's cell.
-func generate(new_seed: int, keep_override: int = -1) -> void:
+## Build one local map. `keep_override` restores an existing colony's center; `region_profile`
+## makes a new map reflect the selected macro biome and its resources.
+func generate(new_seed: int, keep_override: int = -1, region_profile: Dictionary = {}) -> void:
 	seed_value = new_seed
 	grid.resize(MAP_WIDTH, MAP_HEIGHT)
 
-	var result := MapGen.generate(grid, new_seed, keep_override)
+	var result := MapGen.generate(grid, new_seed, keep_override, region_profile)
 	terrain = result.terrain
 	feature = result.feature
 	keep_cell = result.keep_cell
@@ -182,12 +182,55 @@ func generate(new_seed: int, keep_override: int = -1) -> void:
 	blight_field.setup(self)
 	for nest in nest_cells:
 		blight_field.seed_at(nest, 200)
+	_seed_regional_blight(region_profile)
 
 	rebuild_move_cost()
 	_build_shore_index()
 	paths.setup(self)
 	resources.setup(self)
 	Events.map_generated.emit()
+
+
+func _seed_regional_blight(region_profile: Dictionary) -> void:
+	if region_profile.is_empty():
+		return
+	var corruption := float(region_profile.get("corruption", 0.0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value ^ 0x6A09E667
+	var keep := grid.coord(keep_cell)
+	var patch_centers: Array[Vector2i] = []
+	var wanted_patches := 2 + int(round(corruption * 3.0))
+	for _patch in wanted_patches:
+		var center := Vector2i(-1, -1)
+		for _attempt in 240:
+			var candidate := grid.coord(rng.randi_range(0, grid.cell_count - 1))
+			if not Terrain.WALKABLE.get(terrain[grid.index_v(candidate)], false):
+				continue
+			if Vector2(candidate - keep).length() < 18.0:
+				continue
+			var clear := true
+			for existing: Vector2i in patch_centers:
+				if Vector2(candidate - existing).length() < 12.0:
+					clear = false
+					break
+			if clear:
+				center = candidate
+				break
+		if center.x < 0:
+			continue
+		patch_centers.append(center)
+		var cells_in_patch := 2 + int(round(corruption * 3.0))
+		var offsets := [
+			Vector2i.ZERO, Vector2i.RIGHT, Vector2i.DOWN,
+			Vector2i.LEFT, Vector2i.UP,
+		]
+		for i in mini(cells_in_patch, offsets.size()):
+			var point: Vector2i = center + offsets[i]
+			if not grid.is_valid_v(point):
+				continue
+			var cell := grid.index_v(point)
+			if Terrain.WALKABLE.get(terrain[cell], false):
+				blight_field.seed_at(cell, int(42.0 + corruption * 72.0))
 
 
 ## Find every walkable cell that touches open water. Must run after rebuild_move_cost,

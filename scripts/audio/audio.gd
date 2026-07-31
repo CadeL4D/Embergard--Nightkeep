@@ -33,13 +33,30 @@ var _sfx: Dictionary = {}
 ## would make a wave of ten monsters dying sound like one monster dying.
 var _pool: Array[AudioStreamPlayer] = []
 var _pool_cursor: int = 0
+var _music_player: AudioStreamPlayer
+var _music_playback: AudioStreamGeneratorPlayback
+var _music_time: float = 0.0
+var _drone_phase: float = 0.0
+var _fifth_phase: float = 0.0
+var _melody_phase: float = 0.0
+var _night_blend: float = 0.0
+var _target_night_blend: float = 0.0
+var _resource_amounts: Dictionary = {}
+var _last_resource_sound_ms: int = 0
 
 const POOL_SIZE := 12
+const MUSIC_RATE := 22050.0
+const MUSIC_BUFFER := 0.55
+const MUSIC_ROOT := 146.832
 
 
 func _ready() -> void:
 	_ensure_buses()
 	load_settings()
+	_register_catalog()
+	_build_music()
+	_wire_events()
+	set_process(true)
 
 
 # --- Buses -----------------------------------------------------------------------------
@@ -116,20 +133,140 @@ func register_sfx(id: StringName, stream: AudioStream) -> void:
 
 ## Fire a one-shot. Unknown ids are silently ignored — that is what lets call sites be
 ## written before the sound design lands.
-func play_sfx(id: StringName, pitch_variance: float = 0.08) -> void:
+func play_sfx(id: StringName, pitch_variance: float = 0.08,
+		bus: StringName = BUS_SFX) -> void:
 	var stream: AudioStream = _sfx.get(id)
 	if stream == null or _pool.is_empty():
 		return
 	var p := _pool[_pool_cursor]
 	_pool_cursor = (_pool_cursor + 1) % _pool.size()
 	p.stream = stream
+	p.bus = bus
 	# A touch of pitch scatter. Twenty identical one-shots in a night wave is the single
 	# fastest way to make a soundscape grating.
 	p.pitch_scale = 1.0 + randf_range(-pitch_variance, pitch_variance)
 	p.play()
+	Accessibility.pulse(12, 0.32)
 
 
 ## Hook for the procedural music layer. No-ops until that exists, so the phase machine can
 ## already be wired to it.
-func set_music_mood(_phase: int) -> void:
-	pass
+func set_music_mood(phase: int) -> void:
+	_target_night_blend = 1.0 if phase == Sim.Phase.NIGHT else (
+		0.58 if phase == Sim.Phase.DUSK else 0.22 if phase == Sim.Phase.DAWN else 0.0)
+
+
+func _register_catalog() -> void:
+	for id: StringName in AudioData.SFX_IDS:
+		var path := "res://assets/audio/sfx/%s.wav" % id
+		var stream := load(path) as AudioStream
+		if stream != null:
+			register_sfx(id, stream)
+
+
+func _build_music() -> void:
+	_music_player = AudioStreamPlayer.new()
+	_music_player.name = "ProceduralMusic"
+	_music_player.bus = BUS_MUSIC
+	var generator := AudioStreamGenerator.new()
+	generator.mix_rate = MUSIC_RATE
+	generator.buffer_length = MUSIC_BUFFER
+	_music_player.stream = generator
+	add_child(_music_player)
+	_music_player.play()
+	_music_playback = _music_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+
+func _wire_events() -> void:
+	Events.phase_changed.connect(func(phase: int, _duration: float) -> void:
+		set_music_mood(phase)
+		if phase == Sim.Phase.DAWN:
+			play_sfx(&"dawn", 0.01)
+	)
+	Events.building_placed.connect(func(_building: Node) -> void:
+		play_sfx(&"build_place", 0.05)
+	)
+	Events.building_completed.connect(func(_building: Node) -> void:
+		play_sfx(&"build_complete", 0.04)
+	)
+	Events.resources_changed.connect(_on_resource_changed)
+	Events.power_cast.connect(func(_id: StringName, _pos: Vector2) -> void:
+		play_sfx(&"power_cast", 0.04)
+	)
+	Events.wave_incoming.connect(func(_size: int, _composition: Dictionary) -> void:
+		play_sfx(&"wave", 0.025)
+	)
+	Events.monster_died.connect(func(_monster: Node) -> void:
+		play_sfx(&"monster_die", 0.12)
+	)
+	Events.villager_died.connect(func(_villager: Node, _cause: StringName) -> void:
+		play_sfx(&"villager_die", 0.035)
+	)
+	Events.tome_written.connect(func(_tier: int) -> void:
+		play_sfx(&"tome_written", 0.025)
+	)
+	Events.notice.connect(func(_text: String, urgency: int) -> void:
+		if urgency >= 2:
+			play_sfx(&"warning", 0.02)
+	)
+	get_tree().node_added.connect(_on_node_added)
+	for child in get_tree().root.find_children("*", "BaseButton", true, false):
+		_connect_button(child as BaseButton)
+
+
+func _on_node_added(node: Node) -> void:
+	if node is BaseButton:
+		_connect_button(node as BaseButton)
+
+
+func _connect_button(button: BaseButton) -> void:
+	if button.has_meta("audio_connected"):
+		return
+	button.set_meta("audio_connected", true)
+	button.pressed.connect(func() -> void:
+		var back_like := button.name.contains("Back") or button.name.contains("Cancel") \
+			or button.name.contains("Close")
+		play_sfx(&"ui_back" if back_like else &"ui_press", 0.025, BUS_UI)
+	)
+
+
+func _on_resource_changed(kind: StringName, amount: int) -> void:
+	var previous := int(_resource_amounts.get(kind, amount))
+	_resource_amounts[kind] = amount
+	var now := Time.get_ticks_msec()
+	if amount > previous and now - _last_resource_sound_ms > 140:
+		_last_resource_sound_ms = now
+		play_sfx(&"resource_drop", 0.08)
+
+
+func _process(delta: float) -> void:
+	_night_blend = move_toward(_night_blend, _target_night_blend, delta * 0.22)
+	if _music_playback == null:
+		return
+	var frames := mini(_music_playback.get_frames_available(), 4096)
+	for _i in frames:
+		_music_playback.push_frame(_music_frame())
+
+
+## Infinite modal score: Dorian by day, Aeolian at night, with a constant root/fifth drone.
+## There is no song boundary to become repetitive during a long world and no per-frame allocation.
+func _music_frame() -> Vector2:
+	var dt := 1.0 / MUSIC_RATE
+	_music_time += dt
+	var root := MUSIC_ROOT * lerpf(1.0, 0.5, _night_blend)
+	_drone_phase = fmod(_drone_phase + TAU * root * dt, TAU)
+	_fifth_phase = fmod(_fifth_phase + TAU * root * 1.4983 * dt, TAU)
+	var step := int(_music_time / 1.45)
+	var day_scale := [0, 2, 3, 5, 7, 9, 10]
+	var night_scale := [0, 2, 3, 5, 7, 8, 10]
+	var index := absi(step * 17 + 11) % day_scale.size()
+	var semitone := lerpf(float(day_scale[index]), float(night_scale[index]), _night_blend)
+	var melody_hz := root * 2.0 * pow(2.0, semitone / 12.0)
+	_melody_phase = fmod(_melody_phase + TAU * melody_hz * dt, TAU)
+	var local := fmod(_music_time, 1.45)
+	var envelope := exp(-local * 2.4) * (0.45 if step % 3 != 1 else 0.0)
+	var drone := sin(_drone_phase) * 0.045 + sin(_fifth_phase) * 0.024
+	var melody := sin(_melody_phase) * envelope * 0.026
+	var breath := sin(_music_time * TAU / 12.0) * 0.006
+	var sample := drone + melody + breath
+	return Vector2(sample, sample * 0.96)

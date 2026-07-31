@@ -1,32 +1,62 @@
 extends Node2D
-## Region-wide boundaries and sparse surface contours for forests and quarries.
+## Cohesive resource art for forests, quarries, and berry thickets.
 ##
 ## A connected feature is still made from 16 px simulation cells, but exposing that
 ## staircase makes every grove and quarry look boxy. This view-only layer traces the
 ## outline of each entire connected region, rounds that path, and draws the perimeter
-## as one continuous contour. It also chooses deterministic solid-interior points for
-## broad, irregular surface shapes that cannot fit in one atlas cell without repeating.
+## as one continuous contour. Tree and berry cells receive overlapping, harvest-readable
+## crowns, while quarries receive broad raised shelves tied to the shared rock body.
 ## Nothing here enters World.feature, pathing or saves.
 
 const FOREST_EDGE_BASE := Color("1b3823")
-const FOREST_EDGE_DARK := Color("090d13")
+const FOREST_EDGE_DARK := Color("101d16")
 const FOREST_OUTER := Color("102217")
+const FOREST_DEEP := Color("173a20")
+const FOREST_BASE := Color("23572c")
 const FOREST_MIDDLE := Color("32643b")
 const FOREST_SPECK := Color("4e8150")
+const TREE_TRUNK_DARK := Color("2a1d17")
+const TREE_TRUNK := Color("60402b")
 
+const ROCK_SHADOW := Color("17130f")
 const ROCK_OUTER := Color("241f1a")
+const ROCK_LEDGE_SHADOW := Color("4b4035")
 const ROCK_EDGE_BASE := Color("665847")
 const ROCK_MIDDLE := Color("796b57")
 const ROCK_INNER := Color("8c7a62")
+const ROCK_HIGHLIGHT := Color("aa9577")
 const ROCK_LINE := Color("17130f")
+
+const BUSH_OUTER := Color("102018")
+const BUSH_DEEP := Color("193822")
+const BUSH_BASE := Color("2a5730")
+const BUSH_LIGHT := Color("477642")
+const BERRY_RED_DEEP := Color("943743")
+const BERRY_RED := Color("d65b61")
+const BERRY_VIOLET_DEEP := Color("70428f")
+const BERRY_VIOLET := Color("b66bd2")
+const BERRY_AMBER_DEEP := Color("9f6829")
+const BERRY_AMBER := Color("dfa64b")
+const BERRY_BLUE_DEEP := Color("3f6699")
+const BERRY_BLUE := Color("6e9bd5")
+const BERRY_GLINT := Color("f2d7af")
+
+const NODE_SPRITE_SIZE := 32
+const NODE_ATLAS_COLS := 8
+const TREE_VARIANTS := 8
+const BERRY_VARIANTS := 4
 
 var _boundaries: Array[Dictionary] = []
 var _boundary_lines: Array[Line2D] = []
 var _details: Array[Dictionary] = []
+var _tree_nodes: Array[Dictionary] = []
+var _berry_nodes: Array[Dictionary] = []
+var _node_atlas: ImageTexture
 var _rebuild_queued := false
 
 
 func _ready() -> void:
+	_node_atlas = _build_node_atlas()
 	Events.map_generated.connect(_queue_rebuild)
 	Events.terrain_changed.connect(_on_terrain_changed)
 
@@ -46,6 +76,8 @@ func _rebuild() -> void:
 	_rebuild_queued = false
 	_boundaries.clear()
 	_details.clear()
+	_tree_nodes.clear()
+	_berry_nodes.clear()
 	var grid: Grid = World.grid
 	if World.feature.size() != grid.cell_count:
 		_sync_boundary_lines()
@@ -54,31 +86,28 @@ func _rebuild() -> void:
 
 	_build_boundaries(grid)
 	_sync_boundary_lines()
-	var chosen: Array[Vector2] = []
+	_build_stone_details(grid)
 	for cell in grid.cell_count:
 		var feature := int(World.feature[cell])
-		if feature != Terrain.Feature.TREE and feature != Terrain.Feature.STONE:
-			continue
 		var c := grid.coord(cell)
-		var seed := _mix(c.x, c.y, feature)
-		# Check the cheap density gate before the 5x5 solid-interior test.
-		var density_divisor := 11 if feature == Terrain.Feature.TREE else 5
-		if (seed >> 9) % density_divisor != 0:
+		var seed := _mix(c.x, c.y, feature * 97 + World.seed_value)
+		if feature == Terrain.Feature.TREE:
+			var tree_center := grid.to_world(c) + Vector2(
+				float((seed >> 4) % 7 - 3),
+				float((seed >> 9) % 7 - 3)
+			)
+			_tree_nodes.append({
+				"center": tree_center, "seed": seed, "coord": c,
+			})
 			continue
-		var solid_radius := 2 if feature == Terrain.Feature.TREE else 1
-		if not _is_solid_interior(c, feature, solid_radius, grid):
-			continue
-		var center := grid.to_world(c)
-		var clear := true
-		var spacing := 58.0 if feature == Terrain.Feature.TREE else 46.0
-		for other in chosen:
-			if center.distance_squared_to(other) < spacing * spacing:
-				clear = false
-				break
-		if not clear:
-			continue
-		chosen.append(center)
-		_details.append({"feature": feature, "center": center, "seed": seed})
+		if feature == Terrain.Feature.BERRIES:
+			var berry_center := grid.to_world(c) + Vector2(
+				float((seed >> 5) % 7 - 3),
+				float((seed >> 10) % 7 - 3)
+			)
+			_berry_nodes.append({
+				"center": berry_center, "seed": seed, "coord": c,
+			})
 
 	queue_redraw()
 
@@ -109,6 +138,84 @@ func _build_boundaries(grid: Grid) -> void:
 		_trace_loops(edges, feature)
 
 
+## Every connected quarry receives a raised top, including the compact guaranteed
+## starting deposit. Larger regions gain more shelves only when they can be kept
+## far enough apart to remain features of one landform rather than stone nodes.
+func _build_stone_details(grid: Grid) -> void:
+	var visited := PackedByteArray()
+	visited.resize(grid.cell_count)
+	for start in grid.cell_count:
+		if visited[start] != 0 \
+			or int(World.feature[start]) != Terrain.Feature.STONE:
+			continue
+		var region := _collect_region(
+			start, Terrain.Feature.STONE, grid, visited
+		)
+		if region.is_empty():
+			continue
+
+		var interior := PackedInt32Array()
+		var primary := region[0]
+		var centroid := Vector2.ZERO
+		for cell in region:
+			centroid += Vector2(grid.coord(cell))
+		centroid /= float(region.size())
+		var primary_distance := INF
+		for cell in region:
+			var c := grid.coord(cell)
+			var distance := Vector2(c).distance_squared_to(centroid)
+			if distance < primary_distance:
+				primary_distance = distance
+				primary = cell
+			if _is_solid_interior(c, Terrain.Feature.STONE, 1, grid):
+				interior.append(cell)
+		if not interior.is_empty():
+			primary = interior[0]
+			primary_distance = INF
+			for cell in interior:
+				var c := grid.coord(cell)
+				var distance := Vector2(c).distance_squared_to(centroid)
+				if distance < primary_distance:
+					primary_distance = distance
+					primary = cell
+
+		var chosen: Array[Vector2] = []
+		var shelf_scale := clampf(
+			sqrt(float(region.size()) / 38.0), 0.68, 1.15
+		)
+		_add_stone_detail(primary, grid, chosen, shelf_scale)
+		if region.size() < 38:
+			continue
+		for cell in interior:
+			if cell == primary:
+				continue
+			var c := grid.coord(cell)
+			var seed := _mix(
+				c.x, c.y, World.seed_value + Terrain.Feature.STONE * 97
+			)
+			if seed % 3 != 0:
+				continue
+			_add_stone_detail(cell, grid, chosen, shelf_scale)
+
+
+func _add_stone_detail(
+		cell: int, grid: Grid, chosen: Array[Vector2], shelf_scale: float
+	) -> void:
+	var c := grid.coord(cell)
+	var center := grid.to_world(c)
+	for other in chosen:
+		if center.distance_squared_to(other) < 68.0 * 68.0:
+			return
+	chosen.append(center)
+	var seed := _mix(
+		c.x, c.y, World.seed_value + Terrain.Feature.STONE * 97
+	)
+	_details.append({
+		"feature": Terrain.Feature.STONE, "center": center, "seed": seed,
+		"scale": shelf_scale,
+	})
+
+
 func _sync_boundary_lines() -> void:
 	for line in _boundary_lines:
 		if is_instance_valid(line):
@@ -120,13 +227,14 @@ func _sync_boundary_lines() -> void:
 		var points: PackedVector2Array = boundary["points"]
 		var closed := _closed(points)
 		if feature == Terrain.Feature.TREE:
-			_add_boundary_line(closed, FOREST_EDGE_DARK, 7.0)
-			_add_boundary_line(closed, FOREST_OUTER, 4.0)
+			_add_boundary_line(closed, FOREST_EDGE_DARK, 6.0)
+			_add_boundary_line(closed, FOREST_OUTER, 3.5)
 			_add_boundary_line(closed, FOREST_EDGE_BASE, 1.5)
 		else:
-			_add_boundary_line(closed, ROCK_LINE, 7.0)
-			_add_boundary_line(closed, ROCK_OUTER, 4.0)
-			_add_boundary_line(closed, ROCK_EDGE_BASE, 1.5)
+			_add_boundary_line(closed, ROCK_SHADOW, 9.0)
+			_add_boundary_line(closed, ROCK_OUTER, 6.0)
+			_add_boundary_line(closed, ROCK_EDGE_BASE, 2.5)
+			_add_boundary_line(closed, ROCK_HIGHLIGHT, 1.0)
 
 
 func _add_boundary_line(points: PackedVector2Array, color: Color, width: float) -> void:
@@ -304,51 +412,229 @@ func _is_solid_interior(c: Vector2i, feature: int, radius: int, grid: Grid) -> b
 
 
 func _draw() -> void:
+	for node in _tree_nodes:
+		_draw_tree_node(node)
+
 	for detail in _details:
-		var feature := int(detail["feature"])
 		var center: Vector2 = detail["center"]
 		var seed := int(detail["seed"])
-		var outer := _blob_points(center, seed, feature, 1.0)
-		var middle_scale := 0.92 if feature == Terrain.Feature.TREE else 0.82
-		var middle := _scaled_points(outer, center, middle_scale)
-		if feature == Terrain.Feature.TREE:
-			draw_colored_polygon(outer, FOREST_OUTER)
-			draw_colored_polygon(middle, FOREST_MIDDLE)
-			draw_polyline(_closed(outer), FOREST_OUTER, 1.0, false)
-			draw_polyline(_closed(middle), FOREST_OUTER, 1.0, false)
-			_draw_forest_speckles(center, seed)
-		else:
-			var inner := _scaled_points(outer, center + Vector2(-1, -1), 0.62)
-			draw_colored_polygon(outer, ROCK_OUTER)
-			draw_colored_polygon(middle, ROCK_MIDDLE)
-			draw_colored_polygon(inner, ROCK_INNER)
-			draw_polyline(_closed(outer), ROCK_LINE, 1.0, false)
-			draw_polyline(_closed(middle), ROCK_OUTER, 1.0, false)
+		_draw_rock_shelf(center, seed, float(detail.get("scale", 1.0)))
+
+	for node in _berry_nodes:
+		_draw_berry_node(node)
 
 
-func _draw_forest_speckles(center: Vector2, seed: int) -> void:
-	for i in 7:
-		var h := _mix(i, seed & 0xffff, Terrain.Feature.TREE + 47)
-		var dx := float((h >> 8) % 17 - 8)
-		var dy := float((h >> 17) % 11 - 5)
-		draw_rect(
-			Rect2(Vector2(roundf(center.x + dx), roundf(center.y + dy)), Vector2.ONE),
-			FOREST_SPECK
+func _draw_tree_node(node: Dictionary) -> void:
+	var center: Vector2 = node["center"]
+	var seed := int(node["seed"])
+	var variant := seed % TREE_VARIANTS
+	var source := Rect2(
+		Vector2(variant * NODE_SPRITE_SIZE, 0),
+		Vector2(NODE_SPRITE_SIZE, NODE_SPRITE_SIZE)
+	)
+	var destination := Rect2(
+		_pixel(center) - Vector2(NODE_SPRITE_SIZE / 2, NODE_SPRITE_SIZE / 2),
+		Vector2(NODE_SPRITE_SIZE, NODE_SPRITE_SIZE)
+	)
+	draw_texture_rect_region(_node_atlas, destination, source)
+
+
+func _draw_rock_shelf(center: Vector2, seed: int, scale: float) -> void:
+	var outer := _organic_blob(
+		center, seed, 25.0 * scale, 17.0 * scale,
+		16, 3.2 * scale
+	)
+	var shadow := _offset_points(outer, Vector2(1, 2))
+	var middle := _scaled_points(outer, center, 0.90)
+	var inner := _scaled_points(outer, center + Vector2(-1, -2), 0.68)
+	draw_colored_polygon(shadow, ROCK_LEDGE_SHADOW)
+	draw_colored_polygon(outer, ROCK_EDGE_BASE)
+	draw_colored_polygon(middle, ROCK_MIDDLE)
+	draw_colored_polygon(inner, ROCK_INNER)
+	draw_polyline(_closed(outer), ROCK_OUTER, 1.25, false)
+	draw_polyline(_closed(middle), ROCK_EDGE_BASE, 1.0, false)
+	draw_polyline(_upper_arc(inner), ROCK_HIGHLIGHT, 1.25, false)
+
+
+func _draw_berry_node(node: Dictionary) -> void:
+	var center: Vector2 = node["center"]
+	var seed := int(node["seed"])
+	var c: Vector2i = node["coord"]
+	var group_x := floori(float(c.x) / 3.0)
+	var group_y := floori(float(c.y) / 2.0)
+	var color_index := _mix(group_x, group_y, World.seed_value + 809) \
+		% 4
+	var variant := seed % BERRY_VARIANTS
+	var source := Rect2(
+		Vector2(
+			variant * NODE_SPRITE_SIZE,
+			(1 + color_index) * NODE_SPRITE_SIZE
+		),
+		Vector2(NODE_SPRITE_SIZE, NODE_SPRITE_SIZE)
+	)
+	var destination := Rect2(
+		_pixel(center) - Vector2(NODE_SPRITE_SIZE / 2, NODE_SPRITE_SIZE / 2),
+		Vector2(NODE_SPRITE_SIZE, NODE_SPRITE_SIZE)
+	)
+	draw_texture_rect_region(_node_atlas, destination, source)
+
+
+func _build_node_atlas() -> ImageTexture:
+	var rows := 5
+	var image := Image.create(
+		NODE_ATLAS_COLS * NODE_SPRITE_SIZE,
+		rows * NODE_SPRITE_SIZE,
+		false,
+		Image.FORMAT_RGBA8
+	)
+	image.fill(Color(0, 0, 0, 0))
+	for variant in TREE_VARIANTS:
+		_paint_tree_sprite(image, Vector2i(variant * NODE_SPRITE_SIZE, 0), variant)
+	for family in 4:
+		for variant in BERRY_VARIANTS:
+			_paint_berry_sprite(
+				image,
+				Vector2i(
+					variant * NODE_SPRITE_SIZE,
+					(1 + family) * NODE_SPRITE_SIZE
+				),
+				variant,
+				family
+			)
+	return ImageTexture.create_from_image(image)
+
+
+func _paint_tree_sprite(image: Image, origin: Vector2i, variant: int) -> void:
+	var center := Vector2i(16, 16)
+	var seed := _mix(variant, 401, 1709)
+	var rx := 9
+	var ry := 8
+	match variant % 4:
+		0:
+			rx = 11
+			ry = 8
+		1:
+			rx = 8
+			ry = 10
+		2:
+			rx = 10
+			ry = 9
+	if variant == TREE_VARIANTS - 1:
+		rx = 7
+		ry = 7
+
+	_paint_sprite_rect(image, origin, center + Vector2i(-1, 3), Vector2i(3, 7), TREE_TRUNK_DARK)
+	_paint_sprite_rect(image, origin, center + Vector2i(0, 4), Vector2i(1, 6), TREE_TRUNK)
+	_paint_sprite_blob(image, origin, center + Vector2i(2, 3), rx + 1, ry + 1, seed + 5, FOREST_OUTER)
+	_paint_sprite_blob(image, origin, center, rx, ry, seed + 17, FOREST_DEEP)
+	_paint_sprite_blob(
+		image, origin, center + Vector2i(-1, -1),
+		maxi(4, rx - 1), maxi(4, ry - 1), seed + 29, FOREST_BASE
+	)
+	_paint_sprite_blob(
+		image, origin, center + Vector2i(-3, -3),
+		maxi(2, roundi(rx * 0.42)), maxi(2, roundi(ry * 0.38)),
+		seed + 43, FOREST_MIDDLE
+	)
+	if variant % 3 == 0:
+		_paint_sprite_blob(
+			image, origin, center + Vector2i(-4, -4),
+			2 + variant % 2, 2, seed + 61, FOREST_SPECK
 		)
 
 
-func _blob_points(center: Vector2, seed: int, feature: int, scale: float) -> PackedVector2Array:
+func _paint_berry_sprite(
+		image: Image, origin: Vector2i, variant: int, family: int
+	) -> void:
+	var fruit_deep_colors: Array[Color] = [
+		BERRY_RED_DEEP, BERRY_VIOLET_DEEP, BERRY_AMBER_DEEP, BERRY_BLUE_DEEP,
+	]
+	var fruit_light_colors: Array[Color] = [
+		BERRY_RED, BERRY_VIOLET, BERRY_AMBER, BERRY_BLUE,
+	]
+	var center := Vector2i(16, 16)
+	var seed := _mix(variant, family, 2609)
+	var rx := 8 + variant % 3
+	var ry := 6 + (variant + 1) % 3
+	_paint_sprite_blob(
+		image, origin, center + Vector2i(1, 2),
+		rx + 1, ry + 1, seed + 7, BUSH_OUTER
+	)
+	_paint_sprite_blob(image, origin, center, rx, ry, seed + 19, BUSH_DEEP)
+	_paint_sprite_blob(
+		image, origin, center + Vector2i(-1, -1),
+		maxi(4, rx - 2), maxi(3, ry - 2), seed + 31, BUSH_BASE
+	)
+	_paint_sprite_blob(
+		image, origin, center + Vector2i(-3, -2),
+		maxi(2, roundi(rx * 0.40)), maxi(2, roundi(ry * 0.35)),
+		seed + 43, BUSH_LIGHT
+	)
+
+	var fruit_count := 4 + variant % 3
+	for fruit in fruit_count:
+		var fruit_hash := _mix(variant * 13 + fruit, family * 17 - fruit, 733)
+		var fx := center.x + int((fruit_hash >> 5) % maxi(3, rx * 2 - 4)) - rx + 2
+		var fy := center.y + int((fruit_hash >> 11) % maxi(3, ry * 2 - 4)) - ry + 2
+		_paint_sprite_rect(
+			image, origin, Vector2i(fx, fy), Vector2i(2, 2),
+			fruit_deep_colors[family]
+		)
+		_set_sprite_pixel(image, origin, Vector2i(fx, fy), fruit_light_colors[family])
+		if fruit_hash % 4 == 0:
+			_set_sprite_pixel(
+				image, origin, Vector2i(fx, fy - 1), BERRY_GLINT
+			)
+
+
+func _paint_sprite_blob(
+		image: Image, origin: Vector2i, center: Vector2i,
+		rx: int, ry: int, seed: int, color: Color
+	) -> void:
+	var phase := float(seed % 628) / 100.0
+	for y in range(maxi(0, center.y - ry - 2), mini(NODE_SPRITE_SIZE, center.y + ry + 3)):
+		for x in range(maxi(0, center.x - rx - 2), mini(NODE_SPRITE_SIZE, center.x + rx + 3)):
+			var nx := float(x - center.x) / float(maxi(1, rx))
+			var ny := float(y - center.y) / float(maxi(1, ry))
+			var angle := atan2(ny, nx)
+			var radius := sqrt(nx * nx + ny * ny)
+			var edge := 1.0 \
+				+ sin(angle * 3.0 + phase) * 0.10 \
+				+ sin(angle * 5.0 - phase * 0.7) * 0.07 \
+				+ sin(angle * 8.0 + phase * 1.1) * 0.035
+			if radius <= edge:
+				image.set_pixel(origin.x + x, origin.y + y, color)
+
+
+func _paint_sprite_rect(
+		image: Image, origin: Vector2i, top_left: Vector2i,
+		size: Vector2i, color: Color
+	) -> void:
+	for y in range(maxi(0, top_left.y), mini(NODE_SPRITE_SIZE, top_left.y + size.y)):
+		for x in range(maxi(0, top_left.x), mini(NODE_SPRITE_SIZE, top_left.x + size.x)):
+			image.set_pixel(origin.x + x, origin.y + y, color)
+
+
+func _set_sprite_pixel(
+		image: Image, origin: Vector2i, point: Vector2i, color: Color
+	) -> void:
+	if point.x >= 0 and point.y >= 0 \
+			and point.x < NODE_SPRITE_SIZE and point.y < NODE_SPRITE_SIZE:
+		image.set_pixel(origin.x + point.x, origin.y + point.y, color)
+
+
+func _organic_blob(
+		center: Vector2, seed: int, radius_x: float, radius_y: float,
+		point_count: int, wobble: float
+	) -> PackedVector2Array:
 	var points := PackedVector2Array()
-	var radius_x := 18.0 if feature == Terrain.Feature.STONE else 26.0
-	var radius_y := 13.0 if feature == Terrain.Feature.STONE else 19.0
-	var point_count := 14 if feature == Terrain.Feature.STONE else 16
 	for i in point_count:
 		var angle := TAU * float(i) / float(point_count)
-		var wobble_hash := _mix(i, seed & 0xffff, feature + 19)
-		var wobble_range := 7 if feature == Terrain.Feature.STONE else 13
-		var wobble := float((wobble_hash >> 10) % wobble_range - wobble_range / 2)
-		var px := center.x + cos(angle) * (radius_x + wobble) * scale
-		var py := center.y + sin(angle) * (radius_y + wobble * 0.65) * scale
+		var wobble_hash := _mix(i, seed & 0xffff, point_count + 19)
+		var variation := float((wobble_hash >> 10) % 1024) / 1023.0
+		var offset := (variation * 2.0 - 1.0) * wobble
+		var px := center.x + cos(angle) * (radius_x + offset)
+		var py := center.y + sin(angle) * (radius_y + offset * 0.65)
 		points.append(Vector2(roundf(px), roundf(py)))
 	return points
 
@@ -370,6 +656,28 @@ func _closed(points: PackedVector2Array) -> PackedVector2Array:
 	if not points.is_empty():
 		closed.append(points[0])
 	return closed
+
+
+func _offset_points(points: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
+	var shifted := PackedVector2Array()
+	for point in points:
+		shifted.append(point + offset)
+	return shifted
+
+
+func _upper_arc(points: PackedVector2Array) -> PackedVector2Array:
+	var arc := PackedVector2Array()
+	if points.is_empty():
+		return arc
+	var halfway := points.size() / 2
+	for i in range(halfway, points.size()):
+		arc.append(points[i])
+	arc.append(points[0])
+	return arc
+
+
+func _pixel(point: Vector2) -> Vector2:
+	return Vector2(roundf(point.x), roundf(point.y))
 
 
 func _mix(x: int, y: int, salt: int) -> int:

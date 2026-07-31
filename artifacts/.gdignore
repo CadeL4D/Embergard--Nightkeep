@@ -1,0 +1,2 @@
+# Visual-regression output only. Keeping this folder outside Godot's importer avoids
+# source PNG locks while the capture scenes refresh several screens in one run.

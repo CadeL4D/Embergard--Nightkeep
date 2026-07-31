@@ -1,8 +1,9 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_menu"]
 [ext_resource type="Shader" path="res://assets/shaders/menu_backdrop.gdshader" id="2_blight"]
 [ext_resource type="Texture2D" path="res://assets/ui/nightkeep_menu_backdrop.png" id="3_backdrop"]
+[ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="4_settings"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
 shader = ExtResource("2_blight")
@@ -144,6 +145,11 @@ custom_minimum_size = Vector2(176, 26)
 layout_mode = 2
 text = "UI_OPTIONS"
 
+[node name="HistoryButton" type="Button" parent="Center/Root/Rows"]
+custom_minimum_size = Vector2(176, 26)
+layout_mode = 2
+text = "UI_HISTORY"
+
 [node name="CreditsButton" type="Button" parent="Center/Root/Rows"]
 custom_minimum_size = Vector2(176, 26)
 layout_mode = 2
@@ -249,6 +255,7 @@ theme_override_font_sizes/font_size = 10
 text = "UI_OPTIONS"
 
 [node name="MasterRow" type="HBoxContainer" parent="Center/Options/Rows"]
+visible = false
 custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -266,6 +273,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 
 [node name="MusicRow" type="HBoxContainer" parent="Center/Options/Rows"]
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -282,6 +290,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 
 [node name="SfxRow" type="HBoxContainer" parent="Center/Options/Rows"]
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -298,6 +307,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 
 [node name="Note" type="Label" parent="Center/Options/Rows"]
+visible = false
 custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.454902, 0.501961, 0.552941, 1)
@@ -305,8 +315,57 @@ theme_override_font_sizes/font_size = 9
 text = "UI_AUDIO_PENDING"
 autowrap_mode = 2
 
+[node name="Settings" type="VBoxContainer" parent="Center/Options/Rows"]
+custom_minimum_size = Vector2(350, 224)
+layout_mode = 2
+script = ExtResource("4_settings")
+
 [node name="BackButton" type="Button" parent="Center/Options/Rows"]
 custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+text = "UI_BACK"
+
+[node name="History" type="PanelContainer" parent="Center"]
+visible = false
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Rows" type="VBoxContainer" parent="Center/History"]
+custom_minimum_size = Vector2(370, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Heading" type="Label" parent="Center/History/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.603922, 0.235294, 1)
+theme_override_font_sizes/font_size = 12
+text = "UI_HISTORY"
+
+[node name="Lifetime" type="Label" parent="Center/History/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.827451, 0.843137, 0.870588, 1)
+text = ""
+
+[node name="Achievements" type="Label" parent="Center/History/Rows"]
+custom_minimum_size = Vector2(350, 32)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85098, 0.501961, 1)
+text = ""
+autowrap_mode = 3
+
+[node name="Scroll" type="ScrollContainer" parent="Center/History/Rows"]
+custom_minimum_size = Vector2(370, 172)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Records" type="VBoxContainer" parent="Center/History/Rows/Scroll"]
+custom_minimum_size = Vector2(350, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="BackButton" type="Button" parent="Center/History/Rows"]
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 text = "UI_BACK"
 

@@ -59,10 +59,26 @@ var _touch_start_time: float = 0.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
+	if event.is_action_pressed(&"game_cancel"):
+		_cancel_desktop_action()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+		if button.pressed and button.button_index == MOUSE_BUTTON_RIGHT:
+			_cancel_desktop_action()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventScreenTouch:
 		_on_touch(event)
 	elif event is InputEventScreenDrag:
 		_on_drag(event)
+
+
+func _cancel_desktop_action() -> void:
+	if armed != null:
+		armed = null
+		armed_changed.emit(null)
+	_select(null)
+	_select_building(null)
 
 
 func _on_touch(event: InputEventScreenTouch) -> void:

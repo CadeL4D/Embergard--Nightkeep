@@ -189,7 +189,8 @@ func _snap_zoom() -> void:
 	if _snap_tween and _snap_tween.is_valid():
 		_snap_tween.kill()
 	_snap_tween = create_tween()
-	_snap_tween.tween_property(self, "zoom", Vector2(target, target), ZOOM_SNAP_TIME)\
+	_snap_tween.tween_property(self, "zoom", Vector2(target, target),
+		Accessibility.motion_duration(ZOOM_SNAP_TIME))\
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 

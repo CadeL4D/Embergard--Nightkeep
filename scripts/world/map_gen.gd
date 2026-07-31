@@ -49,6 +49,7 @@ const NEST_MIN_DIST := 30
 const NEST_DIST_SPAN := 8.0
 const NEST_COUNT := 4
 const MIN_RESOURCE_REGION := 8
+const MIN_BERRY_REGION := 4
 
 class Result extends RefCounted:
 	var terrain: PackedByteArray
@@ -66,7 +67,8 @@ class Result extends RefCounted:
 ## generation twice is far simpler and less fragile than trying to unpick and redo those
 ## three passes in place. It stays perfectly deterministic because the result is a pure
 ## function of (seed, keep).
-static func generate(grid: Grid, seed_value: int, keep_override: int = -1) -> Result:
+static func generate(grid: Grid, seed_value: int, keep_override: int = -1,
+		region_profile: Dictionary = {}) -> Result:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 
@@ -76,24 +78,67 @@ static func generate(grid: Grid, seed_value: int, keep_override: int = -1) -> Re
 	res.feature = PackedByteArray()
 	res.feature.resize(grid.cell_count)
 
-	_fill_terrain(grid, res, seed_value)
+	_fill_terrain(grid, res, seed_value, region_profile)
 	# Score a site even when one was handed to us, so the rng advances identically either
 	# way. Skipping the call would give the same seed two different feature scatters
 	# depending on whether the player picked, and the save format assumes it cannot.
 	var scored := _choose_keep(grid, res, rng)
 	res.keep_cell = keep_override if grid.is_valid_index(keep_override) else scored
 	_flatten_keep(grid, res, res.keep_cell)
-	_scatter_features(grid, res, seed_value, rng)
+	_scatter_features(grid, res, seed_value, rng, region_profile)
 	res.nest_cells = _place_nests(grid, res, rng)
 	_clear_around_keep(grid, res, res.keep_cell)
+	if not region_profile.is_empty():
+		_ensure_starting_stone(grid, res)
+	# The guaranteed starting quarry is added after the main feature scatter,
+	# so perform the visual separation here, once every resource is final.
+	_separate_berry_thickets(grid, res)
 	_prune_isolated_resources(grid, res)
 	_prune_small_resource_regions(grid, res)
 	return res
 
 
+## Regional scarcity should shape expansion, not soft-lock the first hours of a colony. Every
+## settleable local map therefore receives one modest connected quarry if its natural generation
+## did not provide enough stone. Rich highlands still contain vastly more.
+static func _ensure_starting_stone(grid: Grid, res: Result) -> void:
+	const MIN_STONE := 20
+	var existing := 0
+	for value in res.feature:
+		if value == Terrain.Feature.STONE:
+			existing += 1
+	if existing >= MIN_STONE:
+		return
+	var keep := grid.coord(res.keep_cell)
+	for radius in range(11, 28):
+		for dy in range(-radius, radius + 1):
+			for dx in range(-radius, radius + 1):
+				if absi(dx) != radius and absi(dy) != radius:
+					continue
+				var center := keep + Vector2i(dx, dy)
+				if not grid.is_valid_v(center):
+					continue
+				for oy in range(-2, 3):
+					for ox in range(-2, 3):
+						var point := center + Vector2i(ox, oy)
+						if not grid.is_valid_v(point):
+							continue
+						var cell := grid.index_v(point)
+						if res.feature[cell] != Terrain.Feature.NONE:
+							continue
+						if res.terrain[cell] not in [
+								Terrain.Type.GRASS, Terrain.Type.DIRT, Terrain.Type.ROCK]:
+							continue
+						res.feature[cell] = Terrain.Feature.STONE
+						existing += 1
+						if existing >= MIN_STONE:
+							return
+
+
 # --- Terrain -------------------------------------------------------------------------
 
-static func _fill_terrain(grid: Grid, res: Result, seed_value: int) -> void:
+static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
+		region_profile: Dictionary = {}) -> void:
 	var elevation := FastNoiseLite.new()
 	elevation.seed = seed_value
 	elevation.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
@@ -110,11 +155,17 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int) -> void:
 	var cx := grid.width * 0.5
 	var cy := grid.height * 0.5
 	var max_r := minf(cx, cy)
+	var elevation_bias := 0.0
+	var moisture_bias := 0.0
+	if not region_profile.is_empty():
+		elevation_bias = (float(region_profile.get("elevation", 0.5)) - 0.5) * 0.30
+		moisture_bias = (float(region_profile.get("moisture", 0.5)) - 0.5) * 0.42
 
 	for y in grid.height:
 		for x in grid.width:
-			var e := (elevation.get_noise_2d(x, y) + 1.0) * 0.5
-			var m := (moisture.get_noise_2d(x, y) + 1.0) * 0.5
+			var e := (elevation.get_noise_2d(x, y) + 1.0) * 0.5 + elevation_bias
+			var m := clampf((moisture.get_noise_2d(x, y) + 1.0) * 0.5 + moisture_bias,
+				0.0, 1.0)
 			var r := Vector2(x - cx, y - cy).length() / max_r
 			e -= smoothstep(0.62, 1.0, r) * 0.55
 
@@ -194,7 +245,8 @@ static func _flatten_keep(grid: Grid, res: Result, keep: int) -> void:
 
 # --- Features ---------------------------------------------------------------------------
 
-static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: RandomNumberGenerator) -> void:
+static func _scatter_features(grid: Grid, res: Result, seed_value: int,
+		rng: RandomNumberGenerator, region_profile: Dictionary = {}) -> void:
 	# Noise-driven clumping rather than uniform random: forests and quarries should
 	# read as places you travel TO, because that is what makes the Ember's position
 	# and the spreading Blight matter.
@@ -205,11 +257,26 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: Ran
 	# removes isolated cells and closes small holes, producing actual destinations
 	# rather than a uniform dusting of resources.
 	clump.frequency = 0.045
+	var berry_clump := FastNoiseLite.new()
+	berry_clump.seed = seed_value + 7907
+	berry_clump.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	# Berries use a tighter field than forests and quarries. That creates small
+	# forage thickets inside otherwise open grass instead of evenly scattered
+	# single pickup points.
+	berry_clump.frequency = 0.095
+	var forest_bias := 0.0
+	var stone_bias := 0.0
+	var food_bias := 0.0
+	if not region_profile.is_empty():
+		forest_bias = (float(region_profile.get("forest", 0.5)) - 0.5) * 0.24
+		stone_bias = (float(region_profile.get("stone", 0.5)) - 0.5) * 0.24
+		food_bias = (float(region_profile.get("food", 0.5)) - 0.5) * 0.04
 
 	for i in grid.cell_count:
 		var t := res.terrain[i]
 		var c := grid.coord(i)
 		var n := (clump.get_noise_2d(c.x, c.y) + 1.0) * 0.5
+		var berry_n := (berry_clump.get_noise_2d(c.x, c.y) + 1.0) * 0.5
 		# Two densities per clump rather than one, so a wood has a SOLID CORE and a ragged fringe.
 		#
 		# The old single test filled 55% of a clump, which is close to the worst possible number:
@@ -219,32 +286,41 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int, rng: Ran
 		# eye a mass to read and the player something to cut into — see WorldView._paint_feature.
 		match t:
 			Terrain.Type.GRASS:
-				if n > 0.66:
+				if n > 0.66 - forest_bias:
 					if rng.randf() < 0.98:
 						res.feature[i] = Terrain.Feature.TREE
-				elif n > 0.56:
+				elif n > 0.56 - forest_bias:
 					if rng.randf() < 0.62:
 						res.feature[i] = Terrain.Feature.TREE
-				# Raised from 0.012. Berries are the only food on the map before a farm
-				# exists, and at just over one percent of grass tiles the opening of every
-				# run was the same scramble regardless of where the player settled.
-				elif rng.randf() < 0.035:
-					res.feature[i] = Terrain.Feature.BERRIES
+				else:
+					# Keep exactly one shared-rng draw for every open grass
+					# cell, matching the old scatterer's sequence. Berry
+					# art must not quietly move quarries generated later.
+					var berry_roll := rng.randf()
+					# Two densities give each patch a packed center and a
+					# ragged edge. Food-rich regions lower both thresholds.
+					if berry_n > 0.69 - food_bias * 2.0:
+						if berry_roll < 0.76:
+							res.feature[i] = Terrain.Feature.BERRIES
+					elif berry_n > 0.63 - food_bias * 2.0:
+						if berry_roll < 0.28:
+							res.feature[i] = Terrain.Feature.BERRIES
 			Terrain.Type.ROCK:
-				if n > 0.60:
+				if n > 0.60 - stone_bias:
 					if rng.randf() < 0.96:
 						res.feature[i] = Terrain.Feature.STONE
-				elif n > 0.49:
+				elif n > 0.49 - stone_bias:
 					if rng.randf() < 0.55:
 						res.feature[i] = Terrain.Feature.STONE
 			Terrain.Type.DIRT:
-				if n > 0.64 and rng.randf() < 0.55:
+				if n > 0.64 - forest_bias and rng.randf() < 0.55:
 					res.feature[i] = Terrain.Feature.TREE
 			Terrain.Type.RUBBLE:
 				if rng.randf() < 0.3:
 					res.feature[i] = Terrain.Feature.RUIN_WALL
 
 	_consolidate_resource_masses(grid, res)
+	_consolidate_berry_thickets(grid, res)
 
 
 ## Remove one-off resource props and close small gaps inside a mass. This is a
@@ -272,6 +348,40 @@ static func _consolidate_resource_masses(grid: Grid, res: Result) -> void:
 			res.feature[i] = target
 
 
+## Close small holes in a berry patch and discard its stray fringe cells. This
+## uses a snapshot so the result is independent of grid iteration order.
+static func _consolidate_berry_thickets(grid: Grid, res: Result) -> void:
+	var before: PackedByteArray = res.feature.duplicate()
+	for i in grid.cell_count:
+		var feature := int(before[i])
+		var berry_neighbours := _matching_resource_neighbours(
+			grid, before, i, Terrain.Feature.BERRIES
+		)
+		if feature == Terrain.Feature.BERRIES:
+			if berry_neighbours <= 1:
+				res.feature[i] = Terrain.Feature.NONE
+			continue
+		if feature == Terrain.Feature.NONE \
+				and res.terrain[i] == Terrain.Type.GRASS \
+				and berry_neighbours >= 5:
+			res.feature[i] = Terrain.Feature.BERRIES
+
+
+## Keep low berry crowns from visually sitting on top of a forest wall or quarry
+## ledge. The empty cell is also useful gameplay language: blocking resources are
+## destinations, while walkable forage patches occupy their nearby clearings.
+static func _separate_berry_thickets(grid: Grid, res: Result) -> void:
+	var before: PackedByteArray = res.feature.duplicate()
+	for i in grid.cell_count:
+		if int(before[i]) != Terrain.Feature.BERRIES:
+			continue
+		for neighbor in grid.neighbours_8(i):
+			var nearby := int(before[neighbor])
+			if nearby == Terrain.Feature.TREE or nearby == Terrain.Feature.STONE:
+				res.feature[i] = Terrain.Feature.NONE
+				break
+
+
 ## Clearing the keep can cut a fringe cell away from the forest it belonged to.
 ## Prune once more afterward so the starting view does not regain a ring of sparse
 ## individual trees around an otherwise deliberate clearing.
@@ -279,7 +389,9 @@ static func _prune_isolated_resources(grid: Grid, res: Result) -> void:
 	var before: PackedByteArray = res.feature.duplicate()
 	for i in grid.cell_count:
 		var feature := int(before[i])
-		if feature != Terrain.Feature.TREE and feature != Terrain.Feature.STONE:
+		if feature != Terrain.Feature.TREE \
+				and feature != Terrain.Feature.STONE \
+				and feature != Terrain.Feature.BERRIES:
 			continue
 		if _matching_resource_neighbours(grid, before, i, feature) <= 1:
 			res.feature[i] = Terrain.Feature.NONE
@@ -287,8 +399,8 @@ static func _prune_isolated_resources(grid: Grid, res: Result) -> void:
 
 ## The neighbour pass above removes dust but can leave diagonal chains whose cells
 ## are not actually connected for harvesting or rendering. Remove whole cardinal
-## components below a small 8-cell grove so every starting forest/quarry reads as a grouped
-## destination rather than a lone clover-shaped prop.
+## components below their minimum useful size so every forest, quarry, and berry
+## thicket reads as a grouped destination rather than a lone prop.
 static func _prune_small_resource_regions(grid: Grid, res: Result) -> void:
 	var visited := PackedByteArray()
 	visited.resize(grid.cell_count)
@@ -296,7 +408,9 @@ static func _prune_small_resource_regions(grid: Grid, res: Result) -> void:
 		if visited[start] != 0:
 			continue
 		var feature := int(res.feature[start])
-		if feature != Terrain.Feature.TREE and feature != Terrain.Feature.STONE:
+		if feature != Terrain.Feature.TREE \
+				and feature != Terrain.Feature.STONE \
+				and feature != Terrain.Feature.BERRIES:
 			continue
 		var region := PackedInt32Array()
 		var queue := PackedInt32Array([start])
@@ -310,7 +424,9 @@ static func _prune_small_resource_regions(grid: Grid, res: Result) -> void:
 				if visited[neighbor] == 0 and int(res.feature[neighbor]) == feature:
 					visited[neighbor] = 1
 					queue.append(neighbor)
-		if region.size() >= MIN_RESOURCE_REGION:
+		var minimum_size := MIN_BERRY_REGION \
+			if feature == Terrain.Feature.BERRIES else MIN_RESOURCE_REGION
+		if region.size() >= minimum_size:
 			continue
 		for cell in region:
 			res.feature[cell] = Terrain.Feature.NONE

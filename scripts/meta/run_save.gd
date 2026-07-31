@@ -1,22 +1,11 @@
 class_name RunSave
 extends RefCounted
-## Serialisation for an in-progress run.
-##
-## Android kills backgrounded apps without warning, and a rogue-lite that loses a
-## forty-minute run to a phone call is a one-star review. So: autosave on every
-## phase change and on application pause, and write to a temp file then rename, so
-## a kill mid-write cannot corrupt the save.
-##
-## DERIVED STATE IS NEVER SAVED. Terrain regenerates from the seed; occupancy,
-## move cost, the light grid, the flow field and the resource index are all rebuilt
-## from the things that are saved. That halves the file and — more importantly —
-## makes it impossible for a save to encode a world that disagrees with itself.
+## Crash-safe persistence for the whole Realm and whichever colony is currently awake.
 
 const SAVE_PATH := "user://run.dat"
 const TEMP_PATH := "user://run.tmp"
-## 2 added nest_hp. Nests became destructible, and a half-worn nest that healed back to
-## full every time the player backgrounded the app would quietly undo hours of siege.
-const SCHEMA_VERSION := 2
+## 4 replaces the fixed Realm graph with a seeded continuous world divided into local regions.
+const SCHEMA_VERSION := 4
 
 
 static func has_save() -> bool:
@@ -28,55 +17,24 @@ static func clear() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 
 
-# --- Writing ------------------------------------------------------------------------
-
 static func save() -> bool:
+	if Realm.awake_id == &"":
+		return false
 	var data := {
 		"version": SCHEMA_VERSION,
-		"seed": World.seed_value,
 		"difficulty": String(Difficulties.current_id()),
 		"tick": Sim.tick,
 		"day": Sim.day,
 		"phase": int(Sim.phase),
 		"phase_elapsed": Sim.phase_elapsed,
-
-		# Feature and blight are the only world layers the player actually changes.
-		"feature": World.feature,
-		"blight": World.blight,
-		# Which nests are ALIVE is derived from the feature layer, but how worn down
-		# they are is not recoverable from anything else.
-		"nest_hp": World.nest_hp.duplicate(),
-		# The Blight's own settlement. Not derivable from anything else: the generator lays out
-		# nests, not what grew around them, so without this a reload hands the player back a map the
-		# enemy had never developed — and the threat budget that came with it.
-		"blight_structures": World.blight_structures.duplicate(true),
-		"blight_growth": Threat.growth_progress(),
-
-		"stock": Colony.stock.duplicate(),
-		"reserved": Colony.reserved.duplicate(),
-		"quotas": Colony.quotas.duplicate(),
-		# Losing this on every autosave would mean a colony that saves each phase change
-		# never quite reaches its next arrival.
-		"migration_progress": Colony.migration_progress,
-
-		"faith": Divine.faith,
-		"ember_cell": Divine.ember_cell,
-
-		"night_index": Threat.night_index,
-
-		"villagers": _pack_villagers(),
-		"buildings": _pack_buildings(),
+		"realm": Realm.to_dict(),
 	}
-
-	# Temp-then-rename, so a process kill part way through leaves the previous save
-	# intact rather than a half-written file that will not load.
 	var f := FileAccess.open(TEMP_PATH, FileAccess.WRITE)
 	if f == null:
 		push_error("RunSave: cannot open %s" % TEMP_PATH)
 		return false
 	f.store_var(data)
 	f.close()
-
 	var dir := DirAccess.open("user://")
 	if dir == null:
 		return false
@@ -85,156 +43,92 @@ static func save() -> bool:
 	return dir.rename("run.tmp", "run.dat") == OK
 
 
-static func _pack_villagers() -> Array:
-	var out: Array = []
-	for v in Colony.villagers:
-		if not is_instance_valid(v) or not v.alive:
-			continue
-		out.append({
-			"x": v.position.x, "y": v.position.y,
-			"job": v.job,
-			"food": v.food, "water": v.water, "rest": v.rest, "mood": v.mood,
-			"health": v.health,
-		})
-	return out
-
-
-static func _pack_buildings() -> Array:
-	var out: Array = []
-	for b in Colony.buildings:
-		if not is_instance_valid(b):
-			continue
-		out.append({
-			"def": b.def.id,
-			"anchor": b.anchor,
-			"complete": b.state == Building.State.COMPLETE,
-			"work": b.work_done,
-			"hp": b.hp,
-			"delivered": b.delivered.duplicate(),
-		})
-	return out
-
-
-# --- Reading ------------------------------------------------------------------------
-
-## Restore a run into the given scene. Returns false if there is nothing valid to
-## load, in which case the caller should start fresh.
-static func load_into(run: Node, entities: Node) -> bool:
-	if not has_save():
+## Restore a run into the existing Run scene. Schema 2 is migrated to a one-colony Realm so an
+## older in-progress game is not discarded by the Phase 4 update.
+static func load_into(_run: Node, entities: Node) -> bool:
+	var data = _read()
+	if data == null:
 		return false
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if f == null:
-		return false
-	var data = f.get_var()
-	f.close()
-
-	if typeof(data) != TYPE_DICTIONARY:
-		push_warning("RunSave: save file is not a dictionary — ignoring")
-		return false
-	if int(data.get("version", 0)) != SCHEMA_VERSION:
-		# No migrations exist yet. Refusing to load an old save is correct while the
-		# format is still moving; silently loading a mismatched one is not.
-		push_warning("RunSave: schema %s does not match %d — ignoring" % [
-			data.get("version", "?"), SCHEMA_VERSION])
+	var version := int(data.get("version", 0))
+	if version == 2:
+		data = _migrate_v2(data)
+	elif version != 3 and version != SCHEMA_VERSION:
+		push_warning("RunSave: schema %d is not supported" % version)
 		return false
 
-	# Difficulty first: it is read while the world and colony are being rebuilt, and a
-	# run resumed on the wrong tier would silently change its own balance mid-play.
 	Difficulties.select(StringName(data.get("difficulty", Difficulties.DEFAULT_ID)))
-
-	# Regenerate the world from the seed, then overlay what the player changed.
-	World.generate(int(data["seed"]))
-	World.feature = data["feature"]
-	World.blight = data["blight"]
-	# Re-derive which nests survived from the overlaid feature layer, THEN restore how
-	# worn each one was. Order matters: rebuild_nest_hp resets everything it finds to
-	# full, so applying the saved values first would simply be overwritten.
-	World.rebuild_nest_hp()
-	for cell in data.get("nest_hp", {}):
-		var key := int(cell)
-		if World.nest_hp.has(key):
-			World.nest_hp[key] = float(data["nest_hp"][cell])
-	World.blight_field.rebuild_frontier()
-	World.resources.setup(World)
-	World.cost_dirty = true
-	World.rebuild_move_cost()
-
-
-	Colony.reset()
-	Colony.stock = data["stock"].duplicate()
-	Colony.reserved = data.get("reserved", {}).duplicate()
-	Colony.quotas = data["quotas"].duplicate()
-	Colony.migration_progress = float(data.get("migration_progress", 0.0))
-	Colony.set_spawn_parent(entities)
-
-	Divine.reset()
-	Threat.reset()
-	Threat.set_spawn_parent(entities)
-	Threat.night_index = int(data.get("night_index", 0))
-	Threat.set_growth_progress(float(data.get("blight_growth", 0.0)))
-
-	# The Blight's settlement, restored AFTER Threat.reset() and not before.
-	#
-	# reset() clears World.blight_structures — it has to, or a previous world's spires would carry
-	# into the next one as threat budget and as occupancy on empty ground. So this has to come after
-	# it, and putting it up beside the nest_hp restore where it naturally belongs would have had
-	# every structure silently wiped a few lines later.
-	#
-	# Rebuilt through add_blight_structure rather than by assigning the dictionary, so each one
-	# re-stamps its occupancy and re-adds its glow; a direct assignment would leave the enemy's
-	# buildings visible but walk-through — obstacles in the save and not in the world.
-	for cell in data.get("blight_structures", {}):
-		var at := int(cell)
-		var row: Dictionary = data["blight_structures"][cell]
-		var struct_def := BlightStructures.get_structure(StringName(row["kind"]))
-		if struct_def == null or not World.add_blight_structure(at, struct_def):
-			continue
-		# Wear applied after, for the same reason nest_hp is: raising one sets it to full.
-		World.blight_structures[at]["hp"] = float(row.get("hp", struct_def.max_hp))
-
-	_restore_buildings(data.get("buildings", []), entities)
-	_restore_villagers(data.get("villagers", []), entities)
-
-	Divine.place_ember(int(data.get("ember_cell", World.keep_cell)))
-	Divine.faith = float(data.get("faith", 20.0))
+	if not Realm.load_dict(data.get("realm", {})):
+		return false
+	var ledger := Realm.awake_ledger()
+	ledger.advance_to(int(data.get("day", 1)))
+	if not Reconstitutor.restore(ledger, entities):
+		return false
 
 	Sim.start_run()
 	Sim.tick = int(data.get("tick", 0))
 	Sim.day = int(data.get("day", 1))
-	Sim.set_phase(int(data.get("phase", Sim.Phase.DAY)))
+	Sim.phase = int(data.get("phase", Sim.Phase.DAY))
 	Sim.phase_elapsed = float(data.get("phase_elapsed", 0.0))
-
-	Events.map_generated.emit()
+	Events.phase_changed.emit(Sim.phase, Sim.PHASE_DURATION[Sim.phase])
+	Events.colony_awakened.emit(Realm.awake_id)
 	return true
 
 
-static func _restore_buildings(rows: Array, entities: Node) -> void:
-	var scene: PackedScene = load("res://scenes/entities/building.tscn")
-	for row: Dictionary in rows:
-		var def := Buildings.get_building(row["def"])
-		if def == null:
-			continue
-		var b: Node = scene.instantiate()
-		b.setup(def, int(row["anchor"]))
-		b.delivered = row.get("delivered", {}).duplicate()
-		b.work_done = float(row.get("work", 0.0))
-		b.position = Colony._building_origin(def, int(row["anchor"]))
-		entities.add_child(b)
-		if bool(row.get("complete", false)):
-			b.complete()
-			b.hp = float(row.get("hp", def.max_hp))
+static func _read():
+	if not has_save():
+		return null
+	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if f == null:
+		return null
+	var data = f.get_var()
+	f.close()
+	if typeof(data) != TYPE_DICTIONARY:
+		push_warning("RunSave: save file is not a dictionary")
+		return null
+	return data
 
 
-static func _restore_villagers(rows: Array, entities: Node) -> void:
-	var scene: PackedScene = load("res://scenes/entities/villager.tscn")
-	for row: Dictionary in rows:
-		var v: Villager = scene.instantiate()
-		v.position = Vector2(float(row["x"]), float(row["y"]))
-		entities.add_child(v)
-		# Set after adding, because _ready resets health to max.
-		v.job = row.get("job", &"")
-		v.food = float(row.get("food", 80.0))
-		v.water = float(row.get("water", 80.0))
-		v.rest = float(row.get("rest", 80.0))
-		v.mood = float(row.get("mood", 60.0))
-		v.health = float(row.get("health", v.max_health))
+static func _migrate_v2(old: Dictionary) -> Dictionary:
+	Realm.start_new(int(old.get("seed", 0)))
+	var region_id := Realm.suggested_first_region()
+	var site: Dictionary = Realm.site(region_id)
+	var ledger := ColonyLedger.new()
+	ledger.id = region_id
+	ledger.display_name = String(site.get("name", "The First Hearth"))
+	ledger.seed_value = int(old.get("seed", 0))
+	ledger.keep_cell = -1
+	ledger.realm_position = Vector2(site.get("coord", Vector2i.ZERO))
+	ledger.connections.assign(site.get("connections", []))
+	ledger.is_heart = true
+	ledger.founded_day = 1
+	ledger.last_advanced_day = int(old.get("day", 1))
+	ledger.state = {
+		"legacy_generation": true,
+		"feature": old.get("feature", PackedByteArray()).duplicate(),
+		"blight": old.get("blight", PackedByteArray()).duplicate(),
+		"nest_hp": old.get("nest_hp", {}).duplicate(true),
+		"blight_structures": old.get("blight_structures", {}).duplicate(true),
+		"blight_growth": float(old.get("blight_growth", 0.0)),
+		"stock": old.get("stock", {}).duplicate(true),
+		"reserved": old.get("reserved", {}).duplicate(true),
+		"quotas": old.get("quotas", {}).duplicate(true),
+		"migration_progress": float(old.get("migration_progress", 0.0)),
+		"faith": float(old.get("faith", 20.0)),
+		"ember_cell": int(old.get("ember_cell", -1)),
+		"night_index": int(old.get("night_index", 0)),
+		"threat_pressure": 0.0,
+		"villagers": old.get("villagers", []).duplicate(true),
+		"buildings": old.get("buildings", []).duplicate(true),
+	}
+	Realm.colonies[ledger.id] = ledger
+	Realm.awake_id = ledger.id
+	Realm.heart_region_id = ledger.id
+	return {
+		"version": SCHEMA_VERSION,
+		"difficulty": old.get("difficulty", String(Difficulties.DEFAULT_ID)),
+		"tick": int(old.get("tick", 0)),
+		"day": int(old.get("day", 1)),
+		"phase": int(old.get("phase", Sim.Phase.DAY)),
+		"phase_elapsed": float(old.get("phase_elapsed", 0.0)),
+		"realm": Realm.to_dict(),
+	}

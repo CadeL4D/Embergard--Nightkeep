@@ -17,7 +17,7 @@ UI_BEGIN_AGAIN,Begin again
 UI_ROLL,Roll
 UI_SEED,seed
 UI_CARRY_THE_EMBER,Carry the Ember
-UI_CHOOSE_WHERE_TO_SETTLE,Choose where to settle
+UI_CHOOSE_WHERE_TO_SETTLE,Choose a starting region
 UI_BEST_RUN,best: day {0}   ·   {1} shards
 UI_MASTER,Master
 UI_MUSIC,Music
@@ -298,4 +298,121 @@ BLIGHT_TOTEM,blight totem
 BLIGHT_TOTEM_DESC,It glows, and everything that comes past it is stronger for having.
 NOTICE_BLIGHT_BUILDS,They have raised a {0} out past your reach.
 NOTICE_BLIGHT_RAZED,One of their works is levelled.
+UI_REALM,Realm
+UI_CLOSE,Close
+REALM_TITLE,The Ember Realm
+REALM_HEADER_STATE,{0} colonies  •  {1}% warded
+REALM_FIRST_HEADER,Choose your first settlement  •  world seed {0}
+REALM_OVERVIEW,The generated world
+REALM_CHOOSE_REGION,Choose an area to inspect
+REALM_CHOOSE_REGION_SUMMARY,Select anywhere on the landscape to zoom into that region. You can inspect its full local terrain before deciding to inhabit it.
+REALM_UNSETTLED,Unsettled frontier
+REALM_OCEAN,Open water
+REALM_BLIGHT_CORE,The Blight Heart
+REALM_REGION_SUMMARY,"{0}\nforest {1}%  •  stone {2}%  •  food {3}%"
+REALM_OCEAN_SUMMARY,This region is water and cannot hold a settlement.
+REALM_CORE_SUMMARY,The source of the Realm's corruption. Surround it with strong wards before the final assault.
+REALM_FALLEN,Fallen to the Blight
+REALM_AWAKE,Awake — you are here
+REALM_SLEEPING,Ledger active — time still passes
+REALM_SITE_SUMMARY,"Founding caravan\n{0} wood  •  {1} stone  •  {2} food\n{3} settlers leave the awake colony."
+REALM_FALLEN_SUMMARY,"Nothing answers here. The road remains, but this ward gives no protection."
+REALM_COLONY_SUMMARY,"{0} survivors  •  {1} buildings  •  mood {2}\nfood {3}  •  wood {4}  •  stone {5}\ncorruption {6}%  •  defense {7}%\nintercepted pressure {8}"
+REALM_FOUND,Found colony
+REALM_BEGIN_HERE,Begin settlement here
+REALM_BACK_TO_WORLD,Back to world
+REALM_TRAVEL,Travel here
+REALM_NO_ROAD,The awake colony has no direct road to this site.
+REALM_SEND_FOOD,+10 food
+REALM_SEND_WOOD,+10 wood
+REALM_SEND_SETTLER,+1 settler
+REALM_COVERAGE_HELP,Settlements protect nearby regions. More survivors and completed defenses widen their warded territory.
+REALM_HEART_STATE,Blight Heart {0}/{1}
+REALM_ASSAULT,Strike the Heart
+REALM_REASON_SETTLED,That site is already settled.
+REALM_REASON_UNSETTLEABLE,This region cannot hold a settlement.
+REALM_REASON_CORE,The Blight Heart cannot be settled.
+REALM_REASON_NO_ROAD,No safe road reaches that site.
+REALM_REASON_SETTLERS,The colony needs two settlers and one survivor at home.
+REALM_REASON_RESOURCE,The caravan lacks {0}.
+REALM_REASON_HEART_BROKEN,The Blight Heart is already broken.
+REALM_REASON_RING_OPEN,The regions around the Blight Heart are not fully warded.
+REALM_REASON_FAITH,The assault needs {0} Faith.
+REALM_REASON_ASSAULT_RESOURCE,The assault lacks {0}.
+REALM_REASON_CARAVAN,The caravan cannot leave.
+REALM_NOTICE_AWAKE,Awake at {0}.
+REALM_NOTICE_FOUNDED,{0} is founded. Its ward now faces the Blight.
+REALM_NOTICE_SENT,{0} {1} sent to {2}.
+REALM_NOTICE_MIGRANT,A settler departed for {0}.
+REALM_NOTICE_OUTPOST_FALLEN,{0} has fallen. The First Hearth still endures. {1}
+REALM_NOTICE_HEART_CRACKS,The Blight Heart cracks. {0} strength remains.
+REALM_NOTICE_VICTORY,The ring holds. The Blight Heart is broken.
 UPGRADE_LOCKED,sealed to you — {0} shards
+UI_HISTORY,Chronicle
+UI_INTERFACE,Interface
+OPTIONS_AUDIO,Audio
+OPTIONS_ACCESSIBILITY,Accessibility
+OPTIONS_ACCESS_TAB,Access
+OPTIONS_CONTROLS,Controls
+AUDIO_COMPLETE_NOTE,Procedural music changes with the day and night. Every action uses its own finished sound.
+ACCESS_PALETTE,Colour palette
+ACCESS_PALETTE_DEFAULT,Original
+ACCESS_PALETTE_RED_GREEN,Red-green safe
+ACCESS_PALETTE_BLUE_YELLOW,Blue-yellow safe
+ACCESS_PALETTE_HIGH_CONTRAST,High contrast
+ACCESS_TEXT_SIZE,Text size
+ACCESS_REDUCED_MOTION,Reduce camera and menu motion
+ACCESS_HAPTICS,Haptic feedback on supported devices
+ACCESS_TUTORIALS,Show contextual guidance
+ACCESS_RESET_TUTORIALS,Reset guidance cards
+ACCESS_TUTORIALS_RESET,Guidance cards reset
+CONTROL_PAUSE,Pause or resume
+CONTROL_SPEED,Cycle game speed
+CONTROL_JOBS,Open the Job Board
+CONTROL_BUILD,Open the build menu
+CONTROL_REALM,Open the Realm
+CONTROL_CANCEL,Cancel or close
+CONTROL_RESET,Restore default controls
+CONTROL_PRESS_KEY,Press a key…
+TUTORIAL_KICKER,EMBERGARD FIELD GUIDE
+TUTORIAL_CONTINUE,Continue
+TUTORIAL_SKIP_ALL,Skip all guidance
+TUTORIAL_COUNT,Guidance {0} of {1}
+TUTORIAL_WELCOME_TITLE,This world is yours to read
+TUTORIAL_WELCOME_BODY,"Drag to pan and pinch or use the mouse wheel to zoom. The Realm map shows the connected forests, stone and berry-rich ground inside every region before you settle it."
+TUTORIAL_EMBER_TITLE,Carry the Ember
+TUTORIAL_EMBER_BODY,Tap empty ground to move the Ember. Its light protects survivors and burns the Blight at night. Drag the bright flame directly when you need precise control.
+TUTORIAL_JOBS_TITLE,Guide work with quotas
+TUTORIAL_JOBS_BODY,"Open the Job Board and use minus, plus or the sliders to decide how many survivors take each role. People change jobs instead of receiving constant individual orders."
+TUTORIAL_BUILD_TITLE,Place with confidence
+TUTORIAL_BUILD_BODY,Move the green ghost to valid ground and confirm it. On desktop you can drag roads and palisades into a whole line; right-click or Escape cancels.
+TUTORIAL_DUSK_TITLE,Dusk is your warning
+TUTORIAL_DUSK_BODY,"Work continues while the light fades. Bring the Ember home, staff Warriors and inspect the breach arrows before darkness gives the Blight its advantage."
+TUTORIAL_POWERS_TITLE,Miracles carry a Burden
+TUTORIAL_POWERS_BODY,Abilities spend Faith when cast and permanently reduce Faith income while taken up. Tap the Faith readout to see every source and Burden.
+TUTORIAL_PRODUCTION_TITLE,Workshops form a chain
+TUTORIAL_PRODUCTION_BODY,Later buildings consume processed goods. Staff their matching jobs and use the resource breakdown to find the exact input that is stopping production.
+TUTORIAL_COLONIES_TITLE,Every colony stands alone
+TUTORIAL_COLONIES_BODY,"Each settlement owns its survivors, stockpile and local Blight. Use the Realm to travel or send supplies across adjacent regions; nothing is silently shared."
+TUTORIAL_BLIGHT_TITLE,Corruption grows locally
+TUTORIAL_BLIGHT_BODY,Several small Blight pockets can threaten a settled map. Uninhabited regions stay dormant. Ward sources locally before their settlements and night pressure mature.
+HISTORY_LIFETIME,{0} runs • {1} days endured • {2} monsters defeated • {3} buildings raised
+HISTORY_ACHIEVEMENTS,Achievements {0}/{1}: {2}
+HISTORY_NONE,None yet
+HISTORY_EMPTY,"No worlds have ended yet. Your completed and fallen runs will be recorded here."
+HISTORY_RUN_TITLE,Day {0} • {1} • {2}
+HISTORY_RUN_DETAIL,{0} colonies • {1} survivors • {2} defeated • +{3} shards
+HISTORY_COMPLETE,Realm saved
+HISTORY_ASCENDED,Ascended
+HISTORY_FALLEN,Fallen
+HISTORY_COPY_SEED,Seed {0}
+HISTORY_COPY_HELP,Copy this world seed to the clipboard
+HISTORY_COPIED,Seed copied
+SUMMARY_COPY_SEED,Copy world seed {0}
+SUMMARY_ACHIEVEMENTS,New achievements: {0}
+ACHIEVEMENT_FIRST_NIGHT,First Light
+ACHIEVEMENT_BUILDER,Raised in Fire
+ACHIEVEMENT_PURIFIER,Root and Branch
+ACHIEVEMENT_SURVIVOR,Ten-Day Vigil
+ACHIEVEMENT_REALMKEEPER,Realmkeeper
+ACHIEVEMENT_NETWORK,Many Hearths

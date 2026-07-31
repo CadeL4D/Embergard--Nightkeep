@@ -64,6 +64,9 @@ extends Resource
 ## `Building.complete()` stamps the tier into World.path_tier from there. The alternative was a
 ## parallel paint tool that would have needed its own version of all of that.
 @export var path_tier: int = 0
+## Desktop may paint this one-cell structure along a mouse drag. Data, not an id check:
+## walls and roads opt in while gates, towers and ordinary buildings remain one deliberate click.
+@export var drag_placeable: bool = false
 
 @export_group("Construction")
 ## Resource cost, e.g. { &"wood": 20, &"stone": 10 }.

@@ -56,6 +56,9 @@ func _trim() -> void:
 	while get_child_count() > MAX_TOASTS:
 		var oldest := get_child(0)
 		_live.erase(oldest)
+		# queue_free() alone leaves the node counted until the end of the frame, so this loop
+		# would keep selecting the same oldest toast forever as soon as a fifth notice arrived.
+		remove_child(oldest)
 		oldest.queue_free()
 
 

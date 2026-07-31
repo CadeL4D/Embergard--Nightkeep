@@ -71,3 +71,8 @@ signal storyteller_event(event_id: StringName, payload: Dictionary)
 ## would be six hours of decoration nobody asked for.
 signal placement_mode_changed(active: bool)
 signal notice(text: String, urgency: int)           ## 0 info, 1 warning, 2 alarm
+
+# --- Realm ------------------------------------------------------------------------
+signal realm_changed()
+signal colony_awakened(colony_id: StringName)
+signal realm_victory()

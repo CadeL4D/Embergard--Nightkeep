@@ -9,7 +9,9 @@ extends CanvasLayer
 @onready var _title: Label = $Center/Card/Layout/Title
 @onready var _message: Label = $Center/Card/Layout/Message
 @onready var _stats: Label = $Center/Card/Layout/Stats
+@onready var _seed: Button = $Center/Card/Layout/Seed
 @onready var _shards: Label = $Center/Card/Layout/Shards
+@onready var _achievements: Label = $Center/Card/Layout/Achievements
 @onready var _unlocks: Label = $Center/Card/Layout/Unlocks
 @onready var _unlock_button: Button = $Center/Card/Layout/UnlockButton
 @onready var _new_run: Button = $Center/Card/Layout/NewRun
@@ -32,6 +34,7 @@ func _ready() -> void:
 	# Without this the main menu is a one-way door: the only way back to difficulty and
 	# seed choice would be to quit the game.
 	_menu_button.pressed.connect(_on_main_menu)
+	_seed.pressed.connect(_copy_seed)
 
 
 ## The run's closing line arrives as a notice just after run_ended, so it is
@@ -49,6 +52,14 @@ func _on_run_ended(ascended: bool, shards: int) -> void:
 
 	_stats.text = L10n.t(&"SUMMARY_STATS", [Sim.day, Colony.population()])
 	_shards.text = L10n.t(&"SUMMARY_SHARDS", [shards, Meta.shards])
+	var record: Dictionary = Meta.run_history[0] if not Meta.run_history.is_empty() else {}
+	_seed.text = L10n.t(&"SUMMARY_COPY_SEED", [int(record.get("seed", World.seed_value))])
+	var new_achievements: Array = record.get("new_achievements", [])
+	var names := PackedStringArray()
+	for id in new_achievements:
+		names.append(tr(StringName("ACHIEVEMENT_" + String(id).to_upper())))
+	_achievements.visible = not names.is_empty()
+	_achievements.text = L10n.t(&"SUMMARY_ACHIEVEMENTS", [", ".join(names)])
 
 	_refresh_offer()
 
@@ -57,11 +68,19 @@ func _on_run_ended(ascended: bool, shards: int) -> void:
 	_card.scale = Vector2(0.97, 0.97)
 	_card.pivot_offset = _card.size * 0.5
 	var reveal := create_tween().set_parallel(true)
-	reveal.tween_property(_card, "modulate:a", 1.0, 0.24)\
+	var duration := Accessibility.motion_duration(0.24)
+	reveal.tween_property(_card, "modulate:a", 1.0, duration)\
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	reveal.tween_property(_card, "scale", Vector2.ONE, 0.24)\
+	reveal.tween_property(_card, "scale", Vector2.ONE, duration)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_new_run.grab_focus()
+
+
+func _copy_seed() -> void:
+	if Meta.run_history.is_empty():
+		return
+	DisplayServer.clipboard_set(str(Meta.run_history[0].get("seed", World.seed_value)))
+	_seed.text = tr(&"HISTORY_COPIED")
 
 
 ## Offer the cheapest thing still locked, and let the PLAYER decide.

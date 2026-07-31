@@ -1,0 +1,92 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/onboarding.gd" id="1_onboarding"]
+
+[sub_resource type="StyleBoxFlat" id="Style_card"]
+content_margin_left = 18.0
+content_margin_top = 15.0
+content_margin_right = 18.0
+content_margin_bottom = 15.0
+bg_color = Color(0.043, 0.055, 0.078, 0.985)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 0.604, 0.235, 0.72)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.75)
+shadow_size = 10
+shadow_offset = Vector2(0, 4)
+
+[node name="Onboarding" type="CanvasLayer"]
+layer = 70
+script = ExtResource("1_onboarding")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 1
+color = Color(0.008, 0.012, 0.02, 0.66)
+
+[node name="Center" type="CenterContainer" parent="Dim"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Card" type="PanelContainer" parent="Dim/Center"]
+custom_minimum_size = Vector2(440, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_card")
+
+[node name="Rows" type="VBoxContainer" parent="Dim/Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="Kicker" type="Label" parent="Dim/Center/Card/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.604, 0.235, 1)
+theme_override_font_sizes/font_size = 9
+text = "TUTORIAL_KICKER"
+
+[node name="Title" type="Label" parent="Dim/Center/Card/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.847, 0.541, 1)
+theme_override_font_sizes/font_size = 16
+text = "Tutorial"
+
+[node name="Body" type="Label" parent="Dim/Center/Card/Rows"]
+custom_minimum_size = Vector2(400, 72)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.827, 0.847, 0.875, 1)
+theme_override_font_sizes/font_size = 11
+text = ""
+autowrap_mode = 3
+
+[node name="Footer" type="HBoxContainer" parent="Dim/Center/Card/Rows"]
+layout_mode = 2
+
+[node name="Count" type="Label" parent="Dim/Center/Card/Rows/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.455, 0.502, 0.553, 1)
+text = ""
+
+[node name="Buttons" type="HBoxContainer" parent="Dim/Center/Card/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SkipAll" type="Button" parent="Dim/Center/Card/Rows/Buttons"]
+custom_minimum_size = Vector2(120, 30)
+layout_mode = 2
+text = "TUTORIAL_SKIP_ALL"
+
+[node name="Continue" type="Button" parent="Dim/Center/Card/Rows/Buttons"]
+custom_minimum_size = Vector2(160, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "TUTORIAL_CONTINUE"

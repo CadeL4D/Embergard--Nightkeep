@@ -12,6 +12,7 @@ extends Node
 ## colour is written down. See UiTheme.
 
 var theme: Theme = null
+var text_scale: float = 1.0
 
 
 func _ready() -> void:
@@ -38,6 +39,7 @@ func _on_node_added(node: Node) -> void:
 	var control := node as Control
 	if not control.get_parent() is Control and control.theme == null:
 		control.theme = theme
+	_apply_font_scale(control)
 
 
 ## Assign the shared Theme where inheritance restarts after a non-Control node.
@@ -48,4 +50,21 @@ func _apply_below(node: Node) -> void:
 			var control := child as Control
 			if control.theme == null:
 				control.theme = theme
+			_apply_font_scale(control)
+		elif child is Control:
+			_apply_font_scale(child as Control)
 		_apply_below(child)
+
+
+func set_text_scale(value: float) -> void:
+	text_scale = clampf(value, 0.9, 1.3)
+	apply()
+
+
+func _apply_font_scale(control: Control) -> void:
+	if control.has_theme_font_size_override("font_size"):
+		if not control.has_meta("access_base_font_size"):
+			control.set_meta("access_base_font_size",
+				control.get_theme_font_size("font_size"))
+		var base := int(control.get_meta("access_base_font_size"))
+		control.add_theme_font_size_override("font_size", maxi(8, roundi(base * text_scale)))

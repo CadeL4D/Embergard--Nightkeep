@@ -13,12 +13,13 @@ const RUN_SCENE := "res://scenes/run/run.tscn"
 
 ## Not named `Panel`: that shadows Godot's native Panel class and the parser rejects it
 ## outright. Same trap as naming a local variable `scale` inside a Control.
-enum Screen { ROOT, CREATE, OPTIONS, CREDITS }
+enum Screen { ROOT, CREATE, OPTIONS, HISTORY, CREDITS }
 
 @onready var _panels := {
 	Screen.ROOT: $Center/Root,
 	Screen.CREATE: $Center/Create,
 	Screen.OPTIONS: $Center/Options,
+	Screen.HISTORY: $Center/History,
 	Screen.CREDITS: $Center/Credits,
 }
 
@@ -30,11 +31,11 @@ enum Screen { ROOT, CREATE, OPTIONS, CREDITS }
 @onready var _pick_site: CheckBox = $Center/Create/Rows/PickSite
 @onready var _difficulty_blurb: Label = $Center/Create/Rows/Blurb
 
-@onready var _sliders := {
-	Audio.BUS_MASTER: $Center/Options/Rows/MasterRow/Slider,
-	Audio.BUS_MUSIC: $Center/Options/Rows/MusicRow/Slider,
-	Audio.BUS_SFX: $Center/Options/Rows/SfxRow/Slider,
-}
+@onready var _settings_panel: SettingsPanel = $Center/Options/Rows/Settings
+@onready var _history_lifetime: Label = $Center/History/Rows/Lifetime
+@onready var _history_achievements: Label = $Center/History/Rows/Achievements
+@onready var _history_records: VBoxContainer = \
+	$Center/History/Rows/Scroll/Records
 
 ## difficulty id -> its button, so the selection can be shown without rebuilding the list.
 var _difficulty_buttons: Dictionary = {}
@@ -58,7 +59,8 @@ func _ready() -> void:
 	_best.text = L10n.t(&"UI_BEST_RUN", [Meta.best_day, Meta.shards])
 
 	_show(Screen.ROOT)
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.35)\
+	create_tween().tween_property(self, "modulate:a", 1.0,
+		Accessibility.motion_duration(0.35))\
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
@@ -68,6 +70,7 @@ func _wire_navigation() -> void:
 	$Center/Root/Rows/ContinueButton.pressed.connect(_on_continue)
 	$Center/Root/Rows/NewButton.pressed.connect(func() -> void: _show(Screen.CREATE))
 	$Center/Root/Rows/OptionsButton.pressed.connect(func() -> void: _show(Screen.OPTIONS))
+	$Center/Root/Rows/HistoryButton.pressed.connect(func() -> void: _show(Screen.HISTORY))
 	$Center/Root/Rows/CreditsButton.pressed.connect(func() -> void: _show(Screen.CREDITS))
 	$Center/Root/Rows/QuitButton.pressed.connect(func() -> void: get_tree().quit())
 
@@ -75,6 +78,7 @@ func _wire_navigation() -> void:
 	$Center/Create/Rows/Buttons/BeginButton.pressed.connect(_on_begin)
 	$Center/Create/Rows/SeedRow/RerollButton.pressed.connect(_reroll_seed)
 	$Center/Options/Rows/BackButton.pressed.connect(_on_options_closed)
+	$Center/History/Rows/BackButton.pressed.connect(func() -> void: _show(Screen.ROOT))
 	$Center/Credits/Rows/BackButton.pressed.connect(func() -> void: _show(Screen.ROOT))
 
 
@@ -84,9 +88,12 @@ func _show(which: Screen) -> void:
 	for key in _panels:
 		_panels[key].visible = key == which
 	var target: Control = _panels[which]
+	if which == Screen.HISTORY:
+		_refresh_history()
 	target.modulate.a = 0.0
 	_panel_tween = create_tween()
-	_panel_tween.tween_property(target, "modulate:a", 1.0, 0.18)\
+	_panel_tween.tween_property(target, "modulate:a", 1.0,
+		Accessibility.motion_duration(0.18))\
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
@@ -156,16 +163,75 @@ func _on_continue() -> void:
 # --- Options ---------------------------------------------------------------------------
 
 func _build_options() -> void:
-	for bus: StringName in _sliders:
-		var slider: HSlider = _sliders[bus]
-		slider.min_value = 0.0
-		slider.max_value = 1.0
-		slider.step = 0.05
-		slider.value = Audio.get_volume(bus)
-		# Applied live rather than on close, so dragging a slider is audibly a preview.
-		slider.value_changed.connect(func(v: float) -> void: Audio.set_volume(bus, v))
+	pass
 
 
 func _on_options_closed() -> void:
-	Audio.save_settings()
+	_settings_panel.save()
 	_show(Screen.ROOT)
+
+
+# --- Run history -----------------------------------------------------------------------
+
+func _refresh_history() -> void:
+	var stats := Meta.lifetime_stats
+	_history_lifetime.text = L10n.t(&"HISTORY_LIFETIME", [
+		Meta.runs_played,
+		int(stats.get("days", 0)),
+		int(stats.get("monsters", 0)),
+		int(stats.get("buildings", 0)),
+	])
+	var achievement_names := PackedStringArray()
+	for id: StringName in Meta.achievements:
+		achievement_names.append(tr(StringName("ACHIEVEMENT_" + String(id).to_upper())))
+	_history_achievements.text = L10n.t(&"HISTORY_ACHIEVEMENTS", [
+		Meta.achievements.size(), 6,
+		", ".join(achievement_names) if not achievement_names.is_empty() else tr(&"HISTORY_NONE"),
+	])
+	for child in _history_records.get_children():
+		_history_records.remove_child(child)
+		child.queue_free()
+	if Meta.run_history.is_empty():
+		var empty := Label.new()
+		empty.text = tr(&"HISTORY_EMPTY")
+		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_history_records.add_child(empty)
+		return
+	for record: Dictionary in Meta.run_history:
+		_history_records.add_child(_history_row(record))
+
+
+func _history_row(record: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	panel.add_child(row)
+	var copy := VBoxContainer.new()
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var title := Label.new()
+	title.text = L10n.t(&"HISTORY_RUN_TITLE", [
+		int(record.get("day", 0)),
+		tr(StringName("DIFFICULTY_" + String(record.get("difficulty", "harried")).to_upper())),
+		tr(&"HISTORY_COMPLETE" if bool(record.get("realm_completed", false)) else
+			&"HISTORY_ASCENDED" if bool(record.get("ascended", false)) else &"HISTORY_FALLEN"),
+	])
+	title.add_theme_color_override("font_color", UiPalette.ACCENT_PALE)
+	var detail := Label.new()
+	detail.text = L10n.t(&"HISTORY_RUN_DETAIL", [
+		int(record.get("colonies", 1)), int(record.get("population", 0)),
+		int(record.get("monsters", 0)), int(record.get("shards", 0)),
+	])
+	detail.add_theme_color_override("font_color", UiPalette.TEXT_DIM)
+	copy.add_child(title)
+	copy.add_child(detail)
+	var seed_button := Button.new()
+	seed_button.custom_minimum_size = Vector2(88, 30)
+	seed_button.text = L10n.t(&"HISTORY_COPY_SEED", [int(record.get("seed", 0))])
+	seed_button.tooltip_text = tr(&"HISTORY_COPY_HELP")
+	seed_button.pressed.connect(func() -> void:
+		DisplayServer.clipboard_set(str(record.get("seed", 0)))
+		seed_button.text = tr(&"HISTORY_COPIED")
+	)
+	row.add_child(copy)
+	row.add_child(seed_button)
+	return panel

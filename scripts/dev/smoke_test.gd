@@ -21,6 +21,7 @@ const SIM_SECONDS := 600.0
 const STEP := 0.05                   ## fixed feed into Sim, independent of real fps
 
 var _failures: PackedStringArray = PackedStringArray()
+var _profile_snapshot: Dictionary = {}
 
 
 const RUN_SCENE := preload("res://scenes/run/run.tscn")
@@ -31,6 +32,17 @@ const LIVE_FRAMES := 240
 
 
 func _ready() -> void:
+	_profile_snapshot = {
+		"shards": Meta.shards,
+		"unlocked": Meta.unlocked.duplicate(),
+		"ascension": Meta.ascension,
+		"best_day": Meta.best_day,
+		"runs_played": Meta.runs_played,
+		"last_difficulty": Meta.last_difficulty,
+		"run_history": Meta.run_history.duplicate(true),
+		"lifetime_stats": Meta.lifetime_stats.duplicate(true),
+		"achievements": Meta.achievements.duplicate(),
+	}
 	print("=== Embergard smoke test ===")
 	# Pin the difficulty. Every balance assertion below is calibrated against the
 	# baseline tier, and a run left on whatever the developer last played would fail
@@ -41,6 +53,8 @@ func _ready() -> void:
 		_run_seed(s)
 	print("\n-- localization --")
 	_check_locale(SEEDS[0])
+	print("\n-- Phase 5 polish --")
+	_check_phase5(SEEDS[0])
 	print("\n-- migration and pacing --")
 	_check_migration(SEEDS[SEEDS.size() - 1])
 	await _check_live_colony()
@@ -150,6 +164,7 @@ func _check_lifecycle(seed_value: int, run: Node2D) -> void:
 
 	# --- Ending the run --------------------------------------------------------------
 	var shards_before := Meta.shards
+	var history_before := Meta.run_history.size()
 	var result := {"ended": false, "awarded": 0}
 	var on_end := func(_asc: bool, s: int) -> void:
 		result["ended"] = true
@@ -168,6 +183,11 @@ func _check_lifecycle(seed_value: int, run: Node2D) -> void:
 	_expect(Meta.shards >= shards_before, seed_value,
 		"shards are banked, not silently spent (%d -> %d)" % [shards_before, Meta.shards])
 	_expect(not RunSave.has_save(), seed_value, "a finished run clears its save")
+	_expect(Meta.run_history.size() == history_before + 1, seed_value,
+		"the Chronicle records the finished world's seed and result")
+	if not Meta.run_history.is_empty():
+		_expect(int(Meta.run_history[0].get("seed", 0)) == Realm.world_seed, seed_value,
+			"the recorded seed can recreate and share the same world")
 	Events.run_ended.disconnect(on_end)
 
 	# The meta must actually gate content, or shards are a number with no meaning.
@@ -1046,6 +1066,31 @@ func _check_ledger(seed_value: int) -> void:
 ## is that a missed string renders as `BUILDING_GATE_DESC` on screen instead of failing silently —
 ## but that only helps if something notices. A typo in a .tres is otherwise invisible until a
 ## player screenshots it.
+func _check_phase5(seed_value: int) -> void:
+	_expect(Audio._sfx.size() == AudioData.SFX_IDS.size(), seed_value,
+		"every Phase 5 sound effect is imported (%d)" % Audio._sfx.size())
+	_expect(Audio._music_player != null and Audio._music_player.stream is AudioStreamGenerator,
+		seed_value, "the infinite procedural music generator is running")
+	_expect(Accessibility.PALETTE_NAMES.size() == 4, seed_value,
+		"the original and three accessible colour palettes exist")
+	_expect(Accessibility.TEXT_SCALES.size() >= 4, seed_value,
+		"text size offers several deliberate readable steps")
+	_expect(Accessibility._filter_material != null, seed_value,
+		"the full-screen colour accessibility filter is available")
+	for action: StringName in Accessibility.ACTION_DEFAULTS:
+		_expect(InputMap.has_action(action) and not InputMap.action_get_events(action).is_empty(),
+			seed_value, "desktop action '%s' has a remappable key" % action)
+	for id in [&"palisade", &"path", &"road"]:
+		var drag_def := Buildings.get_building(id)
+		_expect(drag_def != null and drag_def.drag_placeable, seed_value,
+			"%s opts into desktop drag placement" % id)
+	var onboarding_script := load("res://scripts/ui/onboarding.gd")
+	_expect(onboarding_script != null, seed_value,
+		"contextual onboarding is present and loadable")
+	_expect(Meta.HISTORY_LIMIT >= 20, seed_value,
+		"the Chronicle retains a useful number of completed worlds")
+
+
 func _check_locale(seed_value: int) -> void:
 	_expect(Locale.keys.size() > 50, seed_value,
 		"the translation table loaded (%d keys)" % Locale.keys.size())
@@ -1247,6 +1292,18 @@ func _fail(seed_value: int, description: String) -> void:
 
 
 func _report() -> void:
+	# Lifecycle coverage awards real shards through the same path as the shipped game. Put the
+	# player's profile back before exiting so running the developer suite cannot farm or damage it.
+	Meta.shards = int(_profile_snapshot["shards"])
+	Meta.unlocked.assign(_profile_snapshot["unlocked"])
+	Meta.ascension = int(_profile_snapshot["ascension"])
+	Meta.best_day = int(_profile_snapshot["best_day"])
+	Meta.runs_played = int(_profile_snapshot["runs_played"])
+	Meta.last_difficulty = StringName(_profile_snapshot["last_difficulty"])
+	Meta.run_history.assign(_profile_snapshot["run_history"])
+	Meta.lifetime_stats = _profile_snapshot["lifetime_stats"].duplicate(true)
+	Meta.achievements.assign(_profile_snapshot["achievements"])
+	Meta.save_profile()
 	print("\n=== result ===")
 	if _failures.is_empty():
 		print("all checks passed across %d seeds" % SEEDS.size())

@@ -365,9 +365,9 @@ theme_override_font_sizes/font_size = 10
 toggle_mode = true
 text = "UI_BUILD"
 
-[node name="AscendButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+[node name="RealmButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
 theme_override_font_sizes/font_size = 10
-text = "UI_ASCEND"
+text = "UI_REALM"

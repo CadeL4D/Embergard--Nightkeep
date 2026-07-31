@@ -13,6 +13,7 @@ category = &"defence"
 tier = 1
 footprint = Vector2i(1, 1)
 blocks_movement = true
+drag_placeable = true
 max_blight = 80
 cost = {
 &"wood": 5

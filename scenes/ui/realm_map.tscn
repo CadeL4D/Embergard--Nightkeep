@@ -1,0 +1,168 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/realm_map.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/realm_map_canvas.gd" id="2"]
+
+[sub_resource type="StyleBoxFlat" id="MapFrame"]
+bg_color = Color(0.035, 0.045, 0.065, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.23, 0.27, 0.32, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[node name="RealmMap" type="CanvasLayer"]
+layer = 90
+script = ExtResource("1")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.018, 0.023, 0.033, 0.91)
+
+[node name="Safe" type="MarginContainer" parent="Backdrop"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="Panel" type="PanelContainer" parent="Backdrop/Safe"]
+layout_mode = 2
+
+[node name="Layout" type="VBoxContainer" parent="Backdrop/Safe/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Header" type="HBoxContainer" parent="Backdrop/Safe/Panel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Backdrop/Safe/Panel/Layout/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831, 0.494, 1)
+theme_override_font_sizes/font_size = 16
+text = "REALM_TITLE"
+
+[node name="RealmState" type="Label" parent="Backdrop/Safe/Panel/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.7, 0.76, 0.82, 1)
+text = ""
+vertical_alignment = 1
+
+[node name="Close" type="Button" parent="Backdrop/Safe/Panel/Layout/Header"]
+custom_minimum_size = Vector2(52, 25)
+layout_mode = 2
+text = "UI_CLOSE"
+
+[node name="Main" type="HBoxContainer" parent="Backdrop/Safe/Panel/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 7
+
+[node name="MapFrame" type="PanelContainer" parent="Backdrop/Safe/Panel/Layout/Main"]
+custom_minimum_size = Vector2(440, 245)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("MapFrame")
+
+[node name="Map" type="Control" parent="Backdrop/Safe/Panel/Layout/Main/MapFrame"]
+layout_mode = 2
+mouse_filter = 1
+script = ExtResource("2")
+
+[node name="Details" type="PanelContainer" parent="Backdrop/Safe/Panel/Layout/Main"]
+custom_minimum_size = Vector2(282, 0)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Layout" type="VBoxContainer" parent="Backdrop/Safe/Panel/Layout/Main/Details"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Name" type="Label" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831, 0.494, 1)
+theme_override_font_sizes/font_size = 14
+text = "Colony"
+
+[node name="Status" type="Label" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.88, 0.72, 1)
+text = "Status"
+
+[node name="Rule" type="HSeparator" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+layout_mode = 2
+
+[node name="Summary" type="Label" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+text = ""
+autowrap_mode = 2
+
+[node name="Warning" type="Label" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.6, 0.55, 1)
+text = ""
+autowrap_mode = 2
+
+[node name="Transfers" type="HBoxContainer" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="SendFood" type="Button" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout/Transfers"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "REALM_SEND_FOOD"
+
+[node name="SendWood" type="Button" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout/Transfers"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "REALM_SEND_WOOD"
+
+[node name="SendMigrant" type="Button" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout/Transfers"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "REALM_SEND_SETTLER"
+
+[node name="BackToWorld" type="Button" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+custom_minimum_size = Vector2(0, 25)
+layout_mode = 2
+text = "REALM_BACK_TO_WORLD"
+
+[node name="Primary" type="Button" parent="Backdrop/Safe/Panel/Layout/Main/Details/Layout"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+text = "REALM_TRAVEL"
+
+[node name="Footer" type="HBoxContainer" parent="Backdrop/Safe/Panel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Coverage" type="ProgressBar" parent="Backdrop/Safe/Panel/Layout/Footer"]
+custom_minimum_size = Vector2(210, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+show_percentage = true
+
+[node name="Heart" type="Label" parent="Backdrop/Safe/Panel/Layout/Footer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.6, 0.55, 1)
+text = "Blight Heart"
+vertical_alignment = 1
+
+[node name="Assault" type="Button" parent="Backdrop/Safe/Panel/Layout/Footer"]
+custom_minimum_size = Vector2(120, 25)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831, 0.494, 1)
+text = "REALM_ASSAULT"

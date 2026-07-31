@@ -15,8 +15,8 @@ Last updated: 2026-07-30
 | **1** | Population growth, threat curve, needs + thirst, dead air, kill rewards, rate ledger | ✅ **done** |
 | **3** | Localization scaffolding | ✅ **done** |
 | **2** | Colony depth | ✅ **done** — 2.1–2.9, smaller grid, resource masses |
-| **4** | The Realm — world map + constellation | ⬜ pending |
-| **5** | Audio content, onboarding, accessibility, desktop parity, stats | ⬜ pending |
+| **4** | The Realm — seeded regional world + independent colonies | ✅ **done** |
+| **5** | Audio content, onboarding, accessibility, desktop parity, stats | ✅ **done** |
 | **6** | Biomes, storyteller events, weather | ⬜ pending |
 
 ## Visual scale and presentation overhaul — done 2026-07-30
@@ -102,7 +102,7 @@ live — that is what finally identifies it.
 seeds and the live run, including day-one wood and stone delivery. A 12-cell experiment was rejected
 because it removed seed 2024's practical opening quarry. Before that tuning, one run hit the
 documented live-scene margin at exactly 9/22 construction work; its immediate rerun passed. The final
-iOS pack is 4,273,544 bytes, and `verify_export.py` confirms that every runtime catalog and directly
+iOS pack is 4,116,172 bytes, and `verify_export.py` confirms that every runtime catalog and directly
 read file is present.
 
 ```
@@ -636,29 +636,63 @@ build.
 
 ---
 
-## Phase 4 — The Realm
+## Phase 4 — The Realm ✅ complete
+
+**Reworked on 2026-07-30.** The Realm is now one seeded continuous landscape backed by a
+**12×8 set of 96 selectable regions**. The divisions are deliberately invisible in the overview:
+the player clicks directly on the landscape, the camera zooms into that exact region's detailed
+112×112 preview, and only the explicit **Begin settlement here** confirmation creates and opens its
+gameplay map. Back returns to the clean world view without mutating an unsettled region. Later
+colonies occupy adjacent regions on the same world. This replaces the rejected seven-node
+constellation and the visible checkerboard prototype.
+
+The macro landscape and every region are pure functions of the world seed. Several overlapping
+land masses, carved gulfs and satellite islands replace the old radial oval. Coastlines, forests,
+highlands, marshes, badlands and tundra use heavy pixel-art outer outlines, light inner rims,
+nested formation contours, seeded surface variation and water-wave detail. The generated provinces
+are intentionally irregular and pronounced instead of being circular colour patches.
+Connected dark-canopy and grey-quarry formations are then projected over that terrain from the
+same continuous forest and stone richness used by local generation. Berry-rich ground receives
+occasional tiny shrub-and-fruit clusters rather than full-tile fills. The overview therefore
+communicates what a selected local map favors without exposing its hidden region boundaries.
+
+Broad corruption is **not drawn on the world map**, and the hidden Blight Heart is not advertised
+before discovery. Each seed distributes several latent corruption sources across different
+regions. An unsettled region's latent risk remains stationary and its preview is generated without
+creating or simulating a colony. Once settled, the local 112×112 map receives several small,
+separated corruption pockets; only that colony's stored local field advances. Existing settlement
+markers may show a restrained local warning arc, never a global purple wash.
 
 **Gated on Phases 1 and 2.** Autoloads stay singletons and hold whichever colony is **awake**.
 
 | New | Kind | Responsibility |
 |---|---|---|
-| `Realm` | autoload | World-map graph, colony ledgers, global + local corruption, arc coverage |
+| `Realm` | autoload | Seeded macro landscape, region grid, colony ledgers, spatial wards |
 | `ColonyLedger` | RefCounted | Abstract state of one colony, including production chain |
 | `Abstractor` | static | Live colony → ledger, on departure |
 | `Reconstitutor` | static | Ledger → live colony, on arrival |
 
-### The Constellation
-Your first colony is the **Heart**. Every later colony covers an **angular arc** measured from it;
-width and strength fall off with distance. Threat through a covered arc is intercepted into the
-shielding colony's ledger; through an **uncovered arc it hits the Heart at full strength**. You win
-by closing the ring.
+All four are implemented in `scripts/realm/`. Every ledger owns its own stock, reserved goods,
+quotas, Faith, roster, buildings, harvested feature field, blight field and enemy settlement.
+`Abstractor` captures that exact state before departure; `Reconstitutor` rebuilds derived grids and
+nodes from it on arrival.
 
-Build close → strong shielding, overlapping arcs, mutual tribute. Build far → weak shielding,
-isolated, but reaches nests and metal. **The Heart is never safe** — a baseline trickle always spawns
-there.
+### Regional expansion and containment
 
-The bones exist: `_place_nests` already distributes nests angularly; `_spawn_cell` already biases by
-direction. Arc coverage is a **filter over existing choices**, not a new system.
+Travel, founding, resource shipments and settlers cross shared region edges. A founding caravan
+subtracts its resources and exact villager rows from the awake colony before the new ledger exists.
+There is no global stockpile: visiting Willow Thicket can show 10 wood while the First Hearth still
+has 80, because those are different colonies.
+
+Every living colony wards nearby regions. Population, completed Hearth tiers and defensive
+buildings expand that spatial protection. The Realm map draws settled routes and clean colony
+markers without restoring the hidden selection grid or revealing the Heart. The final assault
+unlocks only after at least four colonies collectively ward every land region touching the Heart.
+
+Threat interception still begins with a real local spawn cell. Its direction from the First Hearth
+is projected across the macro world; a developed colony in that direction absorbs pressure into its
+own ledger. A permanent 18% baseline still reaches home, so expansion reduces danger without
+turning the first colony off.
 
 ### Abstracted colonies that feel simulated
 Not simulated — stored as a ledger and **deterministically reconstituted**, seeded from
@@ -667,43 +701,87 @@ starving greets you with hungry villagers. O(1) per colony per day.
 
 **Blight is the exception — advance it for real.** It is the pressure, and pressure must be honest.
 
+Sleeping days are seeded independently from colony seed + day. Gatherers remove finite trees,
+rocks and berry patches from the stored feature field; workshops consume declared inputs; hunger
+changes the stored villagers; intercepted pressure damages their ward; and a bounded real blight
+advance mutates the stored byte field. Returning therefore shows the same stock, needs, cleared
+ground and corruption the summary described.
+
 > **Three invariants.** (1) The ledger is the single source of truth; reconstitution must never
 > contradict the summary the player was shown. (2) No resources from nothing. (3) Neglect is a
 > choice, never an ambush — local corruption bars warn continuously and counterplay exists.
 
 ### Also
-Save format extends to world seed + difficulty + N ledgers + full deltas for the awake colony.
-Migration between connected colonies is 1.1 at world scale. Win = close the ring, destroy the heart,
-increment `Meta.ascension`.
+Save schema 4 stores the world seed, difficulty, selected regions and N independent ledgers. Schema
+2 single-map saves and schema 3 constellation saves migrate onto deterministic reachable regions
+instead of being discarded. Three resource-and-Faith strikes destroy the contained Blight Heart;
+only the final strike records `Meta.ascension`.
+
+Local generation accepts the selected region profile. Forest regions produce denser connected
+woods, highlands favor stone, wetter regions favor food and dangerous regions begin with more
+Blight. A modest guaranteed quarry prevents resource-poor starts from becoming soft locks while
+preserving the much larger differences between biomes.
 
 ---
 
-## Phase 5 — polish
+## Phase 5 — polish ✅ complete
 
-- **5.1 Audio content.** Buses shipped in 0.12; this is the sound. SFX baked to WAV via
-  `bake_audio.gd` + `audio_data.gd` mirroring the art pipeline. **Music synthesized at runtime**
-  (`AudioStreamGenerator`) — infinite and non-repeating over a 10-hour run at near-zero size.
-  Constrain to a mode (Aeolian at night, Dorian/pentatonic by day) so every note is consonant by
-  construction; drone of root/fifth/octave sines with slow independent detune LFOs. Crossfade on
-  `phase_changed`. New folders `scripts/audio/`, `content/music/`.
-  **Device risk:** `AudioStreamGenerator` underruns on iOS with a small buffer. ~0.5s buffer,
-  allocation-free fill, baked-loop fallback. Verify on hardware early.
-- **5.2 Onboarding.** The game teaches nothing, and Phase 2 adds a production chain, spheres,
-  thirst, gates and roads on top. Contextual, state-triggered, skippable, shown-once — staged across
-  the chain (teach the Toolsmith when tools are first needed).
-- **5.3 Accessibility.** Colourblind palettes (blight-red / light-warm / monster-magenta /
-  influence-boundary are the readability axes), text scaling, reduced motion, remappable input,
-  haptics.
-- **5.4 Desktop parity.** Right-click cancel, hotkeys, hover tooltips, **drag-placement for walls
-  and paths**.
-- **5.5 Run history.** `Meta` tracks 4 numbers. Add per-run history, seed sharing, achievements.
+**Completed on 2026-07-30.** Phase 5 turns the finished simulation into a game that explains
+itself, sounds intentional, supports different players and remembers the worlds they made.
+
+### 5.1 Audio content
+
+- Twelve deterministic one-shots are authored by `audio_data.gd`, baked to ordinary 22.05 kHz
+  PCM WAV files by `bake_audio.gd`, imported, and registered at startup: distinct UI press/back,
+  construction start/finish, resource delivery, miracle, alarm, wave, monster/villager death,
+  Tome and dawn cues. A throttled resource cue prevents busy colonies becoming noise.
+- `AudioStreamGenerator` produces an infinite low-cost score with a root/fifth drone and sparse
+  modal melody. It moves from Dorian by day into Aeolian at night, blends through dusk/dawn, uses
+  a 0.55 second buffer and pushes frames without per-sample allocations.
+- Master, Music, Sound and Interface buses have separate live-preview controls. Button sounds are
+  connected centrally, so runtime-created controls cannot silently miss audio.
+
+### 5.2 Contextual onboarding
+
+- Nine event-driven Field Guide cards teach the Realm, Ember, Job Board, placement, dusk, Burden,
+  production, separate colonies and local Blight when each system first becomes relevant.
+- Cards pause safely, queue instead of overlapping, are shown once, can be skipped permanently,
+  and can be reset from Accessibility. Headless automation bypasses presentation without bypassing
+  the underlying systems.
+
+### 5.3 Accessibility and controls
+
+- Options is now a fitted three-tab surface: Audio, Access and Controls.
+- Original, red/green-safe, blue/yellow-safe and high-contrast full-screen palettes preserve the
+  important Blight/fire/monster/influence distinctions. Text has four deliberate scale steps,
+  including scene-authored overrides. Reduced motion covers menu, summary, Realm and camera
+  transitions; haptics are optional and mobile-only.
+- Pause, speed, Jobs, Build, Realm and Cancel actions are fully remappable and persisted. Settings,
+  audio, tutorials and Meta now load-merge the shared profile file; earning shards can no longer
+  erase preferences.
+
+### 5.4 Desktop parity
+
+- Mouse wheel zoom remains cursor-anchored. Right-click and Escape cancel placement, armed powers
+  and selections. Remappable hotkeys open every major HUD surface.
+- Palisades, paths and roads opt into `BuildingDef.drag_placeable`; a mouse drag paints a
+  deterministic line, validates and pays for every cell, and stops cleanly when resources run out.
+  Other buildings remain one-click deliberate placements. Build and power cards retain hover help.
+
+### 5.5 Chronicle, seed sharing and achievements
+
+- The profile schema now retains the latest 24 runs with seed, difficulty, outcome, day,
+  population, colony count, buildings, nests, kills, losses and payout, plus lifetime totals.
+- Chronicle cards and the run summary copy the exact world seed to the clipboard.
+- Six persistent achievements cover first night, construction, nest clearing, ten-day survival,
+  a four-colony network and Realm completion. Newly earned achievements appear on the payout card.
 
 ---
 
 ## Phase 6 — long tail
 
-- **Biomes.** One biome, one size, always 4 nests at 34-52 tiles. Vary `NEST_COUNT`, distance, and
-  metal/water availability by tier.
+- **Biome depth.** Macro biomes and local resource bias shipped with Phase 4. Still vary local
+  `NEST_COUNT`, nest distance, water topology, weather and unique regional hazards by biome tier.
 - **Storyteller events.** `Events.storyteller_event` is declared and **never emitted**. Caravans,
   refugee bands, blight surges, storms that dim light, droughts that dry wells.
 - **Weather / seasons** affecting light, yield and spread.
@@ -716,11 +794,29 @@ Extend the existing harness; do not replace it. `smoke_test.gd` runs 4 seeds
 (`1, 7, 424242, 99999`), 600 sim-seconds at a fixed 0.05 step, ~125 assertions.
 `stress_test.gd` covers performance; `screenshot.gd` covers visuals.
 
+`realm_test.gd` adds the Phase 4 conservation and world suite: gridless first-region selection,
+zoom-before-confirmation, stationary unsettled corruption, multiple local corruption pockets,
+deterministic macro generation, different seeds, reachability across varied seeds, region-derived
+local maps, separate stockpiles across repeated travel, founding deductions, equal transfer
+debits/credits, deterministic sleeping outcomes, N-ledger save/load, spatial containment,
+directional interception with the Heart baseline, three-stage victory, and ascension. A real
+renderer captures `artifacts/phase4_world_select.png`, `artifacts/phase4_region_preview.png`, and
+`artifacts/phase4_realm_map.png` at 1600×720 for layout and art QA. The iOS export pack is audited
+with dev, build and artifact folders excluded.
+
+Phase 5 extends the smoke suite with the twelve imported sound cues, live procedural generator,
+four palette modes, text-scale steps, remappable desktop actions, drag-placeable content,
+onboarding availability and Chronicle retention. A real renderer captures every title-screen
+state, all three fixed settings tabs, the red/green-safe shader, the first Field Guide card and the
+run summary at 1600×720. The final focused Realm suite and four-seed smoke suite pass, and the
+4,215,100-byte iOS pack audit verifies all 411 translations, twelve audio cues and every runtime
+content catalog.
+
 ### Manual checks that automation cannot cover
 - **Sphere geometry:** Watchtower east, Stockpile west — the boundary should bulge strongly east
   and barely west.
-- **Arc shielding:** settle due west of the Heart; western pressure should drop and eastern should
-  not.
+- **Spatial shielding:** develop a colony east of the First Hearth; eastern pressure should shift
+  into that colony while the opposite direction and baseline still reach home.
 - **Gates under load:** wall a village completely with one gate; monsters should funnel to it and
   villagers should not be stuck inside.
 - **Corruption read:** blighted ground should look like ground, and the frontier should stipple

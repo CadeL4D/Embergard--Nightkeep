@@ -20,7 +20,7 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _breakdown: BreakdownPanel = $SafeArea/Layout/TopRow/ResourceColumn/Breakdown
 @onready var _jobs_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton
 @onready var _build_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BuildButton
-@onready var _ascend_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/AscendButton
+@onready var _realm_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/RealmButton
 @onready var _job_panel: PanelContainer = $SafeArea/Layout/BottomRow/JobPanel
 @onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll/Rows
 @onready var _build_panel: PanelContainer = $SafeArea/Layout/BottomRow/BuildPanel
@@ -70,8 +70,6 @@ var _refresh_accum: float = 0.0
 var _placement: Node = null
 ## Frame the breakdown was last toggled on, to debounce duplicate press events.
 var _tap_frame: int = -1
-var _ascend_armed: bool = false
-var _ascend_timer: float = 0.0
 ## Demolition is irreversible and refunds 40%, so it arms on the first press like Ascend does.
 var _demolish_armed: bool = false
 var _demolish_timer: float = 0.0
@@ -83,7 +81,7 @@ func _ready() -> void:
 
 	_jobs_button.toggled.connect(_on_jobs_toggled)
 	_build_button.toggled.connect(_on_build_toggled)
-	_ascend_button.pressed.connect(_on_ascend)
+	_realm_button.pressed.connect(_on_realm)
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(_on_cancel)
 	Events.resources_changed.connect(_on_resources_changed)
@@ -432,19 +430,10 @@ func _on_cancel() -> void:
 		_placement.cancel()
 
 
-## Ascending is irreversible and ends the run, so it takes two presses. A single
-## mistap next to the Build button should never cost someone their colony.
-func _on_ascend() -> void:
-	if not _ascend_armed:
-		_ascend_armed = true
-		_ascend_button.text = tr(&"UI_ASCEND_CONFIRM")
-		_ascend_timer = 3.0
-		return
-	_ascend_armed = false
-	_ascend_button.text = tr(&"UI_ASCEND")
-	var run := get_parent()
-	if run != null and run.has_method("ascend"):
-		run.ascend()
+func _on_realm() -> void:
+	var realm_map := get_node_or_null("../RealmMap")
+	if realm_map != null and realm_map.has_method("open"):
+		realm_map.open()
 
 
 ## Placement mode replaces the build menu rather than sitting alongside it. Two
@@ -594,11 +583,6 @@ func _process(delta: float) -> void:
 	# Headcounts change as the reconciler runs, so the board needs polling — but at
 	# 4 Hz, not per frame. A per-frame rebuild of these strings shows up in the
 	# profiler as the UI's own cost while you are trying to profile the sim.
-	if _ascend_armed:
-		_ascend_timer -= delta
-		if _ascend_timer <= 0.0:
-			_ascend_armed = false
-			_ascend_button.text = tr(&"UI_ASCEND")
 
 	if _demolish_armed:
 		_demolish_timer -= delta
@@ -716,6 +700,34 @@ func _on_speed_changed(_scale: float, paused: bool) -> void:
 	_pause_button.set_pressed_no_signal(paused)
 	_pause_button.text = tr(&"UI_RESUME" if paused else &"UI_PAUSE")
 	_speed_button.text = L10n.t(&"UI_SPEED", [int(Sim.time_scale)])
+
+
+# --- Desktop hotkeys ------------------------------------------------------------------
+
+func _unhandled_input(event: InputEvent) -> void:
+	var onboarding := get_node_or_null("../Onboarding/Dim") as Control
+	if onboarding != null and onboarding.visible:
+		return
+	if event.is_action_pressed(&"game_pause"):
+		Sim.toggle_pause()
+	elif event.is_action_pressed(&"game_speed"):
+		Sim.cycle_speed()
+	elif event.is_action_pressed(&"game_jobs"):
+		_jobs_button.button_pressed = not _jobs_button.button_pressed
+	elif event.is_action_pressed(&"game_build"):
+		_build_button.button_pressed = not _build_button.button_pressed
+	elif event.is_action_pressed(&"game_realm"):
+		_on_realm()
+	elif event.is_action_pressed(&"game_cancel"):
+		if _placement != null and _placement.active:
+			_placement.cancel()
+		else:
+			_jobs_button.button_pressed = false
+			_build_button.button_pressed = false
+			_breakdown.visible = false
+	else:
+		return
+	get_viewport().set_input_as_handled()
 
 
 # --- Selection ------------------------------------------------------------------------

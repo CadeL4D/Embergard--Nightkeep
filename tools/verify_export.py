@@ -35,6 +35,15 @@ REQUIRED_PATHS = [
     "res://content/locale/embergard.csv",
 ]
 
+# Audio paths are built dynamically by the Audio autoload. They are therefore asserted
+# separately from normal scene dependencies so a future export-filter change cannot make a
+# cue work in the editor and disappear on device.
+REQUIRED_AUDIO = [
+    "ui_press", "ui_back", "build_place", "build_complete", "resource_drop",
+    "power_cast", "warning", "wave", "monster_die", "villager_die",
+    "tome_written", "dawn",
+]
+
 # Directories whose .tres content must all be present, since the catalogs scan them at runtime.
 REQUIRED_CONTENT_DIRS = [
     "content/jobs", "content/buildings", "content/powers",
@@ -61,14 +70,29 @@ def main(argv: list[str]) -> int:
         print(f"  {'ok  ' if present else 'FAIL'}  {path}")
         failures += not present
 
+    print()
+    for cue in REQUIRED_AUDIO:
+        path = f"res://assets/audio/sfx/{cue}.wav"
+        # Imported files can be indexed directly or through an export remap.
+        indexed = (path.encode("utf-8") in data
+                   or f"{path}.remap".encode("utf-8") in data)
+        print(f"  {'ok  ' if indexed else 'FAIL'}  audio cue {cue}")
+        failures += not indexed
+
     # --- and their CONTENT, not just their path in the index -----------------------------
     # A path can appear in the index while the payload is an imported stub, so the strings the
     # player actually reads are checked directly.
     locale = ROOT / "content/locale/embergard.csv"
     if locale.is_file():
-        rows = [r for r in csv.reader(locale.read_text(encoding="utf-8").splitlines())
-                if len(r) > 1 and r[0] and not r[0].startswith("#")]
-        found = sum(1 for r in rows if r[1] and r[1].encode("utf-8") in data)
+        with locale.open("r", encoding="utf-8", newline="") as stream:
+            rows = [r for r in csv.reader(stream)
+                    if len(r) > 1 and r[0] and r[0] not in {"key", "keys"}
+                    and not r[0].startswith("#")]
+        # Multiline CSV fields can use different newline bytes in the pack index; verify
+        # every non-empty line so those values are still covered without a false negative.
+        found = sum(1 for r in rows if r[1] and all(
+            line.encode("utf-8") in data for line in r[1].splitlines() if line
+        ))
         ratio = found / max(len(rows), 1)
         ok = ratio > 0.95
         print(f"  {'ok  ' if ok else 'FAIL'}  {found}/{len(rows)} translated values stored verbatim")

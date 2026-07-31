@@ -41,6 +41,8 @@ var _drag_finger: int = -1
 var _grabbed_ghost: bool = false
 var _touch_start: Vector2 = Vector2.ZERO
 var _touch_start_time: float = 0.0
+var _mouse_dragging: bool = false
+var _mouse_start: Vector2i = Vector2i.ZERO
 
 @onready var _ghost: Sprite2D = $Ghost
 @onready var _camera: Camera2D = get_node("../CameraRig")
@@ -77,6 +79,7 @@ func cancel() -> void:
 	_ghost.visible = false
 	_drag_finger = -1
 	_grabbed_ghost = false
+	_mouse_dragging = false
 	queue_redraw()
 	placement_changed.emit(false, "", false)
 	Events.placement_mode_changed.emit(false)
@@ -117,10 +120,77 @@ func confirm() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if not active:
 		return
-	if event is InputEventScreenTouch:
+	if event.is_action_pressed(&"game_cancel"):
+		cancel()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton:
+		_on_mouse_button(event as InputEventMouseButton)
+	elif event is InputEventMouseMotion:
+		_on_mouse_motion(event as InputEventMouseMotion)
+	elif event is InputEventScreenTouch:
+		# Desktop mouse input is handled directly below so roads and walls can be painted.
+		# Consume its emulated touch twin to prevent one click placing twice.
+		if not OS.has_feature("mobile"):
+			get_viewport().set_input_as_handled()
+			return
 		_on_touch(event as InputEventScreenTouch)
 	elif event is InputEventScreenDrag:
+		if not OS.has_feature("mobile"):
+			get_viewport().set_input_as_handled()
+			return
 		_on_drag(event as InputEventScreenDrag)
+
+
+func _on_mouse_button(event: InputEventMouseButton) -> void:
+	if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		cancel()
+		get_viewport().set_input_as_handled()
+		return
+	if event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	var world := _to_world(event.position)
+	if event.pressed:
+		_mouse_dragging = true
+		_move_to_world(world)
+		_mouse_start = World.grid.coord(_anchor) if _anchor != -1 else Vector2i.ZERO
+	else:
+		if not _mouse_dragging:
+			return
+		_mouse_dragging = false
+		_move_to_world(world)
+		var finish := World.grid.coord(_anchor) if _anchor != -1 else _mouse_start
+		if def != null and def.drag_placeable and finish != _mouse_start:
+			_place_drag_line(_mouse_start, finish)
+		else:
+			confirm()
+	get_viewport().set_input_as_handled()
+
+
+func _on_mouse_motion(event: InputEventMouseMotion) -> void:
+	if not _mouse_dragging:
+		return
+	_move_to_world(_to_world(event.position))
+	get_viewport().set_input_as_handled()
+
+
+func _place_drag_line(from: Vector2i, to: Vector2i) -> void:
+	var delta := to - from
+	var steps := maxi(absi(delta.x), absi(delta.y))
+	if steps == 0:
+		confirm()
+		return
+	var visited := {}
+	for i in range(steps + 1):
+		if not active or def == null:
+			break
+		var progress := float(i) / float(steps)
+		var point := Vector2i(roundi(lerpf(from.x, to.x, progress)),
+			roundi(lerpf(from.y, to.y, progress)))
+		if visited.has(point) or not World.grid.is_valid_v(point):
+			continue
+		visited[point] = true
+		_move_to_world((Vector2(point) + Vector2(0.5, 0.5)) * Grid.TILE_SIZE)
+		confirm()
 
 
 func _on_touch(event: InputEventScreenTouch) -> void:

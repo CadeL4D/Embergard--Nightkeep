@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/run/run.gd" id="1_run"]
 [ext_resource type="Script" path="res://scripts/divine/god_hand.gd" id="8_god_hand"]
@@ -14,7 +14,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="9_hud"]
 [ext_resource type="Script" path="res://scripts/ui/placement_controller.gd" id="10_placement"]
 [ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="11_summary"]
-[ext_resource type="PackedScene" path="res://scenes/ui/site_picker.tscn" id="12_picker"]
+[ext_resource type="PackedScene" path="res://scenes/ui/realm_map.tscn" id="16_realm"]
+[ext_resource type="PackedScene" path="res://scenes/ui/onboarding.tscn" id="17_onboarding"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_blight"]
 shader = ExtResource("4_blight")
@@ -105,8 +106,10 @@ centered = false
 
 [node name="Hud" parent="." instance = ExtResource("9_hud")]
 
-[node name="SitePicker" parent="." instance = ExtResource("12_picker")]
-
 [node name="RunSummary" parent="." instance = ExtResource("11_summary")]
+
+[node name="RealmMap" parent="." instance = ExtResource("16_realm")]
+
+[node name="Onboarding" parent="." instance = ExtResource("17_onboarding")]
 
 [node name="DebugOverlay" parent="." instance = ExtResource("7_debug")]

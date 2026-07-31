@@ -35,8 +35,7 @@ const SKY_COLORS := {
 @onready var camera: Camera2D = $CameraRig
 @onready var sky: CanvasModulate = $Sky
 @onready var ember: Node2D = $Ember
-## Optional: absent in the dev and test scenes, which found a colony directly.
-@onready var site_picker: Node = get_node_or_null("SitePicker")
+@onready var realm_map: Node = get_node_or_null("RealmMap")
 
 var _sky_from: Color = Color.WHITE
 var _sky_to: Color = Color.WHITE
@@ -49,6 +48,8 @@ var _pending_seed: int = 0
 var _ended: bool = false
 ## Running tally for the summary screen.
 var _buildings_raised: int = 0
+var _monsters_defeated: int = 0
+var _villagers_lost: int = 0
 
 
 func _ready() -> void:
@@ -56,6 +57,8 @@ func _ready() -> void:
 	Events.villager_died.connect(_on_villager_died)
 	Events.building_destroyed.connect(_on_building_destroyed)
 	Events.building_completed.connect(_on_building_completed)
+	Events.monster_died.connect(_on_monster_died)
+	Events.realm_victory.connect(_on_realm_victory)
 
 	# An explicit request from the main menu wins over anything on disk: the player asked
 	# for a new world, and silently resuming their old one instead would be maddening.
@@ -99,6 +102,8 @@ func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool
 	_clear_entities()
 	_ended = false
 	_buildings_raised = 0
+	_monsters_defeated = 0
+	_villagers_lost = 0
 	_pending_seed = seed_value
 	RunSave.clear()
 
@@ -111,12 +116,14 @@ func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool
 	# choice.
 	Difficulties.select(difficulty_id if difficulty_id != &"" else Meta.last_difficulty)
 
-	World.generate(seed_value)
-
+	Realm.start_new(seed_value)
 	if pick_site:
-		_begin_site_selection()
+		_begin_region_selection()
 		return
-	_found_colony(seed_value)
+	var start_id := Realm.suggested_first_region()
+	var start_region := Realm.site(start_id)
+	World.generate(int(start_region["seed"]), -1, start_region)
+	_found_colony(seed_value, start_id)
 
 
 ## Show the generated land and let the player choose where to settle.
@@ -124,38 +131,28 @@ func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool
 ## Nothing is founded yet and the clock does not run, so the player can pan and zoom over
 ## a still world with no pressure. This is the first real decision of a run and it should
 ## be the calmest.
-func _begin_site_selection() -> void:
-	camera.center_on_cell(World.keep_cell)
+func _begin_region_selection() -> void:
 	# Daylight, so the land is actually legible while it is being judged.
 	_sky_from = SKY_COLORS[Sim.Phase.DAY]
 	_sky_to = _sky_from
 	sky.color = _sky_from
-	_sync_ember()
-	if site_picker != null:
-		site_picker.begin(_suggested_site())
+	ember.visible = false
+	if realm_map != null:
+		realm_map.open_for_first_settlement()
 
 
-## Where the generator would have put the keep. Offered as a suggestion so a player who
-## does not want to make this decision can take one tap and move on.
-func _suggested_site() -> int:
-	return World.keep_cell
+## Commit to one macro square and raise the first colony on its derived local map.
+func found_first_region(site_id: StringName) -> bool:
+	var check := Realm.can_found_first(site_id)
+	if not bool(check["ok"]):
+		return false
+	var region := Realm.site(site_id)
+	World.generate(int(region["seed"]), -1, region)
+	_found_colony(_pending_seed, site_id)
+	return true
 
 
-## Commit to a site. Regenerates the map around the chosen cell — the flatten pad, the
-## nest ring and the cleared start area all key off the keep, so they have to be rebuilt
-## rather than patched.
-func confirm_site(cell: int) -> void:
-	if not World.grid.is_valid_index(cell):
-		return
-	World.generate(_pending_seed, cell)
-	if site_picker != null:
-		site_picker.finish()
-	_found_colony(_pending_seed)
-
-
-## Raise the colony and start the clock. Everything from the Ember to the founding band,
-## shared by the picked and unpicked paths so the two cannot drift apart.
-func _found_colony(seed_value: int) -> void:
+func _found_colony(seed_value: int, site_id: StringName) -> void:
 	Colony.reset()
 	Divine.reset()
 	Threat.reset()
@@ -176,6 +173,7 @@ func _found_colony(seed_value: int) -> void:
 
 	camera.center_on_cell(World.keep_cell)
 	Sim.start_run()
+	Realm.register_first_from_live(site_id)
 
 	_sky_from = SKY_COLORS[Sim.Phase.DAY]
 	_sky_to = _sky_from
@@ -208,8 +206,12 @@ func _raise_hearth() -> void:
 func _clear_entities() -> void:
 	Sim.stop_run()
 	for child in entities.get_children():
-		child.queue_free()
+		# A realm transition regenerates World immediately. Freeing synchronously ensures an old
+		# building cannot release its footprint or light handle against the newly generated map on
+		# the next frame.
+		child.free()
 	Colony.villagers.clear()
+	Colony.buildings.clear()
 
 
 func _spawn_starting_villagers() -> void:
@@ -235,6 +237,123 @@ func _spawn_starting_villagers() -> void:
 				Colony.spawn_villager(cell)
 				placed += 1
 		radius += 1
+
+
+func _spawn_transferred_villagers(rows: Array) -> void:
+	var cells := _spawn_cells(rows.size())
+	for i in mini(rows.size(), cells.size()):
+		var row: Dictionary = rows[i]
+		var v: Villager = Colony.spawn_villager(cells[i])
+		v.job = StringName(row.get("job", &""))
+		v.food = float(row.get("food", 80.0))
+		v.water = float(row.get("water", 80.0))
+		v.rest = float(row.get("rest", 80.0))
+		v.mood = float(row.get("mood", 60.0))
+		v.health = float(row.get("health", v.max_health))
+
+
+func _spawn_cells(want: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var grid: Grid = World.grid
+	var keep := grid.coord(World.keep_cell)
+	var radius := 1
+	while out.size() < want and radius < 12:
+		for dy in range(-radius, radius + 1):
+			for dx in range(-radius, radius + 1):
+				if out.size() >= want:
+					break
+				if absi(dx) != radius and absi(dy) != radius:
+					continue
+				if not grid.is_valid(keep.x + dx, keep.y + dy):
+					continue
+				var cell := grid.index(keep.x + dx, keep.y + dy)
+				if World.is_walkable(cell):
+					out.append(cell)
+		radius += 1
+	return out
+
+
+# --- Realm travel ------------------------------------------------------------------------
+
+func travel_to_colony(target_id: StringName) -> bool:
+	if not Realm.can_travel(target_id):
+		return false
+	return _wake_colony(target_id, true)
+
+
+func _wake_colony(target_id: StringName, capture_current: bool) -> bool:
+	if capture_current:
+		Realm.capture_awake()
+	var previous_paused := Sim.paused
+	Sim.set_paused(true)
+	_clear_entities()
+	Realm.set_awake(target_id)
+	var ledger := Realm.awake_ledger()
+	if not Reconstitutor.restore(ledger, entities):
+		return false
+	Threat.set_spawn_parent(entities)
+	Colony.set_spawn_parent(entities)
+	Sim.paused = previous_paused
+	Sim.resume_run()
+	camera.center_on_cell(World.keep_cell)
+	_sync_ember()
+	_sky_from = SKY_COLORS[Sim.phase]
+	_sky_to = _sky_from
+	sky.color = _sky_from
+	RunSave.save()
+	Events.notice.emit(L10n.t(&"REALM_NOTICE_AWAKE", [ledger.display_name]), 0)
+	return true
+
+
+func found_realm_site(site_id: StringName) -> bool:
+	var caravan := Realm.prepare_settlement(site_id)
+	if not bool(caravan.get("ok", false)):
+		Events.notice.emit(String(caravan.get("reason", tr(&"REALM_REASON_CARAVAN"))), 1)
+		return false
+	var previous_paused := Sim.paused
+	Sim.set_paused(true)
+	_clear_entities()
+	var ledger: ColonyLedger = caravan["ledger"]
+	World.generate(ledger.seed_value, -1, Realm.site(site_id))
+	ledger.keep_cell = World.keep_cell
+	Colony.reset()
+	Divine.reset()
+	Threat.reset()
+	Threat.set_spawn_parent(entities)
+	Colony.set_spawn_parent(entities)
+	for kind: StringName in caravan["cargo"]:
+		Colony.add(kind, int(caravan["cargo"][kind]))
+	Divine.place_ember(World.keep_cell)
+	_raise_hearth()
+	_spawn_transferred_villagers(caravan["settlers"])
+	Realm.set_awake(site_id)
+	Abstractor.capture(ledger)
+	Sim.paused = previous_paused
+	Sim.resume_run()
+	camera.center_on_cell(World.keep_cell)
+	_sync_ember()
+	_sky_from = SKY_COLORS[Sim.phase]
+	_sky_to = _sky_from
+	sky.color = _sky_from
+	RunSave.save()
+	Events.notice.emit(L10n.t(&"REALM_NOTICE_FOUNDED", [ledger.display_name]), 0)
+	return true
+
+
+func send_realm_resource(target_id: StringName, kind: StringName, amount: int) -> bool:
+	var sent := Realm.transfer_resource(target_id, kind, amount)
+	if sent:
+		Events.notice.emit(L10n.t(&"REALM_NOTICE_SENT", [
+			amount, L10n.resource(kind), Realm.colony(target_id).display_name]), 0)
+	return sent
+
+
+func send_realm_migrant(target_id: StringName) -> bool:
+	var sent := Realm.transfer_migrant(target_id)
+	if sent:
+		Events.notice.emit(L10n.t(&"REALM_NOTICE_MIGRANT",
+			[Realm.colony(target_id).display_name]), 0)
+	return sent
 
 
 func _process(_delta: float) -> void:
@@ -268,8 +387,13 @@ func _on_building_completed(_b: Node) -> void:
 
 
 func _on_villager_died(_v: Node, _cause: StringName) -> void:
+	_villagers_lost += 1
 	# Deferred: the roster still contains the dying villager at emit time.
 	call_deferred("_check_defeat")
+
+
+func _on_monster_died(_monster: Node) -> void:
+	_monsters_defeated += 1
 
 
 ## Losing the Village Center ends the run, whatever tier it had reached.
@@ -281,7 +405,10 @@ func _on_villager_died(_v: Node, _cause: StringName) -> void:
 func _on_building_destroyed(b: Node) -> void:
 	var def: BuildingDef = b.def
 	if def.center_tier > 0:
-		call_deferred("_end_run", false, tr(&"NOTICE_HEARTH_BROKEN"))
+		if Realm.awake_id == Realm.heart_region_id:
+			call_deferred("_end_run", false, tr(&"NOTICE_HEARTH_BROKEN"))
+		else:
+			call_deferred("_lose_awake_outpost", tr(&"NOTICE_HEARTH_BROKEN"))
 	else:
 		call_deferred("_check_defeat")
 
@@ -290,7 +417,21 @@ func _check_defeat() -> void:
 	if _ended:
 		return
 	if Colony.population() <= 0:
-		_end_run(false, tr(&"NOTICE_LAST_FALLEN"))
+		if Realm.awake_id == Realm.heart_region_id:
+			_end_run(false, tr(&"NOTICE_LAST_FALLEN"))
+		else:
+			_lose_awake_outpost(tr(&"NOTICE_LAST_FALLEN"))
+
+
+func _lose_awake_outpost(reason: String) -> void:
+	if _ended or Realm.awake_id == Realm.heart_region_id:
+		return
+	var lost_name := Realm.awake_ledger().display_name
+	Realm.mark_awake_fallen()
+	if Realm.settled(Realm.heart_region_id) and _wake_colony(Realm.heart_region_id, false):
+		Events.notice.emit(L10n.t(&"REALM_NOTICE_OUTPOST_FALLEN", [lost_name, reason]), 2)
+	else:
+		_end_run(false, reason)
 
 
 ## Days a run must reach before ascending counts toward the difficulty ratchet. Low enough that a
@@ -305,7 +446,11 @@ func ascend() -> void:
 		_end_run(true, tr(&"NOTICE_ASCEND"))
 
 
-func _end_run(ascended: bool, message: String) -> void:
+func _on_realm_victory() -> void:
+	_end_run(true, tr(&"REALM_NOTICE_VICTORY"), true)
+
+
+func _end_run(ascended: bool, message: String, realm_completed: bool = false) -> void:
 	if _ended:
 		return
 	_ended = true
@@ -336,8 +481,22 @@ func _end_run(ascended: bool, message: String) -> void:
 	#
 	# Phase 4 replaces this with closing the ring around the Heart. Voluntarily walking away from a
 	# world you have made safe is the closest thing this version has to completing one.
-	if ascended and Sim.day >= ASCENSION_MIN_DAY:
+	if realm_completed:
 		Meta.record_ascension()
+	Meta.record_run({
+		"seed": Realm.world_seed if Realm.world_seed != 0 else World.seed_value,
+		"difficulty": String(Difficulties.current_id()),
+		"day": Sim.day,
+		"population": Colony.population(),
+		"colonies": Realm.colonies.size(),
+		"buildings": _buildings_raised,
+		"nests": nests_cleared,
+		"monsters": _monsters_defeated,
+		"villagers_lost": _villagers_lost,
+		"shards": shards,
+		"ascended": ascended,
+		"realm_completed": realm_completed,
+	})
 	RunSave.clear()
 
 	Events.run_ended.emit(ascended, shards)
