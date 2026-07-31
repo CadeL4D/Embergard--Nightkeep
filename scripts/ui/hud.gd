@@ -21,6 +21,20 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _jobs_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton
 @onready var _build_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BuildButton
 @onready var _realm_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/RealmButton
+@onready var _control_button: Button = \
+	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/ControlButton
+@onready var _control_panel: PanelContainer = $SafeArea/Layout/BottomRow/ControlPanel
+@onready var _control_status: Label = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Status
+@onready var _forbidden_button: Button = \
+	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Forbidden
+@onready var _work_zone_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Work
+@onready var _guard_zone_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Guard
+@onready var _erase_zone_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Erase
+@onready var _shelter_button: Button = \
+	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Shelter
+@onready var _dusk_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Dusk
+@onready var _cleanse_button: Button = \
+	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Cleanse
 @onready var _job_panel: PanelContainer = $SafeArea/Layout/BottomRow/JobPanel
 @onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll/Rows
 @onready var _build_panel: PanelContainer = $SafeArea/Layout/BottomRow/BuildPanel
@@ -34,6 +48,10 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/UpgradeButton
 @onready var _demolish_button: Button = \
 	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/DemolishButton
+@onready var _storage_filter: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/StorageFilter
+@onready var _storage_priority: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/StoragePriority
 @onready var _placement_bar: PanelContainer = $SafeArea/Layout/BottomRow/PlacementBar
 @onready var _placement_status: Label = $SafeArea/Layout/BottomRow/PlacementBar/Row/Status
 @onready var _confirm_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/ConfirmButton
@@ -42,6 +60,7 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _phase_label: Label = $SafeArea/Layout/TopRow/PhaseBar/Row/Phase
 @onready var _pause_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/PauseButton
 @onready var _speed_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/SpeedButton
+@onready var _menu_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/MenuButton
 @onready var _migrant_prompt: PanelContainer = $SafeArea/Layout/MigrantPrompt
 @onready var _migrant_ask: Label = $SafeArea/Layout/MigrantPrompt/Row/Ask
 @onready var _accept_button: Button = $SafeArea/Layout/MigrantPrompt/Row/AcceptButton
@@ -81,6 +100,7 @@ func _ready() -> void:
 
 	_jobs_button.toggled.connect(_on_jobs_toggled)
 	_build_button.toggled.connect(_on_build_toggled)
+	_control_button.toggled.connect(_on_control_toggled)
 	_realm_button.pressed.connect(_on_realm)
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(_on_cancel)
@@ -115,10 +135,27 @@ func _ready() -> void:
 
 	_pause_button.toggled.connect(_on_pause_toggled)
 	_speed_button.pressed.connect(_on_speed_pressed)
+	_menu_button.pressed.connect(_on_menu_pressed)
 	Events.speed_changed.connect(_on_speed_changed)
 
 	_upgrade_button.pressed.connect(_on_upgrade)
 	_demolish_button.pressed.connect(_on_demolish)
+	_storage_filter.pressed.connect(_on_storage_filter)
+	_storage_priority.pressed.connect(_on_storage_priority)
+	_forbidden_button.pressed.connect(
+		DefenseControl.set_paint_mode.bind(DefenseControl.PaintMode.FORBIDDEN))
+	_work_zone_button.pressed.connect(
+		DefenseControl.set_paint_mode.bind(DefenseControl.PaintMode.WORK))
+	_guard_zone_button.pressed.connect(
+		DefenseControl.set_paint_mode.bind(DefenseControl.PaintMode.GUARD))
+	_erase_zone_button.pressed.connect(
+		DefenseControl.set_paint_mode.bind(DefenseControl.PaintMode.ERASE))
+	_shelter_button.pressed.connect(DefenseControl.toggle_shelter)
+	_dusk_button.pressed.connect(DefenseControl.toggle_dusk_lock)
+	_cleanse_button.pressed.connect(DefenseControl.start_cleanse)
+	DefenseControl.changed.connect(_refresh_control_panel)
+	DefenseControl.paint_mode_changed.connect(func(_mode: int) -> void:
+		_refresh_control_panel())
 	# The build menu is gated on the Village Center tier and on headcount, so raising the Hearth or
 	# taking in survivors can unlock cards mid-run. Rebuilding on those two events is what makes
 	# that moment visible — an unlock nobody notices is not a reward.
@@ -220,6 +257,7 @@ func _on_jobs_toggled(pressed: bool) -> void:
 	if pressed:
 		_breakdown.visible = false
 		_build_button.button_pressed = false
+		_control_button.button_pressed = false
 	_refresh_selection()
 	_refresh_building_card()
 
@@ -372,6 +410,14 @@ func _refresh_building_card() -> void:
 	var def: BuildingDef = b.def
 	_bld_what.text = tr(def.display_name)
 	_bld_what.add_theme_color_override("font_color", def.color)
+	var is_storage := not b.is_site() and def.is_stockpile
+	_storage_filter.visible = is_storage
+	_storage_priority.visible = is_storage
+	if is_storage:
+		var store_cell := b.centre_cell()
+		_storage_filter.text = DefenseControl.stockpile_filter_name(store_cell)
+		_storage_priority.text = L10n.t(&"STORAGE_PRIORITY",
+			[DefenseControl.stockpile_priority(store_cell)])
 
 	# What state it is in matters more than what it is: a site waiting on timber and a finished
 	# workshop offer completely different decisions.
@@ -403,16 +449,72 @@ func _refresh_building_card() -> void:
 	_demolish_button.text = tr(&"UI_DEMOLISH_CONFIRM" if _demolish_armed else &"UI_DEMOLISH")
 
 
+func _on_storage_filter() -> void:
+	var b: Building = _god_hand.selected_building if _god_hand != null else null
+	if b != null and is_instance_valid(b) and not b.is_site() and b.def.is_stockpile:
+		DefenseControl.cycle_stockpile_filter(b.centre_cell())
+		_refresh_building_card()
+
+
+func _on_storage_priority() -> void:
+	var b: Building = _god_hand.selected_building if _god_hand != null else null
+	if b != null and is_instance_valid(b) and not b.is_site() and b.def.is_stockpile:
+		DefenseControl.cycle_stockpile_priority(b.centre_cell())
+		_refresh_building_card()
+
+
 func _on_build_toggled(pressed: bool) -> void:
 	_build_panel.visible = pressed
 	if pressed:
 		_breakdown.visible = false
 		_jobs_button.button_pressed = false
+		_control_button.button_pressed = false
 	elif _placement != null and _placement.active:
 		_placement.cancel()
 	_refresh_cards()
 	_refresh_selection()
 	_refresh_building_card()
+
+
+func _on_control_toggled(pressed: bool) -> void:
+	_control_panel.visible = pressed
+	if pressed:
+		_breakdown.visible = false
+		_jobs_button.button_pressed = false
+		_build_button.button_pressed = false
+		if _placement != null and _placement.active:
+			_placement.cancel()
+	else:
+		DefenseControl.cancel_paint()
+	_refresh_control_panel()
+	_refresh_selection()
+	_refresh_building_card()
+
+
+func _refresh_control_panel() -> void:
+	if not is_node_ready():
+		return
+	_forbidden_button.set_pressed_no_signal(
+		DefenseControl.paint_mode == DefenseControl.PaintMode.FORBIDDEN)
+	_work_zone_button.set_pressed_no_signal(
+		DefenseControl.paint_mode == DefenseControl.PaintMode.WORK)
+	_guard_zone_button.set_pressed_no_signal(
+		DefenseControl.paint_mode == DefenseControl.PaintMode.GUARD)
+	_erase_zone_button.set_pressed_no_signal(
+		DefenseControl.paint_mode == DefenseControl.PaintMode.ERASE)
+	_shelter_button.set_pressed_no_signal(DefenseControl.shelter_active)
+	_dusk_button.set_pressed_no_signal(DefenseControl.dusk_lock)
+	_shelter_button.text = tr(&"CONTROL_SHELTER_ON" if DefenseControl.shelter_active \
+		else &"CONTROL_SHELTER")
+	_dusk_button.text = tr(&"CONTROL_DUSK_ON" if DefenseControl.dusk_lock else &"CONTROL_DUSK")
+	var cleanse := DefenseControl.can_start_cleanse()
+	_cleanse_button.disabled = not bool(cleanse["ok"])
+	_cleanse_button.tooltip_text = String(cleanse["reason"])
+	_cleanse_button.text = L10n.t(&"CONTROL_CLEANSE_PROGRESS",
+		[DefenseControl.cleanse_dawns_left]) if DefenseControl.cleanse_dawns_left > 0 \
+		else tr(&"CONTROL_CLEANSE")
+	_control_status.text = tr(&"CONTROL_PAINT_HINT") \
+		if DefenseControl.paint_mode != DefenseControl.PaintMode.NONE else tr(&"CONTROL_HINT")
 
 
 func _on_card_pressed(def: BuildingDef) -> void:
@@ -448,6 +550,7 @@ func _on_placement_changed(active: bool, status: String, valid: bool) -> void:
 		return
 	_breakdown.visible = false
 	_jobs_button.button_pressed = false
+	_control_button.button_pressed = false
 	# Tapping the ghost is the primary confirm, so the bar has to teach it — the
 	# gesture is invisible otherwise, and a player who never finds it is left tapping
 	# a small button at the bottom of the screen for every wall segment.
@@ -494,6 +597,7 @@ func _on_power_pressed(def: PowerDef) -> void:
 	# the screen, and the tap that arms a power must not also land on a menu.
 	_jobs_button.button_pressed = false
 	_build_button.button_pressed = false
+	_control_button.button_pressed = false
 	_god_hand.arm(def)
 
 
@@ -605,6 +709,8 @@ func _process(delta: float) -> void:
 		_refresh_counts()
 	if _build_panel.visible:
 		_refresh_cards()
+	if _control_panel.visible:
+		_refresh_control_panel()
 
 
 ## The phase clock is the game's spine, and at dusk it becomes the most important
@@ -618,11 +724,21 @@ func _refresh_phase() -> void:
 	_phase_label.text = L10n.t(&"HUD_CLOCK", [
 		Sim.day, tr(names[Sim.phase]), int(Sim.seconds_remaining()), extra])
 	_phase_label.text += "\n" + Climate.hud_text()
+	var forecast := Threat.next_night_forecast()
+	var risk_keys: Array[StringName] = [&"FORECAST_READY", &"FORECAST_CLOSE", &"FORECAST_DANGER"]
+	var monster_names: PackedStringArray = forecast["names"]
+	var shown := PackedStringArray()
+	for i in mini(monster_names.size(), 3):
+		shown.append(monster_names[i])
+	_phase_label.text += "\n" + L10n.t(&"FORECAST_LINE", [
+		int(forecast["night"]), int(forecast["bodies"]),
+		", ".join(shown), tr(risk_keys[int(forecast["risk"])])])
 	_phase_label.tooltip_text = L10n.t(&"CLIMATE_TOOLTIP", [
 		Climate.name_of_season(), Climate.name_of_weather(),
 		int(round(Climate.farm_multiplier() * 100.0)),
 		int(round(Climate.gather_multiplier(Terrain.Feature.TREE) * 100.0)),
-	])
+	]) + "\n" + L10n.t(&"FORECAST_TOOLTIP", [
+		int(forecast["budget"]), int(forecast["readiness"]), ", ".join(monster_names)])
 	_phase_label.add_theme_color_override("font_color", UiPalette.phase_color(Sim.phase))
 
 
@@ -653,6 +769,7 @@ func _on_resource_bar_input(event: InputEvent) -> void:
 	if opening:
 		_jobs_button.button_pressed = false
 		_build_button.button_pressed = false
+		_control_button.button_pressed = false
 		if _placement != null and _placement.active:
 			_placement.cancel()
 	_breakdown.toggle()
@@ -675,6 +792,7 @@ func _on_migrants_arrived(count: int) -> void:
 	_breakdown.visible = false
 	_jobs_button.button_pressed = false
 	_build_button.button_pressed = false
+	_control_button.button_pressed = false
 	_migrant_prompt.visible = true
 	var beds := Colony.beds_free()
 	var warning := ""
@@ -701,6 +819,12 @@ func _on_speed_pressed() -> void:
 	Sim.cycle_speed()
 
 
+func _on_menu_pressed() -> void:
+	var menu := get_node_or_null("../PauseMenu")
+	if menu != null and menu.has_method("open"):
+		menu.open()
+
+
 ## Driven by the signal rather than by the button handlers, so the readout stays correct
 ## however the speed was changed — including from the debug keys.
 func _on_speed_changed(_scale: float, paused: bool) -> void:
@@ -716,7 +840,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if onboarding != null and onboarding.visible:
 		return
 	if event.is_action_pressed(&"game_pause"):
-		Sim.toggle_pause()
+		_on_menu_pressed()
 	elif event.is_action_pressed(&"game_speed"):
 		Sim.cycle_speed()
 	elif event.is_action_pressed(&"game_jobs"):
@@ -731,6 +855,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_jobs_button.button_pressed = false
 			_build_button.button_pressed = false
+			_control_button.button_pressed = false
 			_breakdown.visible = false
 	else:
 		return
@@ -772,7 +897,7 @@ func _refresh_selection() -> void:
 ## rule and a hard layout guarantee for the 360 px-tall mobile viewport.
 func _action_panel_open() -> bool:
 	return _breakdown.visible or _job_panel.visible or _build_panel.visible \
-		or _placement_bar.visible or _migrant_prompt.visible
+		or _control_panel.visible or _placement_bar.visible or _migrant_prompt.visible
 
 
 func _refresh() -> void:
@@ -783,6 +908,7 @@ func _refresh() -> void:
 	_refresh_phase()
 	_refresh_selection()
 	_refresh_building_card()
+	_refresh_control_panel()
 
 
 func _on_resources_changed(_kind: StringName, _amount: int) -> void:

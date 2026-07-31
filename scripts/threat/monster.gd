@@ -8,15 +8,18 @@ extends Agent
 ## "intelligence" (avoid light, break walls only when going round is worse) lives in
 ## the field's cost function, not here.
 
-enum State { ADVANCING, ATTACKING, DYING }
+enum State { WANDERING, ADVANCING, ATTACKING, DYING }
 
 ## How far ahead to walk the flow field per think. Long enough to keep moving
 ## smoothly between infrequent thinks, short enough to stay responsive when the
 ## field is rebuilt.
 const PATH_LOOKAHEAD := 8
+const WANDER_RADIUS := 6
+const INTERACTION_RADIUS := 7
 
 var def: MonsterDef
-var state: State = State.ADVANCING
+var state: State = State.WANDERING
+var home_cell: int = -1
 
 const TINT_INTERVAL := 0.2
 
@@ -24,16 +27,19 @@ var _attack_timer: float = 0.0
 var _target: Node = null
 var _anim_time: float = 0.0
 var _tint_timer: float = 0.0
+var _wander_turn: int = 0
+var _provoked: bool = false
 
 @onready var _sprite: Sprite2D = $Sprite
 
 
-func setup(monster_def: MonsterDef, stat_scale: float = 1.0) -> void:
+func setup(monster_def: MonsterDef, stat_scale: float = 1.0, spawn_home: int = -1) -> void:
 	def = monster_def
 	# The director converts unspendable budget into stat multipliers rather than
 	# more bodies, so late nights get harder without exceeding the entity cap.
 	max_health = def.max_health * stat_scale
 	move_speed = def.move_speed
+	home_cell = spawn_home
 
 
 func _ready() -> void:
@@ -82,8 +88,12 @@ func think(delta: float) -> void:
 		return
 
 	_target = null
-	state = State.ADVANCING
-	_advance()
+	if _provoked or Threat.monster_should_raid(home_cell, cell()):
+		state = State.ADVANCING
+		_advance()
+	else:
+		state = State.WANDERING
+		_wander_near_home()
 
 
 ## Standing in bright light hurts. This is the mechanical teeth behind "monsters
@@ -112,6 +122,33 @@ func _advance() -> void:
 	if path.is_empty():
 		return
 	follow_path(path)
+
+
+## A background creature paces around the camp it came from. The choice is stable and
+## cheap—one neighboring cell per think, no private path search—and the home-radius
+## check prevents an idle monster from accidentally roaming across the whole map.
+func _wander_near_home() -> void:
+	if is_moving() or not World.grid.is_valid_index(home_cell):
+		return
+	var offsets: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1), Vector2i(-1, 1),
+		Vector2i(-1, 0), Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1),
+	]
+	var grid: Grid = World.grid
+	var here := grid.coord(cell())
+	var first := posmod(_wander_turn + cell() * 3, offsets.size())
+	_wander_turn += 1
+	for attempt in offsets.size():
+		var next_coord := here + offsets[(first + attempt) % offsets.size()]
+		if not grid.is_valid_v(next_coord):
+			continue
+		var next_cell := grid.index_v(next_coord)
+		if grid.dist_sq(home_cell, next_cell) > WANDER_RADIUS * WANDER_RADIUS:
+			continue
+		if not World.is_walkable(next_cell) or World.light_at(next_cell) >= def.burn_threshold:
+			continue
+		follow_path(PackedInt32Array([next_cell]))
+		return
 
 
 ## Straight at the nearest thing worth destroying, through whatever is in the way.
@@ -205,6 +242,14 @@ func _strike(victim: Node) -> void:
 		Events.breach_detected.emit(victim.global_position)
 	else:
 		victim.take_damage(def.damage, self)
+
+
+func on_damaged(_amount: float, _source: Node) -> void:
+	# Once attacked, a creature defends itself and follows the normal raid field for
+	# the rest of that night. This is the explicit interaction route for a player who
+	# chooses to push beyond the safe sphere.
+	_provoked = true
+	think_urgent = true
 
 
 # --- Presentation ---------------------------------------------------------------------------

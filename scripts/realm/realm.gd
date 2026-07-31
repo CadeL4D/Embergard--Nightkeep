@@ -12,6 +12,9 @@ const MACRO_PIXELS_PER_REGION := 32
 const SETTLEMENT_COST := {&"wood": 30, &"stone": 15, &"food": 24}
 const STARTING_CARGO := {&"wood": 10, &"stone": 5, &"food": 12}
 const SETTLERS_REQUIRED := 2
+const RECOVERY_COST := {&"wood": 24, &"stone": 18, &"food": 18}
+const RECOVERY_CARGO := {&"wood": 8, &"stone": 4, &"food": 12}
+const RECOVERY_SETTLERS := 2
 const HEART_BASELINE_THREAT := 0.18
 const BLIGHT_HEART_MAX := 300
 const ASSAULT_COST := {&"tools": 8, &"cut_stone": 16}
@@ -276,6 +279,44 @@ func _sample_landscape(x: float, y: float) -> Dictionary:
 		"stone": stone_richness,
 		"food": food_richness,
 	}
+
+
+## High-resolution sample used by MapGen. Both views now ask the same landscape for the same
+## world coordinate: the Realm map paints it coarsely and the playable square adds tile detail.
+## Nothing here is random state, so previews, visits, and save restoration remain identical.
+func local_landscape_at(region_coord: Vector2i, uv: Vector2) -> Dictionary:
+	var rx := float(region_coord.x) + clampf(uv.x, 0.0, 1.0)
+	var ry := float(region_coord.y) + clampf(uv.y, 0.0, 1.0)
+	var sampled := _sample_landscape(rx, ry)
+	var biome := StringName(sampled["biome"])
+	var material := _macro_material(biome)
+	var river_line := absf(_river.get_noise_2d(rx, ry))
+	if biome not in [&"ocean", &"coast", &"highland"] \
+			and float(sampled["moisture"]) > 0.46 and river_line < 0.014:
+		material = 7
+	elif material not in [0, 1]:
+		material = _macro_resource_material(rx, ry, sampled, material)
+	var macro_x := floori(rx * MACRO_PIXELS_PER_REGION)
+	var macro_y := floori(ry * MACRO_PIXELS_PER_REGION)
+	var berry_mark := 2 if _macro_is_berry_center(macro_x, macro_y, sampled) else 0
+	if berry_mark == 0:
+		for oy in range(-1, 2):
+			for ox in range(-1, 2):
+				if ox == 0 and oy == 0:
+					continue
+				var px := macro_x + ox
+				var py := macro_y + oy
+				var neighbour := _sample_landscape(
+					(float(px) + 0.5) / MACRO_PIXELS_PER_REGION,
+					(float(py) + 0.5) / MACRO_PIXELS_PER_REGION)
+				if _macro_is_berry_center(px, py, neighbour):
+					berry_mark = 1
+					break
+			if berry_mark != 0:
+				break
+	sampled["material"] = material
+	sampled["berry_mark"] = berry_mark
+	return sampled
 
 
 func _land_field(point: Vector2) -> float:
@@ -889,13 +930,102 @@ func transfer_migrant(target_id: StringName) -> bool:
 	return true
 
 
-func mark_awake_fallen() -> void:
+func mark_awake_fallen() -> int:
 	capture_awake()
 	var ledger := awake_ledger()
+	var refugees := 0
 	if ledger != null:
+		# A destroyed center can force an evacuation while people are still alive. They return to
+		# the First Hearth as refugees; the ruined buildings and altered terrain remain behind.
+		refugees = mini(ledger.population(), 4)
 		ledger.fallen = true
 		ledger.state["villagers"] = []
+		ledger.state["refugees"] = int(ledger.state.get("refugees", 0)) + refugees
+		ledger.state["fallen_day"] = Sim.day
 	Events.realm_changed.emit()
+	return refugees
+
+
+func can_recover(site_id: StringName) -> Dictionary:
+	var ledger := colony(site_id)
+	if ledger == null or not ledger.fallen:
+		return {"ok": false, "reason": tr(&"REALM_RECOVERY_NOT_RUIN")}
+	if site_id == heart_region_id:
+		return {"ok": false, "reason": tr(&"REALM_RECOVERY_HEART")}
+	if not connected(awake_id, site_id):
+		return {"ok": false, "reason": tr(&"REALM_REASON_NO_ROAD")}
+	if Colony.population() <= RECOVERY_SETTLERS:
+		return {"ok": false, "reason": L10n.t(&"REALM_RECOVERY_NEED_SETTLERS",
+			[RECOVERY_SETTLERS])}
+	if not Colony.can_afford(RECOVERY_COST):
+		return {"ok": false, "reason": tr(&"REALM_RECOVERY_NEED_SUPPLIES")}
+	return {"ok": true, "reason": ""}
+
+
+## Convert a fallen ledger into a playable recovery mission. Terrain, corruption, surviving
+## structures, stockpile policies, and control zones remain exact; only a basic Hearth and the
+## recovery party are guaranteed so the mission cannot load into an unwinnable empty scene.
+func prepare_recovery(site_id: StringName) -> Dictionary:
+	var check := can_recover(site_id)
+	if not bool(check["ok"]):
+		return check
+	capture_awake()
+	var source := awake_ledger()
+	Colony.spend(RECOVERY_COST)
+	source.state["stock"] = Colony.stock.duplicate(true)
+	var source_rows: Array = source.state.get("villagers", [])
+	var party: Array = []
+	for _i in RECOVERY_SETTLERS:
+		party.append(source_rows.pop_back())
+	source.state["villagers"] = source_rows
+
+	var ledger := colony(site_id)
+	var arrival := _ledger_world_position(ledger.keep_cell)
+	for row: Dictionary in party:
+		row["x"] = arrival.x
+		row["y"] = arrival.y
+		row["food"] = maxf(float(row.get("food", 80.0)), 65.0)
+		row["water"] = maxf(float(row.get("water", 80.0)), 65.0)
+	ledger.state["villagers"] = party
+	ledger.state["stock"] = RECOVERY_CARGO.duplicate(true)
+	ledger.state["reserved"] = {}
+	ledger.state["recovery_attempts"] = int(ledger.state.get("recovery_attempts", 0)) + 1
+	ledger.state["refugees"] = 0
+	_ensure_recovery_hearth(ledger)
+	ledger.fallen = false
+	ledger.shield_integrity = 0.45
+	ledger.last_advanced_day = Sim.day
+	Events.realm_changed.emit()
+	return {"ok": true, "ledger": ledger}
+
+
+func _ledger_world_position(cell: int) -> Vector2:
+	var x := cell % World.MAP_WIDTH
+	var y := cell / World.MAP_WIDTH
+	return Vector2((float(x) + 0.5) * Grid.TILE_SIZE, (float(y) + 0.5) * Grid.TILE_SIZE)
+
+
+func _ensure_recovery_hearth(ledger: ColonyLedger) -> void:
+	var rows: Array = ledger.state.get("buildings", [])
+	for row: Dictionary in rows:
+		var def := Buildings.get_building(StringName(row.get("def", &"")))
+		if def != null and def.center_tier > 0 and bool(row.get("complete", false)):
+			return
+	var keep_x := ledger.keep_cell % World.MAP_WIDTH
+	var keep_y := ledger.keep_cell / World.MAP_WIDTH
+	var anchor := (keep_y - 1) * World.MAP_WIDTH + (keep_x - 1)
+	rows.append({
+		"def": &"hearth",
+		"anchor": anchor,
+		"complete": true,
+		"state": Building.State.COMPLETE,
+		"work": 0.0,
+		"hp": 220.0,
+		"delivered": {},
+		"salvage": {},
+		"demolish_done": 0.0,
+	})
+	ledger.state["buildings"] = rows
 
 
 func _on_day_advanced(day_number: int) -> void:

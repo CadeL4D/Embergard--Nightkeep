@@ -167,8 +167,21 @@ func _advance_one_day(day_number: int) -> void:
 
 	# Corruption keeps moving when nobody is watching. The exact byte field is changed, not just
 	# a display percentage, so reconstitution cannot roll this consequence away.
-	_advance_blight(state.get("terrain", PackedByteArray()), state.get("blight", PackedByteArray()),
-		rng, roundi((30.0 + pressure * 18.0) * blight_mult))
+	var defense_control: Dictionary = state.get("defense_control", {}).duplicate(true)
+	var cleanse_left := int(defense_control.get("cleanse_dawns_left", 0))
+	if cleanse_left > 0:
+		_sleeping_cleanse(state.get("blight", PackedByteArray()), cleanse_left)
+		cleanse_left -= 1
+		defense_control["cleanse_dawns_left"] = cleanse_left
+		if cleanse_left <= 0:
+			defense_control["cleanse_completed"] = true
+		state["defense_control"] = defense_control
+	else:
+		var nest_mult := _sleeping_nest_multiplier(
+			state.get("nest_cells", PackedInt32Array()), state.get("feature", PackedByteArray()))
+		_advance_blight(state.get("terrain", PackedByteArray()),
+			state.get("blight", PackedByteArray()), rng,
+			roundi((30.0 + pressure * 18.0) * blight_mult * nest_mult))
 	var blight: PackedByteArray = state.get("blight", PackedByteArray())
 	var blighted := 0
 	for value in blight:
@@ -191,6 +204,28 @@ func _advance_one_day(day_number: int) -> void:
 	state["villagers"] = villagers
 	state["blight"] = blight
 	fallen = villagers.is_empty()
+
+
+func _sleeping_nest_multiplier(nests: PackedInt32Array, feature: PackedByteArray) -> float:
+	if nests.is_empty() or feature.is_empty():
+		return 1.0
+	var live := 0
+	for cell in nests:
+		if cell >= 0 and cell < feature.size() and feature[cell] == Terrain.Feature.NEST:
+			live += 1
+	return lerpf(0.25, 1.0, float(live) / float(nests.size()))
+
+
+func _sleeping_cleanse(blight: PackedByteArray, dawns_left: int) -> void:
+	if blight.is_empty() or dawns_left <= 0:
+		return
+	var cells := PackedInt32Array()
+	for i in blight.size():
+		if blight[i] > 0:
+			cells.append(i)
+	var amount := ceili(float(cells.size()) / float(dawns_left))
+	for i in mini(amount, cells.size()):
+		blight[cells[i]] = 0
 
 
 func _harvest(feature: PackedByteArray, feature_id: int, resource: StringName,

@@ -9,8 +9,8 @@ extends Node
 ## Layers, all flat arrays of grid.cell_count indexed y * width + x:
 ##   terrain   PackedByteArray  Terrain.Type       — what the ground is
 ##   feature   PackedByteArray  Terrain.Feature    — what sits on it
-##   occupancy PackedInt32Array building instance id, or 0 for empty (PATHING)
-##   claimed   PackedInt32Array building instance id, or 0 for empty (PLACEMENT)
+##   occupancy PackedInt64Array building instance id, or 0 for empty (PATHING)
+##   claimed   PackedInt64Array building instance id, or 0 for empty (PLACEMENT)
 ##   light     PackedByteArray  0-255              — gameplay light, not the renderer's
 ##   blight    PackedByteArray  0-255 intensity
 ##   move_cost PackedByteArray  1-254, 255 = impassable (derived; never saved)
@@ -50,13 +50,13 @@ var grid: Grid = Grid.new(MAP_WIDTH, MAP_HEIGHT)
 
 var terrain: PackedByteArray = PackedByteArray()
 var feature: PackedByteArray = PackedByteArray()
-var occupancy: PackedInt32Array = PackedInt32Array()
+var occupancy: PackedInt64Array = PackedInt64Array()
 ## Ground spoken for by a building, from the instant the blueprint goes down.
 ## Deliberately NOT the same layer as occupancy: occupancy is about pathing and is
 ## only stamped when a building COMPLETES, because builders have to be able to walk
 ## onto a site to raise it. That left unfinished sites invisible to placement, so a
 ## second hut could be dropped straight on top of one already under construction.
-var claimed: PackedInt32Array = PackedInt32Array()
+var claimed: PackedInt64Array = PackedInt64Array()
 var light: PackedByteArray = PackedByteArray()
 var blight: PackedByteArray = PackedByteArray()
 var move_cost: PackedByteArray = PackedByteArray()
@@ -160,9 +160,9 @@ func generate(new_seed: int, keep_override: int = -1, region_profile: Dictionary
 	nest_cells = result.nest_cells
 	rebuild_nest_hp()
 
-	occupancy = PackedInt32Array()
+	occupancy = PackedInt64Array()
 	occupancy.resize(grid.cell_count)
-	claimed = PackedInt32Array()
+	claimed = PackedInt64Array()
 	claimed.resize(grid.cell_count)
 	light = PackedByteArray()
 	light.resize(grid.cell_count)
@@ -192,6 +192,8 @@ func generate(new_seed: int, keep_override: int = -1, region_profile: Dictionary
 	_build_shore_index()
 	paths.setup(self)
 	resources.setup(self)
+	if DefenseControl:
+		DefenseControl.reset_for_map()
 	Events.map_generated.emit()
 
 

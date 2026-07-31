@@ -4,8 +4,8 @@ extends RefCounted
 
 const SAVE_PATH := "user://run.dat"
 const TEMP_PATH := "user://run.tmp"
-## 5 saves Realm-wide climate mitigation and deterministic storyteller state.
-const SCHEMA_VERSION := 5
+## 6 adds per-colony control zones, stockpile rules, cleansing, refugees, and recoverable ruins.
+const SCHEMA_VERSION := 6
 
 
 static func has_save() -> bool:
@@ -54,7 +54,7 @@ static func load_into(_run: Node, entities: Node) -> bool:
 	var version := int(data.get("version", 0))
 	if version == 2:
 		data = _migrate_v2(data)
-	elif version not in [3, 4, SCHEMA_VERSION]:
+	elif version not in [3, 4, 5, SCHEMA_VERSION]:
 		push_warning("RunSave: schema %d is not supported" % version)
 		return false
 

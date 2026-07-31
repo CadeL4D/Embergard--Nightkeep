@@ -88,16 +88,18 @@ func _ready() -> void:
 	# the sprite by its own height to line the two up.
 	_sprite.offset = Vector2(0, -def.tile_size().y)
 
-	# Buildings you can WALK ON must draw beneath the people standing on them. Y-sorting
+	# Buildings you can WALK ON must draw beneath the people standing on them and
+	# beneath the Ember hovering over them. Y-sorting
 	# cannot express that: the node sits at the BOTTOM of its footprint, so a farmer
 	# working the top row of a 2x2 farm sorts behind it and vanishes into the crop, and
 	# a haulier on a stockpile disappears under the sacks.
 	#
 	# Walkability is the right signal rather than a new flag or a list of ids — anything
-	# you can stand on is, by definition, something you should be drawn over. The terrain
-	# layer sits at z -2 so these still cover the ground.
+	# you can stand on is, by definition, something you should be drawn over. Entities'
+	# parent is z +2, so relative -2 puts roads at world z 0: above the ground layers,
+	# below villagers, and below the later-drawn Ember at the same global z.
 	if not def.blocks_movement:
-		z_index = -1
+		z_index = -2
 
 	var width := float(def.tile_size().x)
 	_progress_back.size = Vector2(width, 2)
@@ -292,7 +294,7 @@ func begin_upgrade(next: BuildingDef) -> bool:
 	hp = next.max_hp
 	_sprite.texture = next.sprite
 	_sprite.offset = Vector2(0, -next.tile_size().y)
-	z_index = -1 if not next.blocks_movement else 0
+	z_index = -2 if not next.blocks_movement else 0
 	_refresh_visuals()
 	return true
 

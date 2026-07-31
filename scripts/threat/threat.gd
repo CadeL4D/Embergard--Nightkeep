@@ -39,6 +39,8 @@ var _spawn_parent: Node = null
 var _pending_budget: float = 0.0
 var _pulses_left: int = 0
 var _pulse_timer: float = 0.0
+var _night_body_cap: int = 0
+var _spawned_this_night: int = 0
 var _field_dirty: bool = true
 var _rng := RandomNumberGenerator.new()
 
@@ -67,6 +69,8 @@ func reset() -> void:
 	_pending_budget = 0.0
 	_pulses_left = 0
 	_pulse_timer = 0.0
+	_night_body_cap = 0
+	_spawned_this_night = 0
 	_field_dirty = true
 	threat_field = FlowField.new()
 	if World.grid.cell_count > 0:
@@ -126,6 +130,10 @@ func _on_structures_changed(_b: Node) -> void:
 func _on_phase_changed(phase: int, _duration: float) -> void:
 	if phase == Sim.Phase.NIGHT:
 		_begin_night()
+	elif phase == Sim.Phase.DUSK:
+		var forecast := next_night_forecast()
+		if int(forecast["risk"]) >= 2:
+			Events.notice.emit(tr(&"FORECAST_WARNING"), 2)
 	elif phase == Sim.Phase.DAWN:
 		_end_night()
 
@@ -136,7 +144,9 @@ func _begin_night() -> void:
 	# The Blight's own settlement pays into the night on top of the curve, so a player who leaves
 	# enemy ground uncontested faces a harder night than the difficulty curve says they should —
 	# and that extra difficulty is a consequence of a decision rather than a number going up.
-	_pending_budget = budget_for_night(night_index) + World.blight_threat_bonus()
+	_pending_budget = wave_budget_for_night(night_index)
+	_night_body_cap = body_cap_for_night(night_index)
+	_spawned_this_night = 0
 	_pulses_left = PULSES
 	_pulse_timer = 0.0
 	Events.wave_incoming.emit(int(_pending_budget), {})
@@ -292,6 +302,9 @@ func _step_waves(delta: float) -> void:
 func _spawn_pulse(budget: float) -> void:
 	if _spawn_parent == null:
 		return
+	if _spawned_this_night >= _night_body_cap:
+		_pending_budget = 0.0
+		return
 	# The night shift is what lets a hard tier feel different rather than merely bigger:
 	# Forsaken draws from a roster two nights ahead, so the player meets Spitters before
 	# they have an answer to them instead of just meeting more Shamblers.
@@ -303,6 +316,9 @@ func _spawn_pulse(budget: float) -> void:
 	var guard := 0
 	while spent < budget and guard < 200:
 		guard += 1
+		if _spawned_this_night >= _night_body_cap:
+			_pending_budget = 0.0
+			return
 		var def := _pick(pool)
 		if def == null:
 			break
@@ -312,7 +328,8 @@ func _spawn_pulse(budget: float) -> void:
 			# nights hard without the framerate paying for it.
 			_apply_overflow(budget - spent)
 			return
-		_spawn_one(def, 1.0)
+		if _spawn_one(def, 1.0):
+			_spawned_this_night += 1
 		spent += def.threat_cost
 	_pending_budget = maxf(_pending_budget - spent, 0.0)
 
@@ -341,18 +358,19 @@ func _apply_overflow(leftover: float) -> void:
 			m.health *= scale
 
 
-func _spawn_one(def: MonsterDef, stat_scale: float) -> void:
+func _spawn_one(def: MonsterDef, stat_scale: float) -> bool:
 	var cell := _spawn_cell()
 	if cell == -1:
-		return
+		return false
 	if Realm.intercept_threat(cell, def.threat_cost):
-		return
+		return false
 	var m: Monster = MONSTER_SCENE.instantiate()
 	# Totems empower the horde. Folded into the same stat_scale the overflow director already uses,
 	# rather than a second multiplier on Monster — one place decides how tough a spawn is.
-	m.setup(def, stat_scale * World.blight_monster_scale())
+	m.setup(def, stat_scale * World.blight_monster_scale(), _nearest_corrupt_anchor(cell))
 	m.position = World.grid.to_world_index(cell)
 	_spawn_parent.add_child(m)
+	return true
 
 
 ## Monsters emerge from the Blight, biased toward the most corrupted map edge.
@@ -365,27 +383,42 @@ func _spawn_cell() -> int:
 	# burned out — and destroying one is supposed to visibly shift the attacks
 	# elsewhere. This line is the entire payoff for clearing a nest.
 	var live_nests := World.live_nest_cells()
+	var anchors := PackedInt32Array(live_nests)
+	for raw_cell in World.blight_structures:
+		anchors.append(int(raw_cell))
+	if anchors.is_empty():
+		return -1
 	for _attempt in 40:
-		var cell := -1
-		if not live_nests.is_empty() and _rng.randf() < 0.6:
-			# Near a nest, which is where the corruption is thickest.
-			var nest: int = live_nests[_rng.randi() % live_nests.size()]
-			var c := grid.coord(nest)
-			cell = grid.index(
-				clampi(c.x + _rng.randi_range(-3, 3), 0, grid.width - 1),
-				clampi(c.y + _rng.randi_range(-3, 3), 0, grid.height - 1))
-		else:
-			# Otherwise a random map edge.
-			match _rng.randi() % 4:
-				0: cell = grid.index(_rng.randi_range(0, grid.width - 1), 1)
-				1: cell = grid.index(_rng.randi_range(0, grid.width - 1), grid.height - 2)
-				2: cell = grid.index(1, _rng.randi_range(0, grid.height - 1))
-				_: cell = grid.index(grid.width - 2, _rng.randi_range(0, grid.height - 1))
+		# Creatures are inhabitants of the corrupted camps, not visitors generated at
+		# an arbitrary map edge. Their home anchor is also what keeps their idle
+		# wandering local until the colony actually draws their attention.
+		var anchor: int = anchors[_rng.randi() % anchors.size()]
+		var c := grid.coord(anchor)
+		var cell := grid.index(
+			clampi(c.x + _rng.randi_range(-3, 3), 0, grid.width - 1),
+			clampi(c.y + _rng.randi_range(-3, 3), 0, grid.height - 1))
 
 		var walkable: int = World.nearest_walkable(cell, 8)
 		if walkable != -1 and threat_field != null and threat_field.is_reachable(walkable):
 			return walkable
 	return -1
+
+
+func _nearest_corrupt_anchor(from: int) -> int:
+	var best := from
+	var best_dist := 0x7FFFFFFF
+	for nest in World.live_nest_cells():
+		var dist := World.grid.dist_sq(from, nest)
+		if dist < best_dist:
+			best_dist = dist
+			best = nest
+	for raw_cell in World.blight_structures:
+		var cell := int(raw_cell)
+		var dist := World.grid.dist_sq(from, cell)
+		if dist < best_dist:
+			best_dist = dist
+			best = cell
+	return best
 
 
 # --- Storyteller -------------------------------------------------------------------
@@ -429,6 +462,114 @@ func budget_for_night(night: int) -> float:
 	var base := 4.0 + float(night) * 2.5 + pow(1.18, float(night)) * 1.5
 	return base * (0.75 + pressure * 0.5) * Meta.threat_dial() \
 		* Difficulties.threat_mult() * Climate.threat_multiplier()
+
+
+## The first week introduces the enemy rather than using the late-game curve at full
+## force. Its share rises with both time and the amount of corrupted development the
+## player has allowed to stand. After the first week the ordinary long curve takes over.
+func wave_budget_for_night(night: int) -> float:
+	var raw := budget_for_night(night) + World.blight_threat_bonus()
+	if night > 7:
+		return raw
+	var time_maturity := clampf(float(night - 1) / 6.0, 0.0, 1.0)
+	var coverage := World.blight_field.coverage() if World.blight.size() > 0 else 0.0
+	var camp_maturity := clampf(
+		float(World.blight_structures.size()) / 8.0
+			+ coverage * 3.0,
+		0.0, 1.0)
+	var background_share := 0.20 + camp_maturity * 0.30
+	return raw * lerpf(background_share, 1.0, time_maturity)
+
+
+## Visible-body caps are intentionally more conservative than the point budget in the
+## opening week. The first night is peaceful on Sheltered and exactly one creature on
+## every other tier; harder modes shorten the grace period without removing it.
+func body_cap_for_night(night: int) -> int:
+	if night <= 0:
+		return 0
+	var opening: Array[int]
+	match Difficulties.current_id():
+		&"sheltered":
+			opening = [0, 1, 1, 2, 2, 3, 4]
+		&"besieged":
+			opening = [1, 1, 2, 3, 4, 5, 7]
+		&"forsaken":
+			opening = [1, 2, 3, 4, 5, 7, 9]
+		_:
+			opening = [1, 1, 2, 2, 3, 4, 5]
+	if night <= opening.size():
+		return opening[night - 1]
+	return MAX_MONSTERS
+
+
+## An idle creature only becomes an invader when the colony enters its interaction
+## radius, or once its difficulty/camp maturity says the background threat has grown
+## into a real raid. This keeps the opening nights ominous without sending every spawn
+## straight across the map to erase a new settlement.
+func monster_should_raid(home_cell: int, current_cell: int) -> bool:
+	if _colony_near(current_cell, Monster.INTERACTION_RADIUS) \
+			or _colony_near(home_cell, Monster.INTERACTION_RADIUS):
+		return true
+	var first_raid := 7
+	match Difficulties.current_id():
+		&"sheltered":
+			first_raid = 8
+		&"besieged":
+			first_raid = 5
+		&"forsaken":
+			first_raid = 3
+	var development_bonus := mini(World.blight_structures.size() / 3, 2)
+	return night_index >= maxi(first_raid - development_bonus, 2)
+
+
+func _colony_near(origin: int, radius: int) -> bool:
+	if not World.grid.is_valid_index(origin):
+		return false
+	if World.in_influence(origin):
+		return true
+	var reach_sq := radius * radius
+	for villager in Colony.villagers:
+		if is_instance_valid(villager) and villager.alive \
+				and World.grid.dist_sq(origin, villager.cell()) <= reach_sq:
+			return true
+	for building in Colony.buildings:
+		if not is_instance_valid(building) or building.is_site():
+			continue
+		for building_cell in building.cells:
+			if World.grid.dist_sq(origin, building_cell) <= reach_sq:
+				return true
+	return false
+
+
+## Stable information the player can act on before dusk. This does not consume the wave RNG, so
+## opening a tooltip can never change which monsters arrive.
+func next_night_forecast() -> Dictionary:
+	var next_night := night_index + 1
+	var budget := wave_budget_for_night(next_night)
+	var pool := Monsters.eligible(next_night + Difficulties.monster_night_shift())
+	var names := PackedStringArray()
+	var average_cost := 1.0
+	if not pool.is_empty():
+		var total := 0.0
+		for monster: MonsterDef in pool:
+			names.append(tr(monster.display_name))
+			total += monster.threat_cost
+		average_cost = total / float(pool.size())
+	var readiness := Colony.defense_readiness()
+	var ratio := readiness / maxf(budget, 1.0)
+	var risk := 0
+	if ratio < 0.72:
+		risk = 2
+	elif ratio < 1.08:
+		risk = 1
+	return {
+		"night": next_night,
+		"budget": ceili(budget),
+		"bodies": mini(maxi(roundi(budget / average_cost), 0), body_cap_for_night(next_night)),
+		"names": names,
+		"readiness": roundi(readiness),
+		"risk": risk,
+	}
 
 
 # --- Registry ----------------------------------------------------------------------

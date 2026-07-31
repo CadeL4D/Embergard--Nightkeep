@@ -822,6 +822,68 @@ itself, sounds intentional, supports different players and remembers the worlds 
 
 ---
 
+## Phase 7 — territorial colonies and continuity ✅ complete
+
+**Completed on 2026-07-30.** Phase 7 makes the Realm and local colony read as one continuous
+place, gives the player precise civilian/defense control, and turns the opening week from an
+unannounced rush into a forecastable territorial conflict.
+
+### 7.1 One world at two scales
+
+- A local settlement map now samples the exact same coastline, rivers, forest fields, quarry
+  fields and berry fields shown inside its selected Realm region. Regional maps no longer invent
+  an unrelated island after selection.
+- The gridless Realm overview still zooms into a detailed region preview before founding. The
+  selected square, its resource formations and its playable terrain are deterministic views of
+  the same seed-derived landscape.
+- Every settleable regional map receives a modest starting quarry connected to the Hearth by a
+  real traversable clearing. Resource-poor biomes remain scarce without soft-locking stone.
+
+### 7.2 Colony control, prediction and recovery
+
+- The Control drawer paints civilian-forbidden areas, allowed work areas, explicit guard patrols
+  and erasure. Orders, masks, emergency shelter, dusk safety, stockpile filters/priorities and
+  cleansing progress persist separately in each colony.
+- The HUD forecasts the next night’s estimated bodies, roster, readiness and risk before dusk.
+  Destroying nests permanently suppresses local corruption growth; a three-dawn late-game rite
+  clears residual corruption after every source is destroyed.
+- Fallen outposts retain their altered terrain, ruins and orders. Refugees may reach the First
+  Hearth, and a supplied recovery party can later re-enter that exact damaged region.
+
+### 7.3 Territorial threat and safer combat
+
+- The first night contains no creature on Sheltered and at most one on every other difficulty.
+  First-week body caps rise gradually with difficulty and the size of the corrupted settlement.
+- Monsters emerge beside nests or corrupt structures, wander within a small home range, and raid
+  only after the colony enters their interaction radius, provokes them, or the difficulty’s grace
+  period matures. Clearing the enemy camp removes its spawn anchor.
+- Warriors autonomously defend only inside the colony’s influence. A direct command or painted
+  guard zone is the explicit exception for an expedition beyond the boundary.
+
+### 7.4 Deliberate placement and visible feedback
+
+- Releasing a building drag leaves a complete blueprint preview; a separate tap/click or the
+  Build button confirms it. Dragged wall/path lines show every valid and blocked tile plus their
+  total cost before construction.
+- Building claims use full 64-bit Godot object IDs. Destroyed buildings and completed demolitions
+  release every footprint cell immediately, so the exact same ground is buildable again.
+- Paths and roads render on the ground beneath villagers and the Ember. Maximum zoom-out reveals
+  the buildable influence sphere.
+- Emberfall, Ward and Wrath have distinct world-space effects. Emberfall retains a visible ember
+  pool for its full light duration; Ward uses expanding protective rings; Wrath lands as lightning
+  and a readable blast.
+
+### 7.5 In-run navigation and final loss
+
+- A fitted in-game menu pauses safely and offers Resume, the complete shared Settings tabs, and
+  Save & Main Menu. It fits the 800×360 shipping viewport and preserves the prior pause state.
+- When the Realm has no surviving settlement, the run shows an explicit No Survivors game-over
+  card. The active run save is retired before the card appears, so Continue cannot reopen a dead
+  colony.
+- Run-save schema 6 includes all per-colony control/recovery state and migrates schemas 2–5.
+
+---
+
 ## Verification
 
 Extend the existing harness; do not replace it. `smoke_test.gd` runs 4 seeds
@@ -854,6 +916,19 @@ suite and focused Realm suite pass. A real renderer captures `artifacts/phase6_s
 event card are visually checked for overlap and readability. The final 4,257,508-byte iOS pack
 boots directly under Godot 4.7 with all 492 translations and the biome, climate, storyteller,
 weather and event-card resources present.
+
+Phase 7 extends the Realm suite with macro/local terrain agreement, per-colony painted orders,
+stockpile policy persistence, forecasts, refuge/recovery, nest suppression, final cleansing,
+two-step drag confirmation, miracle feedback, zoomed influence visibility, pause-menu state and
+64-bit destruction/demolition footprint release. The four-seed smoke suite additionally verifies
+the first-night body cap, territorial home wandering, provoked pursuit, warrior watch duty and
+the connected starting quarry. Real-renderer captures cover the control drawer, all three core
+miracles, zoomed influence, pause root/settings, released placement preview, Realm overview and
+selected-region continuity at 1600×720. A dedicated no-survivors regression verifies the living
+population transition, terminal game-over card, explanatory retired-save message and physical
+removal of the continue save. Godot 4.7 completes an editor parse, a clean 4,307,824-byte runtime
+pack, and a refreshed iOS Xcode-project export with developer scenes, captures and prior builds
+excluded.
 
 ### Manual checks that automation cannot cover
 - **Sphere geometry:** Watchtower east, Stockpile west — the boundary should bulge strongly east

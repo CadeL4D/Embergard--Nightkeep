@@ -233,6 +233,8 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 		"the field reaches the map edge")
 
 	# --- The wave --------------------------------------------------------------------
+	if not Colony.villagers.is_empty():
+		Colony.villagers[0].set_job(&"warrior")
 	Sim.set_phase(Sim.Phase.NIGHT)
 	Sim.time_scale = 8.0
 	for _i in 400:
@@ -242,8 +244,25 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 	_expect(Threat.alive_count() > 0, seed_value,
 		"the night spawns monsters (%d)" % Threat.alive_count())
 	_expect(Threat.alive_count() <= Threat.MAX_MONSTERS, seed_value, "monster cap respected")
+	_expect(Threat.alive_count() <= Threat.body_cap_for_night(1), seed_value,
+		"the first night respects its gentle body cap")
 
-	# Monsters must close on the colony rather than milling about at the edge.
+	var stayed_home := true
+	for _i in 120:
+		await get_tree().process_frame
+		for monster in Threat.monsters:
+			if not is_instance_valid(monster):
+				continue
+			if World.grid.dist_sq(monster.cell(), monster.home_cell) \
+					> (Monster.WANDER_RADIUS + 1) * (Monster.WANDER_RADIUS + 1):
+				stayed_home = false
+	_expect(stayed_home, seed_value,
+		"first-night monsters remain territorial around their corrupt camp")
+	if Threat.alive_count() > 0:
+		Threat.monsters[0].on_damaged(0.0, null)
+
+	# A provoked monster must still close on the colony rather than forgetting the
+	# interaction and returning to its camp.
 	#
 	# Measured across the whole wave, not one sampled creature: an individual that
 	# stops because it has reached something to attack is behaving correctly, and
@@ -258,7 +277,7 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 			engaged = true
 			break
 	_expect(end_closest < start_closest or engaged, seed_value,
-		"monsters advance on the colony (%d -> %d tiles, engaged: %s)" % [
+		"a provoked monster advances on the colony (%d -> %d tiles, engaged: %s)" % [
 			int(sqrt(float(start_closest))), int(sqrt(float(end_closest))), engaged])
 
 	# --- Guards fight back -------------------------------------------------------------

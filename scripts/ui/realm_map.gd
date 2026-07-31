@@ -163,7 +163,12 @@ func _refresh() -> void:
 				Realm.SETTLERS_REQUIRED])
 	elif ledger.fallen:
 		_status.text = tr(&"REALM_FALLEN")
-		_summary.text = tr(&"REALM_FALLEN_SUMMARY")
+		_summary.text = L10n.t(&"REALM_FALLEN_RECOVERY_SUMMARY", [
+			int(ledger.state.get("fallen_day", 0)),
+			int(Realm.RECOVERY_COST[&"wood"]),
+			int(Realm.RECOVERY_COST[&"stone"]),
+			int(Realm.RECOVERY_COST[&"food"]),
+			Realm.RECOVERY_SETTLERS])
 	else:
 		_status.text = tr(&"REALM_AWAKE") if is_awake else tr(&"REALM_SLEEPING")
 		_summary.text = tr(&"REALM_COLONY_SUMMARY").format([
@@ -183,9 +188,14 @@ func _refresh() -> void:
 		_primary.text = tr(&"REALM_BEGIN_HERE")
 		_primary.disabled = not bool(first_check["ok"])
 		_warning.text = String(first_check["reason"])
-	elif _canvas.zoomed_in and not is_awake and not (ledger != null and ledger.fallen):
+	elif _canvas.zoomed_in and not is_awake:
 		_primary.visible = true
-		if ledger == null:
+		if ledger != null and ledger.fallen:
+			var recover_check := Realm.can_recover(_selected)
+			_primary.text = tr(&"REALM_RECOVER")
+			_primary.disabled = not bool(recover_check["ok"])
+			_warning.text = String(recover_check["reason"])
+		elif ledger == null:
 			var check := Realm.can_found(_selected)
 			_primary.text = tr(&"REALM_FOUND")
 			_primary.disabled = not bool(check["ok"])
@@ -223,6 +233,9 @@ func _on_primary() -> void:
 	var ok := false
 	if _choosing_first and run.has_method("found_first_region"):
 		ok = run.found_first_region(_selected)
+	elif Realm.colony(_selected) != null and Realm.colony(_selected).fallen \
+			and run.has_method("recover_colony"):
+		ok = run.recover_colony(_selected)
 	elif Realm.colony(_selected) == null and run.has_method("found_realm_site"):
 		ok = run.found_realm_site(_selected)
 	elif run.has_method("travel_to_colony"):

@@ -12,6 +12,7 @@ static func capture(ledger: ColonyLedger) -> void:
 		"terrain": World.terrain.duplicate(),
 		"feature": World.feature.duplicate(),
 		"blight": World.blight.duplicate(),
+		"nest_cells": World.nest_cells.duplicate(),
 		"nest_hp": World.nest_hp.duplicate(true),
 		"blight_structures": World.blight_structures.duplicate(true),
 		"blight_growth": Threat.growth_progress(),
@@ -23,6 +24,7 @@ static func capture(ledger: ColonyLedger) -> void:
 		"ember_cell": Divine.ember_cell,
 		"night_index": Threat.night_index,
 		"threat_pressure": Threat.pressure,
+		"defense_control": DefenseControl.to_dict(),
 		"villagers": _pack_villagers(),
 		"buildings": _pack_buildings(),
 	}

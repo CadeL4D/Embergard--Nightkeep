@@ -23,6 +23,7 @@ extends CanvasLayer
 var _offer: Unlocks.Entry = null
 
 var _last_notice: String = ""
+var _no_survivors := false
 
 
 func _ready() -> void:
@@ -42,13 +43,18 @@ func _ready() -> void:
 func _on_notice(text: String, urgency: int) -> void:
 	if urgency >= 2:
 		_last_notice = text
+		if visible and not _no_survivors:
+			_message.text = text
 
 
 func _on_run_ended(ascended: bool, shards: int) -> void:
-	_title.text = tr(&"SUMMARY_ASCENDED" if ascended else &"SUMMARY_FALLEN")
+	var no_survivors := not ascended and Colony.population() <= 0
+	_no_survivors = no_survivors
+	_title.text = tr(&"SUMMARY_NO_SURVIVORS" if no_survivors \
+		else (&"SUMMARY_ASCENDED" if ascended else &"SUMMARY_FALLEN"))
 	_title.add_theme_color_override("font_color",
 		UiPalette.ACCENT_PALE if ascended else UiPalette.DANGER)
-	_message.text = _last_notice
+	_message.text = tr(&"SUMMARY_NO_SURVIVORS_BODY") if _no_survivors else _last_notice
 
 	_stats.text = L10n.t(&"SUMMARY_STATS", [Sim.day, Colony.population()])
 	_shards.text = L10n.t(&"SUMMARY_SHARDS", [shards, Meta.shards])

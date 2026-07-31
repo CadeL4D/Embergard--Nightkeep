@@ -586,14 +586,21 @@ func remove_stockpile(cell: int) -> void:
 
 ## Closest drop-off point to a villager. Returns -1 if the colony has nowhere to
 ## put anything, in which case gatherers simply hold their load.
-func nearest_stockpile(from: int) -> int:
+func nearest_stockpile(from: int, kind: StringName = &"") -> int:
 	var best := -1
-	var best_dist := 0x7FFFFFFF
+	var best_score := 0x7FFFFFFF
 	for cell in stockpiles:
+		if not DefenseControl.stockpile_accepts(cell, kind):
+			continue
 		var d := World.grid.dist_sq(from, cell)
-		if d < best_dist:
-			best_dist = d
+		# One priority step outweighs twenty tiles of walking without making distance irrelevant.
+		var score := d - (DefenseControl.stockpile_priority(cell) - 1) * 400
+		if score < best_score:
+			best_score = score
 			best = cell
+	# A restrictive setup must never strand a load permanently. Fall back to any storehouse.
+	if best == -1 and kind != &"":
+		return nearest_stockpile(from)
 	return best
 
 
@@ -846,6 +853,8 @@ func nearest_build_site(from: int) -> Node:
 			continue
 		if b.needs_materials() and not _can_supply(b):
 			continue
+		if not DefenseControl.allows_work(b.anchor):
+			continue
 		var d := World.grid.dist_sq(from, b.anchor)
 		if d < best_dist:
 			best_dist = d
@@ -903,6 +912,8 @@ func nearest_water_source(from: int) -> int:
 		var cell: int = b.work_cell()
 		if cell == -1:
 			continue
+		if not DefenseControl.allows_civilian(cell):
+			continue
 		var d := World.grid.dist_sq(from, cell)
 		if d < best_dist:
 			best_dist = d
@@ -912,6 +923,8 @@ func nearest_water_source(from: int) -> int:
 	# a building raised on the waterfront since then would have closed that cell off.
 	for cell in World.shore_cells:
 		if not World.is_walkable(cell):
+			continue
+		if not DefenseControl.allows_civilian(cell):
 			continue
 		var d := World.grid.dist_sq(from, cell)
 		if d < best_dist:
@@ -928,7 +941,29 @@ func has_water_access() -> bool:
 ## pool rather than per-stockpile stock, so any drop-off point will do — the walk
 ## is the cost, not the logistics.
 func nearest_food_source(from: int) -> int:
-	return nearest_stockpile(from) if has_food() else -1
+	return nearest_stockpile(from, &"food") if has_food() else -1
+
+
+## Player-facing readiness score in the same rough units as a nightly threat budget.
+## It is intentionally conservative: walls buy time, warriors and towers actually end a wave.
+func defense_readiness() -> float:
+	var score := 2.0
+	score += float(headcount_of(&"warrior")) * 5.0
+	for b in buildings:
+		if not is_instance_valid(b) or b.is_site():
+			continue
+		match b.def.id:
+			&"watchtower":
+				score += 8.0
+			&"stone_tower":
+				score += 13.0
+			&"wall", &"gate":
+				score += 1.0
+			&"stone_wall", &"stone_gate":
+				score += 2.0
+			&"hearth", &"great_hall", &"stone_keep", &"citadel":
+				score += 3.0
+	return score
 
 
 # --- Building slots -----------------------------------------------------------------------
@@ -1090,13 +1125,22 @@ func quota_of(job: StringName) -> int:
 func headcount_of(job: StringName) -> int:
 	var n := 0
 	for v in villagers:
-		if is_instance_valid(v) and v.job == job:
+		if is_instance_valid(v) and v.alive and v.job == job:
 			n += 1
 	return n
 
 
 func population() -> int:
-	return villagers.size()
+	# A dying agent remains in the scene tree until the end of the frame. Counting
+	# the backing array therefore gave the final villager a one-frame "ghost life":
+	# Run's deferred defeat check could run before _exit_tree erased them and never
+	# receive another chance to end the run. Population is a gameplay fact, so count
+	# living villagers rather than scene nodes awaiting deletion.
+	var living := 0
+	for villager in villagers:
+		if is_instance_valid(villager) and villager.alive:
+			living += 1
+	return living
 
 
 ## Reconcile the roster against the player's quotas.

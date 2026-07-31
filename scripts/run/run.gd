@@ -433,11 +433,27 @@ func _lose_awake_outpost(reason: String) -> void:
 	if _ended or Realm.awake_id == Realm.heart_region_id:
 		return
 	var lost_name := Realm.awake_ledger().display_name
-	Realm.mark_awake_fallen()
+	var refugees := Realm.mark_awake_fallen()
 	if Realm.settled(Realm.heart_region_id) and _wake_colony(Realm.heart_region_id, false):
+		if refugees > 0:
+			Colony.admit_event_survivors(refugees)
+			Realm.capture_awake()
+			Events.notice.emit(L10n.t(&"REALM_NOTICE_REFUGEES", [refugees, lost_name]), 1)
 		Events.notice.emit(L10n.t(&"REALM_NOTICE_OUTPOST_FALLEN", [lost_name, reason]), 2)
 	else:
 		_end_run(false, reason)
+
+
+func recover_colony(target_id: StringName) -> bool:
+	var recovery := Realm.prepare_recovery(target_id)
+	if not bool(recovery.get("ok", false)):
+		Events.notice.emit(String(recovery.get("reason", tr(&"REALM_RECOVERY_FAILED"))), 1)
+		return false
+	if not _wake_colony(target_id, false):
+		return false
+	Events.notice.emit(L10n.t(&"REALM_NOTICE_RECOVERY_BEGINS",
+		[Realm.awake_ledger().display_name]), 0)
+	return true
 
 
 ## Days a run must reach before ascending counts toward the difficulty ratchet. Low enough that a

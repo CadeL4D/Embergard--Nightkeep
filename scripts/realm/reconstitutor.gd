@@ -44,6 +44,7 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 	Threat.night_index = int(data.get("night_index", 0))
 	Threat.pressure = float(data.get("threat_pressure", ledger.pressure))
 	Threat.set_growth_progress(float(data.get("blight_growth", 0.0)))
+	DefenseControl.load_dict(data.get("defense_control", {}))
 
 	for cell in data.get("blight_structures", {}):
 		var at := int(cell)

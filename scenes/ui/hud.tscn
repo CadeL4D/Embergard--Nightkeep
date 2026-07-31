@@ -144,6 +144,13 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "1x"
 
+[node name="MenuButton" type="Button" parent="SafeArea/Layout/TopRow/PhaseBar/Row"]
+custom_minimum_size = Vector2(26, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+tooltip_text = "UI_MENU"
+text = "☰"
+
 [node name="MigrantPrompt" type="PanelContainer" parent="SafeArea/Layout"]
 visible = false
 layout_mode = 2
@@ -242,6 +249,79 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 2
 
+[node name="ControlPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
+visible = false
+custom_minimum_size = Vector2(448, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/ControlPanel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Status" type="Label" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.737255, 0.768627, 0.8, 1)
+theme_override_font_sizes/font_size = 8
+text = "CONTROL_HINT"
+
+[node name="Paint" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Forbidden" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(88, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_FORBIDDEN"
+
+[node name="Work" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(76, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_WORK"
+
+[node name="Guard" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(76, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_GUARD"
+
+[node name="Erase" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(66, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_ERASE"
+
+[node name="Orders" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Shelter" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders"]
+custom_minimum_size = Vector2(108, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_SHELTER"
+
+[node name="Dusk" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders"]
+custom_minimum_size = Vector2(108, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_DUSK"
+
+[node name="Cleanse" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders"]
+custom_minimum_size = Vector2(112, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "CONTROL_CLEANSE"
+
 [node name="BuildingCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
 custom_minimum_size = Vector2(220, 0)
@@ -280,6 +360,20 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.960784, 0.6, 0.552941, 1)
 theme_override_font_sizes/font_size = 9
 text = "UI_DEMOLISH"
+
+[node name="StorageFilter" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions"]
+visible = false
+custom_minimum_size = Vector2(86, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "STORAGE_ALL"
+
+[node name="StoragePriority" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions"]
+visible = false
+custom_minimum_size = Vector2(74, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "STORAGE_PRIORITY"
 
 [node name="BuildPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
@@ -364,6 +458,13 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 10
 toggle_mode = true
 text = "UI_BUILD"
+
+[node name="ControlButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+custom_minimum_size = Vector2(70, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+toggle_mode = true
+text = "UI_CONTROL"
 
 [node name="RealmButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 custom_minimum_size = Vector2(62, 22)

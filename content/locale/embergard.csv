@@ -497,3 +497,55 @@ STORY_DROUGHT_RATION,Ration water
 STORY_DROUGHT_RATION_DETAIL,Reduce thirst at the cost of farm output and morale.
 STORY_DROUGHT_ENDURE,Trust the clouds
 STORY_DROUGHT_ENDURE_DETAIL,Keep all supplies and bear the full drought.
+UI_CONTROL,Control
+CONTROL_HINT,Paint safe boundaries or issue a settlement-wide order.
+CONTROL_PAINT_HINT,Drag across the world to paint. Tap the active tool again when finished.
+CONTROL_FORBIDDEN,No civilians
+CONTROL_WORK,Work area
+CONTROL_GUARD,Guard patrol
+CONTROL_ERASE,Erase
+CONTROL_SHELTER,Shelter now
+CONTROL_SHELTER_ON,Sheltering
+CONTROL_SHELTER_OFF,The emergency shelter order has ended.
+CONTROL_DUSK,Open after dusk
+CONTROL_DUSK_ON,Closed after dusk
+CONTROL_CLEANSE,Cleanse region
+CONTROL_CLEANSE_PROGRESS,Cleansing · {0} dawns
+CONTROL_PATH_BLOCKED,That route crosses a civilian safety boundary.
+STORAGE_ALL,All goods
+STORAGE_FOOD,Food only
+STORAGE_MATERIALS,Raw materials
+STORAGE_FINISHED,Finished goods
+STORAGE_PRIORITY,Priority {0}
+FORECAST_LINE,night {0}: ~{1} · {2} · {3}
+FORECAST_TOOLTIP,Estimated threat {0}; defense readiness {1}. Possible enemies: {2}.
+FORECAST_READY,prepared
+FORECAST_CLOSE,close
+FORECAST_DANGER,underdefended
+FORECAST_WARNING,The coming night is stronger than this colony's current defenses.
+CLEANSE_ALREADY_ACTIVE,A cleansing project is already underway.
+CLEANSE_ALREADY_COMPLETE,There is no minor corruption left to cleanse.
+CLEANSE_NESTS_REMAIN,Destroy every nest in this region first.
+CLEANSE_TOO_CORRUPTED,The corruption is still too entrenched for a final cleansing.
+CLEANSE_NEED_FAITH,The rite needs {0} Faith.
+CLEANSE_NEED_SUPPLIES,The rite needs 30 stone and 18 tools.
+CLEANSE_STARTED,The three-dawn cleansing of this region has begun.
+CLEANSE_PROGRESS,The cleansing continues. {0} dawns remain.
+CLEANSE_COMPLETE,This region has been cleansed of its remaining corruption.
+REALM_RECOVER,Recover ruins
+REALM_RECOVERY_NOT_RUIN,This colony does not need recovery.
+REALM_RECOVERY_HEART,The First Hearth cannot be recovered this way.
+REALM_RECOVERY_NEED_SETTLERS,Keep {0} settlers at the awake colony for a recovery party.
+REALM_RECOVERY_NEED_SUPPLIES,Recovery needs 24 wood · 18 stone · 18 food.
+REALM_RECOVERY_FAILED,The recovery party could not depart.
+REALM_FALLEN_RECOVERY_SUMMARY,Fallen on day {0}. Its altered land and ruined buildings remain.\n\nRecovery: {1} wood · {2} stone · {3} food · {4} settlers
+REALM_NOTICE_REFUGEES,{0} refugees from {1} reached the First Hearth.
+REALM_NOTICE_RECOVERY_BEGINS,The recovery of {0} has begun. Rebuild before nightfall.
+UI_MENU,Game menu
+PAUSE_TITLE,Nightkeep paused
+PAUSE_RESUME,Return to the colony
+PAUSE_SETTINGS,Settings
+PAUSE_SAVE_MENU,Save and return to main menu
+PAUSE_SAVE_NOTE,Your active colony and Realm will be saved before leaving.
+SUMMARY_NO_SURVIVORS,Game over · no survivors
+SUMMARY_NO_SURVIVORS_BODY,The last villager has fallen. This run has ended and its active save has been retired.

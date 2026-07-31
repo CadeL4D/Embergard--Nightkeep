@@ -11,7 +11,10 @@ shader_type canvas_item;
 // their village through this for six hours, and a wash over the whole settlement would be
 // unbearable. What matters is exactly one thing: where the line is.
 
-uniform sampler2D influence_tex : filter_nearest, repeat_disable;
+// Linear sampling is intentional here. Placement still checks the exact cell array; this is only
+// its strategic overview. Nearest sampling turned a genuinely radial field into a staircase of
+// whole-tile rectangles when the camera was pulled back.
+uniform sampler2D influence_tex : filter_linear, repeat_disable;
 uniform vec2 grid_size = vec2(128.0, 128.0);
 uniform float tile_px = 16.0;
 
@@ -48,19 +51,16 @@ float bayer4(vec2 p) {
 
 // Cheap value hash, per world pixel. Wobbles the threshold so the boundary is never a clean
 // circle — that irregularity is the entire brief: "amorphous, grows directionally".
-float hash12(vec2 p) {
-	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-	p3 += dot(p3, p3.yzx + 33.33);
-	return fract((p3.x + p3.y) * p3.z);
-}
-
 void fragment() {
 	float v = texture(influence_tex, UV).r;
 
-	// One sample per TILE, not per screen pixel, so the wobble sits on the grid the sphere is
-	// actually measured on. Sampling per pixel would shimmer as the camera moved.
-	vec2 tile = floor(UV * grid_size);
-	float wobble = (hash12(tile) - 0.5) * rim * 0.9;
+	// Two broad, continuous waves keep the line from looking computer-perfect without producing
+	// hard corners at tile boundaries. They are evaluated in world-cell space, so camera movement
+	// cannot make the contour shimmer.
+	vec2 world_cell = UV * grid_size;
+	float wave_a = sin(world_cell.x * 0.63 + sin(world_cell.y * 0.19) * 1.35);
+	float wave_b = sin(world_cell.y * 0.51 - world_cell.x * 0.17);
+	float wobble = (wave_a * 0.62 + wave_b * 0.38) * rim * 0.22;
 	float line = threshold + wobble;
 
 	// Distance from the boundary, normalised across the rim.

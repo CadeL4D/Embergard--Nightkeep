@@ -99,40 +99,105 @@ static func generate(grid: Grid, seed_value: int, keep_override: int = -1,
 
 
 ## Regional scarcity should shape expansion, not soft-lock the first hours of a colony. Every
-## settleable local map therefore receives one modest connected quarry if its natural generation
-## did not provide enough stone. Rich highlands still contain vastly more.
+## settleable local map therefore receives one modest, reachable quarry near the Hearth. Rich
+## highlands still contain vastly more; this is the handhold that lets any region reach them.
 static func _ensure_starting_stone(grid: Grid, res: Result) -> void:
 	const MIN_STONE := 20
-	var existing := 0
-	for value in res.feature:
-		if value == Terrain.Feature.STONE:
-			existing += 1
-	if existing >= MIN_STONE:
-		return
 	var keep := grid.coord(res.keep_cell)
-	for radius in range(11, 28):
+	for radius in range(11, 24):
 		for dy in range(-radius, radius + 1):
 			for dx in range(-radius, radius + 1):
 				if absi(dx) != radius and absi(dy) != radius:
 					continue
 				var center := keep + Vector2i(dx, dy)
-				if not grid.is_valid_v(center):
+				if not grid.is_valid(center.x - 3, center.y - 3) \
+						or not grid.is_valid(center.x + 3, center.y + 3):
 					continue
-				for oy in range(-2, 3):
-					for ox in range(-2, 3):
+				var usable := true
+				for oy in range(-3, 4):
+					for ox in range(-3, 4):
 						var point := center + Vector2i(ox, oy)
-						if not grid.is_valid_v(point):
-							continue
 						var cell := grid.index_v(point)
-						if res.feature[cell] != Terrain.Feature.NONE:
-							continue
-						if res.terrain[cell] not in [
-								Terrain.Type.GRASS, Terrain.Type.DIRT, Terrain.Type.ROCK]:
-							continue
-						res.feature[cell] = Terrain.Feature.STONE
-						existing += 1
-						if existing >= MIN_STONE:
+						if res.terrain[cell] in [Terrain.Type.WATER, Terrain.Type.DEEP_WATER] \
+								or res.feature[cell] == Terrain.Feature.NEST:
+							usable = false
+							break
+					if not usable:
+						break
+				if not usable:
+					continue
+
+				# Find a real terrain route before stamping. The old version only cleared the
+				# quarry's apron; on a forest-heavy seed that left seven clear tiles completely
+				# enclosed by trees, so the quarry existed visually but no quarrier could reach it.
+				var route := _starting_resource_route(
+					grid, res, res.keep_cell, grid.index_v(center), center)
+				if route.is_empty():
+					continue
+
+				# Clear a one-tile apron and the route back to the already guaranteed Hearth
+				# clearing. Widened by one cell so it reads as an intentional trail rather than
+				# a pinhole through the canopy.
+				for oy in range(-3, 4):
+					for ox in range(-3, 4):
+						res.feature[grid.index_v(center + Vector2i(ox, oy))] = Terrain.Feature.NONE
+				for route_cell in route:
+					for neighbour in grid.neighbours_8(route_cell):
+						var nearby_feature := int(res.feature[neighbour])
+						if nearby_feature in [Terrain.Feature.TREE, Terrain.Feature.BERRIES]:
+							res.feature[neighbour] = Terrain.Feature.NONE
+					var route_feature := int(res.feature[route_cell])
+					if route_feature in [Terrain.Feature.TREE, Terrain.Feature.BERRIES]:
+						res.feature[route_cell] = Terrain.Feature.NONE
+				var stamped := 0
+				for oy in range(-2, 3):
+					for ox in range(-2, 2):
+						res.feature[grid.index_v(center + Vector2i(ox, oy))] = Terrain.Feature.STONE
+						stamped += 1
+						if stamped >= MIN_STONE:
 							return
+
+
+## Cardinal route across ground the founding settlers can open. Trees and berries may be cleared;
+## boulders, ruins, nests, and water must be routed around. The prospective quarry apron is treated
+## as empty because it will be cleared immediately after this succeeds.
+static func _starting_resource_route(grid: Grid, res: Result, start: int, goal: int,
+		apron_center: Vector2i) -> PackedInt32Array:
+	var parent := PackedInt32Array()
+	parent.resize(grid.cell_count)
+	parent.fill(-2)
+	var queue := PackedInt32Array([start])
+	parent[start] = -1
+	var head := 0
+	while head < queue.size():
+		var cell := queue[head]
+		head += 1
+		if cell == goal:
+			break
+		for next in grid.neighbours_4(cell):
+			if parent[next] != -2 or not Terrain.WALKABLE.get(res.terrain[next], false):
+				continue
+			var next_coord := grid.coord(next)
+			var in_apron := absi(next_coord.x - apron_center.x) <= 3 \
+				and absi(next_coord.y - apron_center.y) <= 3
+			var feature := int(res.feature[next])
+			if feature == Terrain.Feature.NEST:
+				continue
+			if not in_apron and Terrain.FEATURE_BLOCKS.get(feature, false) \
+					and feature not in [Terrain.Feature.TREE, Terrain.Feature.BERRIES]:
+				continue
+			parent[next] = cell
+			queue.append(next)
+
+	if parent[goal] == -2:
+		return PackedInt32Array()
+	var reversed := PackedInt32Array()
+	var at := goal
+	while at != -1:
+		reversed.append(at)
+		at = parent[at]
+	reversed.reverse()
+	return reversed
 
 
 # --- Terrain -------------------------------------------------------------------------
@@ -154,14 +219,16 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 	hydrology.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	hydrology.frequency = 0.042
 
-	# Radial falloff pushes the map edges toward water so the playfield reads as an
-	# island. It also gives monsters clean approach lanes instead of a hard border.
+	# Standalone/debug maps retain the old island falloff. Realm regions do not: they are one
+	# window into a continuous continent, so their edges must join the neighbouring squares.
 	var cx := grid.width * 0.5
 	var cy := grid.height * 0.5
 	var max_r := minf(cx, cy)
 	var elevation_bias := 0.0
 	var moisture_bias := 0.0
 	var biome_id := StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
+	var has_macro_source := region_profile.has("coord") and Realm.world_seed != 0
+	var region_coord: Vector2i = region_profile.get("coord", Vector2i.ZERO)
 	if not region_profile.is_empty():
 		elevation_bias = (float(region_profile.get("elevation", 0.5)) - 0.5) * 0.30
 		moisture_bias = (float(region_profile.get("moisture", 0.5)) - 0.5) * 0.42
@@ -190,28 +257,52 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 			var m := clampf((moisture.get_noise_2d(x, y) + 1.0) * 0.5 + moisture_bias,
 				0.0, 1.0)
 			var r := Vector2(x - cx, y - cy).length() / max_r
-			e -= smoothstep(0.62, 1.0, r) * 0.55
+			if not has_macro_source:
+				e -= smoothstep(0.62, 1.0, r) * 0.55
 			var h := (hydrology.get_noise_2d(x, y) + 1.0) * 0.5
 
 			var t: int
-			if e < 0.22:
-				t = Terrain.Type.DEEP_WATER
-			elif e < 0.30:
-				t = Terrain.Type.WATER
-			elif e < 0.35:
-				t = Terrain.Type.SAND
-			elif e > 0.72:
-				t = Terrain.Type.ROCK
-			elif m < 0.38:
-				t = Terrain.Type.DIRT
+			var local := {}
+			if has_macro_source:
+				local = Realm.local_landscape_at(region_coord,
+					Vector2((float(x) + 0.5) / float(grid.width),
+						(float(y) + 0.5) / float(grid.height)))
+				var material := int(local.get("material", 2))
+				m = clampf(float(local.get("moisture", m)) * 0.72 + m * 0.28, 0.0, 1.0)
+				match material:
+					0:
+						t = Terrain.Type.DEEP_WATER \
+							if float(local.get("landness", -0.1)) < -0.055 else Terrain.Type.WATER
+					1:
+						t = Terrain.Type.SAND
+					5, 9:
+						t = Terrain.Type.ROCK if h < 0.82 else Terrain.Type.RUBBLE
+					6:
+						t = Terrain.Type.DIRT if h < 0.86 else Terrain.Type.RUBBLE
+					7:
+						t = Terrain.Type.WATER
+					_:
+						t = Terrain.Type.DIRT if m < 0.36 else Terrain.Type.GRASS
 			else:
-				t = Terrain.Type.GRASS
+				if e < 0.22:
+					t = Terrain.Type.DEEP_WATER
+				elif e < 0.30:
+					t = Terrain.Type.WATER
+				elif e < 0.35:
+					t = Terrain.Type.SAND
+				elif e > 0.72:
+					t = Terrain.Type.ROCK
+				elif m < 0.38:
+					t = Terrain.Type.DIRT
+				else:
+					t = Terrain.Type.GRASS
 			# Each region keeps the shared tileset but arranges it differently. Broad ponds,
 			# tidal cuts, scree and dry rubble make the biome readable before one resource is
 			# harvested, while the keep flattening pass below still guarantees a safe opening.
 			match biome_id:
 				&"coast":
-					if r > 0.38 and r < 0.82 and absf(h - 0.50) < 0.030 \
+					if not has_macro_source and r > 0.38 and r < 0.82 \
+							and absf(h - 0.50) < 0.030 \
 							and t in [Terrain.Type.SAND, Terrain.Type.GRASS, Terrain.Type.DIRT]:
 						t = Terrain.Type.WATER
 				&"marsh":
@@ -321,6 +412,8 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int,
 	var stone_bias := 0.0
 	var food_bias := 0.0
 	var biome_id := StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
+	var has_macro_source := region_profile.has("coord") and Realm.world_seed != 0
+	var region_coord: Vector2i = region_profile.get("coord", Vector2i.ZERO)
 	if not region_profile.is_empty():
 		forest_bias = (float(region_profile.get("forest", 0.5)) - 0.5) * 0.24
 		stone_bias = (float(region_profile.get("stone", 0.5)) - 0.5) * 0.24
@@ -334,6 +427,24 @@ static func _scatter_features(grid: Grid, res: Result, seed_value: int,
 		var c := grid.coord(i)
 		var n := (clump.get_noise_2d(c.x, c.y) + 1.0) * 0.5
 		var berry_n := (berry_clump.get_noise_2d(c.x, c.y) + 1.0) * 0.5
+		var macro := {}
+		if has_macro_source:
+			macro = Realm.local_landscape_at(region_coord,
+				Vector2((float(c.x) + 0.5) / float(grid.width),
+					(float(c.y) + 0.5) / float(grid.height)))
+			var material := int(macro.get("material", 2))
+			if material == 8 and t in [Terrain.Type.GRASS, Terrain.Type.DIRT]:
+				if rng.randf() < (0.98 if n > 0.35 else 0.78):
+					res.feature[i] = Terrain.Feature.TREE
+				continue
+			if material == 9 and t in [Terrain.Type.ROCK, Terrain.Type.RUBBLE]:
+				if rng.randf() < (0.97 if n > 0.35 else 0.74):
+					res.feature[i] = Terrain.Feature.STONE
+				continue
+			if int(macro.get("berry_mark", 0)) > 0 and t == Terrain.Type.GRASS:
+				if rng.randf() < (0.58 if int(macro["berry_mark"]) == 2 else 0.22):
+					res.feature[i] = Terrain.Feature.BERRIES
+				continue
 		# Two densities per clump rather than one, so a wood has a SOLID CORE and a ragged fringe.
 		#
 		# The old single test filled 55% of a clump, which is close to the worst possible number:

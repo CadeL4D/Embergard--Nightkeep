@@ -1,0 +1,109 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="1_pause"]
+[ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="2_settings"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 18.0
+content_margin_top = 16.0
+content_margin_right = 18.0
+content_margin_bottom = 16.0
+bg_color = Color(0.0431373, 0.054902, 0.0784314, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 0.603922, 0.235294, 0.62)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+shadow_color = Color(0, 0, 0, 0.75)
+shadow_size = 12
+shadow_offset = Vector2(0, 5)
+
+[node name="PauseMenu" type="CanvasLayer"]
+layer = 90
+visible = false
+script = ExtResource("1_pause")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.00784314, 0.0117647, 0.0196078, 0.78)
+mouse_filter = 0
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Card" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(390, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Views" type="MarginContainer" parent="Center/Card"]
+layout_mode = 2
+
+[node name="Root" type="VBoxContainer" parent="Center/Card/Views"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="Title" type="Label" parent="Center/Card/Views/Root"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.847059, 0.541176, 1)
+theme_override_font_sizes/font_size = 17
+text = "PAUSE_TITLE"
+horizontal_alignment = 1
+
+[node name="Rule" type="HSeparator" parent="Center/Card/Views/Root"]
+layout_mode = 2
+
+[node name="Resume" type="Button" parent="Center/Card/Views/Root"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "PAUSE_RESUME"
+
+[node name="Settings" type="Button" parent="Center/Card/Views/Root"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "PAUSE_SETTINGS"
+
+[node name="MainMenu" type="Button" parent="Center/Card/Views/Root"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "PAUSE_SAVE_MENU"
+
+[node name="SaveNote" type="Label" parent="Center/Card/Views/Root"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
+theme_override_font_sizes/font_size = 8
+text = "PAUSE_SAVE_NOTE"
+horizontal_alignment = 1
+
+[node name="Settings" type="VBoxContainer" parent="Center/Card/Views"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="Label" parent="Center/Card/Views/Settings"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.847059, 0.541176, 1)
+theme_override_font_sizes/font_size = 14
+text = "PAUSE_SETTINGS"
+horizontal_alignment = 1
+
+[node name="SettingsPanel" type="VBoxContainer" parent="Center/Card/Views/Settings"]
+layout_mode = 2
+script = ExtResource("2_settings")
+
+[node name="Back" type="Button" parent="Center/Card/Views/Settings"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "UI_BACK"

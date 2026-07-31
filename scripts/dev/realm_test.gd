@@ -63,6 +63,8 @@ func _ready() -> void:
 		"the Blight Heart occupies its own hidden source region")
 	_expect(World.seed_value == int(Realm.site(heart_id)["seed"]),
 		"the awake gameplay map is generated from its selected region")
+	_expect(_macro_local_agreement() >= 0.58,
+		"the playable terrain continues the Realm map's water and resource formations")
 	_expect(_blight_components() >= 4,
 		"a settled local map contains several small separated corruption pockets")
 
@@ -123,6 +125,22 @@ func _ready() -> void:
 	_expect(run.travel_to_colony(neighbour_id), "the new colony can be revisited")
 	_expect(Colony.amount_of(&"wood") == int(Realm.STARTING_CARGO[&"wood"]) + 33,
 		"the new colony kept its own changed stockpile")
+	var zone_cell := World.grid.index_v(World.grid.coord(World.keep_cell) + Vector2i(9, 0))
+	DefenseControl.paint_mode = DefenseControl.PaintMode.WORK
+	DefenseControl.paint(zone_cell)
+	var store_cell := int(Colony.stockpiles[0])
+	DefenseControl.cycle_stockpile_filter(store_cell)
+	DefenseControl.cycle_stockpile_priority(store_cell)
+	Realm.capture_awake()
+	_expect(run.travel_to_colony(heart_id), "control-order check can visit the first colony")
+	_expect(DefenseControl.work[zone_cell] == 0,
+		"painted work areas belong only to their own colony")
+	_expect(run.travel_to_colony(neighbour_id), "control-order check returns to the outpost")
+	_expect(DefenseControl.work[zone_cell] != 0,
+		"the outpost restores its painted work area")
+	_expect(DefenseControl.stockpile_filter(store_cell) == DefenseControl.StockFilter.FOOD \
+			and DefenseControl.stockpile_priority(store_cell) == 2,
+		"stockpile filters and priorities restore with their colony")
 
 	var outpost_food := Colony.amount_of(&"food")
 	var heart_food_before := Realm.colony(heart_id).stock_of(&"food")
@@ -154,6 +172,69 @@ func _ready() -> void:
 	_expect(Realm.awake_id == awake_before, "the awake region survives save and load")
 	_expect(Colony.amount_of(&"wood") == wood_before,
 		"the awake colony stock survives save and load")
+	_expect(DefenseControl.work[zone_cell] != 0,
+		"painted control zones survive the run-save round trip")
+
+	var forecast := Threat.next_night_forecast()
+	var forecast_names: PackedStringArray = forecast["names"]
+	_expect(int(forecast["budget"]) > 0 and not forecast_names.is_empty(),
+		"the HUD can forecast the next night's strength and enemy types")
+	var power_effects := run.get_node("WorldView/PowerEffects")
+	Events.power_cast.emit(&"ward", World.grid.to_world_index(World.keep_cell))
+	_expect(power_effects.effects.size() == 1,
+		"casting a miracle creates visible world-space feedback")
+	power_effects.effects.clear()
+	run.camera.zoom = Vector2(0.5, 0.5)
+	await get_tree().process_frame
+	_expect(run.world_view.influence_overlay.visible,
+		"maximum zoom-out automatically reveals the buildable influence sphere")
+	run.camera.zoom = Vector2.ONE
+	var pause_menu := run.get_node("PauseMenu")
+	pause_menu.open()
+	_expect(pause_menu.visible and Sim.paused,
+		"the in-game menu pauses safely and exposes navigation/settings")
+	pause_menu.close()
+	_expect(not pause_menu.visible and not Sim.paused,
+		"returning from the in-game menu resumes the colony")
+	await _check_released_footprints(run)
+	DefenseControl.toggle_shelter()
+	_expect(DefenseControl.should_shelter(Colony.villagers[0]),
+		"the emergency order immediately recalls civilians")
+	DefenseControl.toggle_shelter()
+
+	var refugees := Realm.mark_awake_fallen()
+	_expect(Realm.colony(neighbour_id).fallen,
+		"a lost outpost remains on the Realm as recoverable ruins")
+	_expect(run._wake_colony(Realm.heart_region_id, false),
+		"survivors can retreat from a fallen outpost to the First Hearth")
+	Colony.admit_event_survivors(refugees)
+	for kind: StringName in Realm.RECOVERY_COST:
+		Colony.add(kind, int(Realm.RECOVERY_COST[kind]))
+	_expect(run.recover_colony(neighbour_id),
+		"a supplied recovery party can re-enter the fallen colony")
+	_expect(not Realm.colony(neighbour_id).fallen \
+			and Colony.population() == Realm.RECOVERY_SETTLERS,
+		"recovery restores a playable party without regenerating the region")
+	_expect(DefenseControl.work[zone_cell] != 0,
+		"recovery preserves the ruined colony's painted orders")
+
+	var suppression_before := DefenseControl.nest_suppression_multiplier()
+	var live_nests := World.live_nest_cells()
+	if not live_nests.is_empty():
+		World.damage_nest(live_nests[0], Terrain.NEST_HP * 2.0)
+	_expect(DefenseControl.nest_suppression_multiplier() < suppression_before,
+		"destroying a nest permanently weakens local corruption spread")
+	for nest in World.live_nest_cells():
+		World.damage_nest(nest, Terrain.NEST_HP * 2.0)
+	Colony.add(&"stone", 80)
+	Colony.add(&"tools", 40)
+	Divine.faith = 60.0
+	_expect(DefenseControl.start_cleanse(),
+		"a cleared late-game region can begin its final cleansing project")
+	for _dawn in DefenseControl.CLEANSE_DAWNS:
+		DefenseControl._on_phase_changed(Sim.Phase.DAWN, Sim.PHASE_DURATION[Sim.Phase.DAWN])
+	_expect(World.blight_field.coverage() == 0.0 and DefenseControl.cleanse_completed,
+		"the cleansing project removes every remaining minor corruption tile")
 
 	heart_id = Realm.heart_region_id
 	_expect(run.travel_to_colony(heart_id), "the test returns home before testing protection")
@@ -216,6 +297,84 @@ func _first_open_neighbour(id: StringName) -> StringName:
 	return &""
 
 
+func _check_released_footprints(run: Node2D) -> void:
+	var def := Buildings.get_building(&"path")
+	if def == null:
+		_expect(false, "the footprint regression test has a path definition")
+		return
+	for kind: StringName in def.cost:
+		Colony.add(kind, int(def.cost[kind]) * 4)
+	var anchor := -1
+	var keep := World.grid.coord(World.keep_cell)
+	for radius in range(3, 18):
+		for y in range(keep.y - radius, keep.y + radius + 1):
+			for x in range(keep.x - radius, keep.x + radius + 1):
+				if not World.grid.is_valid(x, y):
+					continue
+				var candidate := World.grid.index(x, y)
+				if bool(Colony.check_placement(def, candidate)["ok"]):
+					anchor = candidate
+					break
+			if anchor != -1:
+				break
+		if anchor != -1:
+			break
+	_expect(anchor != -1, "the footprint regression test finds buildable ground")
+	if anchor == -1:
+		return
+
+	var neighbour_anchor := -1
+	var anchor_coord := World.grid.coord(anchor)
+	for offset in [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]:
+		var point: Vector2i = anchor_coord + offset
+		if World.grid.is_valid_v(point):
+			var candidate := World.grid.index_v(point)
+			if bool(Colony.check_placement(def, candidate)["ok"]):
+				neighbour_anchor = candidate
+				break
+	_expect(neighbour_anchor != -1, "the drag-preview regression test finds a second path cell")
+	if neighbour_anchor != -1:
+		var placement := run.get_node("PlacementController")
+		var building_count := Colony.buildings.size()
+		placement.begin(def)
+		placement._set_pending_line(anchor_coord, World.grid.coord(neighbour_anchor))
+		_expect(Colony.buildings.size() == building_count,
+			"releasing a dragged building line leaves a preview without constructing")
+		placement.confirm()
+		_expect(Colony.buildings.size() > building_count,
+			"a separate confirmation tap commits the released preview")
+		for index in range(Colony.buildings.size() - 1, building_count - 1, -1):
+			var preview_building = Colony.buildings[index]
+			if is_instance_valid(preview_building):
+				preview_building.destroy()
+		placement.cancel()
+		await get_tree().process_frame
+
+	var destroyed := Colony.place_building(def, anchor, run.entities)
+	_expect(destroyed != null, "a test building can occupy the regression footprint")
+	if destroyed == null:
+		return
+	destroyed.complete()
+	destroyed.destroy()
+	await get_tree().process_frame
+	_expect(bool(Colony.check_placement(def, anchor)["ok"]),
+		"a monster-destroyed building immediately releases its whole footprint")
+
+	var demolished := Colony.place_building(def, anchor, run.entities)
+	if demolished != null:
+		demolished.complete()
+	_expect(demolished != null and demolished.begin_demolish(),
+		"a replacement building can begin demolition on the same footprint")
+	if demolished == null:
+		return
+	demolished.demolish_done = demolished.demolish_work()
+	demolished.salvage.clear()
+	demolished.destroy()
+	await get_tree().process_frame
+	_expect(bool(Colony.check_placement(def, anchor)["ok"]),
+		"a completed demolition also releases the footprint for rebuilding")
+
+
 func _blight_components() -> int:
 	var visited := PackedByteArray()
 	visited.resize(World.grid.cell_count)
@@ -248,6 +407,39 @@ func _world_signature() -> String:
 				float(row.get("stone", 0.0)),
 			])
 	return "|".join(rows) + ":" + String(Realm.blight_core_id)
+
+
+func _macro_local_agreement() -> float:
+	var row := Realm.site(Realm.awake_id)
+	var coord: Vector2i = row["coord"]
+	var matched := 0
+	var compared := 0
+	for y in range(2, World.grid.height - 2, 3):
+		for x in range(2, World.grid.width - 2, 3):
+			var cell := World.grid.index(x, y)
+			if World.grid.chebyshev(cell, World.keep_cell) <= MapGen.KEEP_CLEAR_RADIUS + 1:
+				continue
+			var sample := Realm.local_landscape_at(coord,
+				Vector2((float(x) + 0.5) / World.grid.width,
+					(float(y) + 0.5) / World.grid.height))
+			var material := int(sample["material"])
+			var agrees := false
+			match material:
+				0, 7:
+					agrees = World.terrain_at(cell) in [
+						Terrain.Type.WATER, Terrain.Type.DEEP_WATER]
+				1:
+					agrees = World.terrain_at(cell) == Terrain.Type.SAND
+				8:
+					agrees = World.feature_at(cell) == Terrain.Feature.TREE
+				9:
+					agrees = World.feature_at(cell) == Terrain.Feature.STONE
+				_:
+					continue
+			compared += 1
+			if agrees:
+				matched += 1
+	return float(matched) / float(maxi(compared, 1))
 
 
 func _build_test_containment() -> void:

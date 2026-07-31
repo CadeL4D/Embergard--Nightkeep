@@ -253,6 +253,14 @@ func think(delta: float) -> void:
 	if _awaiting_path:
 		return
 
+	# A shelter order is the one colony-wide command allowed to preempt ordinary needs and work.
+	# Warriors remain on the line; everyone else drops their claim and returns to the Village Center.
+	if DefenseControl.should_shelter(self):
+		_tick_shelter()
+		return
+	elif state == State.FLEEING:
+		state = State.IDLE
+
 	# Needs preempt work, but never interrupt themselves. The order is thirst, hunger, rest:
 	# dehydration kills fastest, and a villager who lies down to sleep while starving or
 	# parched dies in bed.
@@ -392,6 +400,10 @@ func _nearest_threatened() -> int:
 	for v in Colony.villagers:
 		if not is_instance_valid(v) or not v.alive or v == self:
 			continue
+		# Autonomous warriors protect the claimed settlement. A painted guard zone
+		# outside it is the player's explicit instruction to patrol farther afield.
+		if not World.in_influence(v.cell()) and not DefenseControl.is_guard_cell(v.cell()):
+			continue
 		var near := false
 		for m in Threat.monsters:
 			if is_instance_valid(m) and m.alive \
@@ -407,7 +419,7 @@ func _nearest_threatened() -> int:
 	if best != -1:
 		return best
 
-	var hunt := _nearest_monster(INF)
+	var hunt := _nearest_defended_monster()
 	return World.nearest_walkable(hunt.cell()) if hunt != null else -1
 
 
@@ -421,6 +433,23 @@ func _nearest_monster(reach: float) -> Node:
 		if d <= best_dist:
 			best_dist = d
 			best = m
+	return best
+
+
+func _nearest_defended_monster() -> Node:
+	var best: Node = null
+	var best_dist := INF
+	for monster in Threat.monsters:
+		if not is_instance_valid(monster) or not monster.alive:
+			continue
+		var monster_cell: int = monster.cell()
+		if not World.in_influence(monster_cell) \
+				and not DefenseControl.is_guard_cell(monster_cell):
+			continue
+		var distance := position.distance_squared_to(monster.position)
+		if distance < best_dist:
+			best_dist = distance
+			best = monster
 	return best
 
 
@@ -438,6 +467,9 @@ func _guard_post() -> int:
 		var threatened := _nearest_threatened()
 		if threatened != -1:
 			return threatened
+		var patrol := DefenseControl.nearest_guard_cell(cell())
+		if patrol != -1:
+			return patrol
 
 	var best := -1
 	var best_dist := 0x7FFFFFFF
@@ -610,7 +642,8 @@ func _seek_work() -> void:
 ## could stand on — and a claim on an unreachable tree is a villager that walks off, fails to arrive,
 ## drops the claim and picks the same tree again forever. See World.has_walkable_neighbour.
 func _can_work_on(target: int) -> bool:
-	return Colony.is_claimable(target) and World.has_walkable_neighbour(target)
+	return DefenseControl.allows_work(target) and Colony.is_claimable(target) \
+		and World.has_walkable_neighbour(target)
 
 
 func _tick_seeking() -> void:
@@ -745,7 +778,7 @@ func _begin_fetch() -> bool:
 	var kind: StringName = _site.next_needed()
 	if kind == &"":
 		return false
-	var source := Colony.nearest_stockpile(cell())
+	var source := Colony.nearest_stockpile(cell(), kind)
 	if source == -1:
 		return false
 	_fetch_kind = kind
@@ -939,7 +972,7 @@ func _begin_haul() -> void:
 	if carry_amount <= 0:
 		state = State.IDLE
 		return
-	var drop := Colony.nearest_stockpile(cell())
+	var drop := Colony.nearest_stockpile(cell(), carry_kind)
 	if drop == -1:
 		state = State.IDLE
 		return
@@ -967,6 +1000,24 @@ func _enter_rest() -> void:
 	stop()
 	_release_target()
 	state = State.RESTING
+
+
+## Fall back to the Hearth or highest-tier Village Center. This state deliberately uses normal
+## pathfinding—the order protects civilians from danger, it does not teleport them through walls.
+func _tick_shelter() -> void:
+	var destination := DefenseControl.shelter_cell()
+	if destination == -1:
+		return
+	if state != State.FLEEING:
+		_release_target()
+		_release_workplace()
+		stop()
+		state = State.FLEEING
+	if is_moving():
+		return
+	if World.grid.dist_sq(cell(), destination) <= 4:
+		return
+	_request_path(destination, State.FLEEING)
 
 
 func _decay_needs(delta: float) -> void:
@@ -1065,6 +1116,13 @@ func _request_path(dest: int, next_state: State) -> void:
 				_release_target()
 			state = State.IDLE
 			return
+		var def := Jobs.get_job(job)
+		var is_guard := def != null and def.defends
+		if not DefenseControl.path_allowed(path, is_guard, next_state == State.FLEEING):
+			if next_state == State.SEEKING:
+				_release_target()
+			state = State.IDLE
+			return
 		follow_path(path)
 		state = next_state
 	)
@@ -1089,6 +1147,11 @@ func command_to(dest: int) -> void:
 		return
 	var path := World.paths.solve(cell(), target)
 	if path.is_empty():
+		return
+	var def := Jobs.get_job(job)
+	var is_guard := def != null and def.defends
+	if not DefenseControl.path_allowed(path, is_guard):
+		Events.notice.emit(tr(&"CONTROL_PATH_BLOCKED"), 1)
 		return
 	_release_target()
 	follow_path(path)

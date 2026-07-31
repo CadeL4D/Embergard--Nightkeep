@@ -13,6 +13,9 @@ extends Node2D
 @onready var feature_layer: TileMapLayer = $Sorted/FeatureLayer
 @onready var blight_overlay: ColorRect = $BlightOverlay
 @onready var influence_overlay: ColorRect = $InfluenceOverlay
+@onready var camera: Camera2D = get_node("../CameraRig")
+
+var _placement_active := false
 
 ## Atlas source id inside terrain_tiles.tres. Only one source, so it is always 0.
 const SOURCE_ID := 0
@@ -32,6 +35,15 @@ func _ready() -> void:
 	Events.terrain_changed.connect(_on_terrain_changed)
 	Events.blight_changed.connect(_on_blight_changed)
 	Events.placement_mode_changed.connect(_on_placement_mode_changed)
+
+
+func _process(_delta: float) -> void:
+	# At the widest view the Realm reads strategically, so the buildable sphere is
+	# shown even when no blueprint is held. Closer views keep it quiet unless the
+	# player is actively placing something.
+	var should_show := _placement_active or camera.zoom.x <= 0.501
+	if influence_overlay.visible != should_show:
+		influence_overlay.visible = should_show
 
 
 func _on_map_generated() -> void:
@@ -214,4 +226,5 @@ func _fit_overlay() -> void:
 
 ## Only shown while placing. See Events.placement_mode_changed.
 func _on_placement_mode_changed(active: bool) -> void:
-	influence_overlay.visible = active
+	_placement_active = active
+	influence_overlay.visible = active or camera.zoom.x <= 0.501

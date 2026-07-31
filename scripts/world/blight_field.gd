@@ -150,7 +150,7 @@ func step(tick: int) -> void:
 	# Hoisted with night_mult: both are constant for the whole pass, and this loop runs
 	# a couple of hundred times per pass.
 	var base_chance: float = BASE_SPREAD * night_mult * Difficulties.blight_mult() \
-		* Climate.blight_multiplier()
+		* Climate.blight_multiplier() * DefenseControl.nest_suppression_multiplier()
 
 	var examined := 0
 	var samples := mini(SAMPLES_PER_PASS, _frontier.size())
