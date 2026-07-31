@@ -8,24 +8,26 @@ extends Node2D
 ## crowns, while quarries receive broad raised shelves tied to the shared rock body.
 ## Nothing here enters World.feature, pathing or saves.
 
-const FOREST_EDGE_BASE := Color("1b3823")
-const FOREST_EDGE_DARK := Color("101d16")
-const FOREST_OUTER := Color("102217")
-const FOREST_DEEP := Color("173a20")
-const FOREST_BASE := Color("23572c")
-const FOREST_MIDDLE := Color("32643b")
-const FOREST_SPECK := Color("4e8150")
+## The isolated lab's foliage ramp. Keeping this here as the source of truth
+## prevents the runtime crowns from drifting darker than the approved prototype.
+const FOREST_EDGE_BASE := Color("2e4425")
+const FOREST_EDGE_DARK := Color("0b130d")
+const FOREST_OUTER := Color("132719")
+const FOREST_DEEP := Color("1a361d")
+const FOREST_BASE := Color("245323")
+const FOREST_MIDDLE := Color("2f662a")
+const FOREST_SPECK := Color("3d7931")
 const TREE_TRUNK_DARK := Color("2a1d17")
 const TREE_TRUNK := Color("60402b")
 
-const ROCK_SHADOW := Color("17130f")
-const ROCK_OUTER := Color("241f1a")
-const ROCK_LEDGE_SHADOW := Color("4b4035")
-const ROCK_EDGE_BASE := Color("665847")
-const ROCK_MIDDLE := Color("796b57")
-const ROCK_INNER := Color("8c7a62")
-const ROCK_HIGHLIGHT := Color("aa9577")
-const ROCK_LINE := Color("17130f")
+## Ported directly from the approved isolated art lab.
+const ROCK_SHADOW := Color("1d1814")
+const ROCK_OUTER := Color("3b332a")
+const ROCK_LEDGE_SHADOW := Color("574b3e")
+const ROCK_EDGE_BASE := Color("706251")
+const ROCK_MIDDLE := Color("81715c")
+const ROCK_INNER := Color("9a866b")
+const ROCK_HIGHLIGHT := Color("b09a7b")
 
 const BUSH_OUTER := Color("102018")
 const BUSH_DEEP := Color("193822")
@@ -50,19 +52,36 @@ const STONE_SHELF_SPACING := 34.0
 var _boundaries: Array[Dictionary] = []
 var _boundary_lines: Array[Line2D] = []
 var _details: Array[Dictionary] = []
+var _rock_overlays: Array[Dictionary] = []
+var _stone_membership := PackedByteArray()
 var _tree_nodes: Array[Dictionary] = []
 var _berry_nodes: Array[Dictionary] = []
 var _node_atlas: ImageTexture
 var _rebuild_queued := false
+var _stone_rebuild_needed := true
 
 
 func _ready() -> void:
 	_node_atlas = _build_node_atlas()
-	Events.map_generated.connect(_queue_rebuild)
+	Events.map_generated.connect(_queue_full_rebuild)
 	Events.terrain_changed.connect(_on_terrain_changed)
 
 
-func _on_terrain_changed(_cell: int) -> void:
+func _queue_full_rebuild() -> void:
+	_stone_rebuild_needed = true
+	_queue_rebuild()
+
+
+func _on_terrain_changed(cell: int) -> void:
+	# Felling a tree or picking berries must not repaint every pixel of every
+	# quarry. Remembering the previous stone membership lets the expensive rock
+	# image remain cached until a stone cell itself is actually mined.
+	if cell >= 0 and cell < _stone_membership.size() \
+			and _stone_membership[cell] != 0:
+		_stone_rebuild_needed = true
+	elif World.grid.is_valid_index(cell) \
+			and World.feature_at(cell) == Terrain.Feature.STONE:
+		_stone_rebuild_needed = true
 	_queue_rebuild()
 
 
@@ -76,18 +95,30 @@ func _queue_rebuild() -> void:
 func _rebuild() -> void:
 	_rebuild_queued = false
 	_boundaries.clear()
-	_details.clear()
 	_tree_nodes.clear()
 	_berry_nodes.clear()
 	var grid: Grid = World.grid
 	if World.feature.size() != grid.cell_count:
+		_details.clear()
+		_rock_overlays.clear()
+		_stone_membership = PackedByteArray()
+		_stone_rebuild_needed = true
 		_sync_boundary_lines()
 		queue_redraw()
 		return
 
 	_build_boundaries(grid)
 	_sync_boundary_lines()
-	_build_stone_details(grid)
+	if _stone_rebuild_needed:
+		_details.clear()
+		_rock_overlays.clear()
+		_build_stone_details(grid)
+		_stone_membership.resize(grid.cell_count)
+		_stone_membership.fill(0)
+		for cell in grid.cell_count:
+			if int(World.feature[cell]) == Terrain.Feature.STONE:
+				_stone_membership[cell] = 1
+		_stone_rebuild_needed = false
 	for cell in grid.cell_count:
 		var feature := int(World.feature[cell])
 		var c := grid.coord(cell)
@@ -120,7 +151,10 @@ func _build_boundaries(grid: Grid) -> void:
 		if visited[cell] != 0:
 			continue
 		var feature := int(World.feature[cell])
-		if feature != Terrain.Feature.TREE and feature != Terrain.Feature.STONE:
+		# Stone's complete silhouette is painted from the same pixel mask as its
+		# shelves. Keeping a second vector outline here was the remaining visual
+		# difference from the isolated art lab.
+		if feature != Terrain.Feature.TREE:
 			continue
 		var region := _collect_region(cell, feature, grid, visited)
 		var edges: Dictionary = {}
@@ -155,6 +189,27 @@ func _build_stone_details(grid: Grid) -> void:
 		if region.is_empty():
 			continue
 
+		var wanted := 1
+		if region.size() >= 18:
+			wanted = clampi(ceili(float(region.size()) / 120.0), 1, 4)
+		# The lab uses an authored shelf radius range and clips it to the rock
+		# surface. Only small deposits scale that range down; a huge quarry gains
+		# more shelves rather than comically enlarging the ones on top.
+		var shelf_scale := clampf(
+			sqrt(float(region.size()) / 260.0), 0.38, 0.62
+		)
+		var shelf_spacing := maxf(
+			STONE_SHELF_SPACING, 120.0
+		)
+		var clearance_by_cell: Dictionary = {}
+		var max_clearance := 0
+		for cell in region:
+			var clearance := _stone_clearance(
+				grid.coord(cell), Terrain.Feature.STONE, grid
+			)
+			clearance_by_cell[cell] = clearance
+			max_clearance = maxi(max_clearance, clearance)
+		var minimum_clearance := maxi(1, mini(3, max_clearance - 1))
 		var interior := PackedInt32Array()
 		var primary := region[0]
 		var centroid := Vector2.ZERO
@@ -168,12 +223,17 @@ func _build_stone_details(grid: Grid) -> void:
 			if distance < primary_distance:
 				primary_distance = distance
 				primary = cell
-			# A full 3x3 test left the guaranteed quarry with only one viable
-			# shelf center. Cardinal support is enough to keep a terrace tied to
-			# the rock body while allowing the several broad raised tops used by
-			# the approved concept.
-			if _is_cross_interior(c, Terrain.Feature.STONE, grid):
+			if int(clearance_by_cell.get(cell, 0)) >= minimum_clearance:
 				interior.append(cell)
+		# Highly branched or perforated quarries may not contain a full square of
+		# the preferred radius. Keep their shelves conservative, but do not drop
+		# the raised top altogether.
+		if interior.is_empty():
+			for cell in region:
+				if _is_cross_interior(
+						grid.coord(cell), Terrain.Feature.STONE, grid
+					):
+					interior.append(cell)
 		if not interior.is_empty():
 			primary = interior[0]
 			primary_distance = INF
@@ -184,14 +244,12 @@ func _build_stone_details(grid: Grid) -> void:
 					primary_distance = distance
 					primary = cell
 
+		var detail_start := _details.size()
 		var chosen: Array[Vector2] = []
-		var wanted := 1
-		if region.size() >= 18:
-			wanted = clampi(roundi(float(region.size()) / 28.0), 2, 5)
-		var shelf_scale := clampf(
-			sqrt(float(region.size()) / float(wanted * 18)), 0.74, 1.16
+		_add_stone_detail(
+			primary, grid, chosen, shelf_scale, shelf_spacing,
+			int(clearance_by_cell.get(primary, 1))
 		)
-		_add_stone_detail(primary, grid, chosen, shelf_scale)
 		while chosen.size() < wanted:
 			var next_cell := -1
 			var next_distance := -1.0
@@ -202,35 +260,411 @@ func _build_stone_details(grid: Grid) -> void:
 				var nearest := INF
 				for existing in chosen:
 					nearest = minf(nearest, candidate.distance_squared_to(existing))
-				if nearest > next_distance:
-					next_distance = nearest
+				var candidate_coord := grid.coord(cell)
+				var placement_hash := _mix(
+					candidate_coord.x, candidate_coord.y,
+					World.seed_value + chosen.size() * 131
+				)
+				var placement_variation := lerpf(
+					0.82, 1.18,
+					float((placement_hash >> 9) % 1024) / 1023.0
+				)
+				var placement_score := nearest * placement_variation
+				if placement_score > next_distance:
+					next_distance = placement_score
 					next_cell = cell
 			if next_cell == -1 \
-					or next_distance < STONE_SHELF_SPACING * STONE_SHELF_SPACING:
+					or next_distance < shelf_spacing * shelf_spacing:
 				break
-			_add_stone_detail(next_cell, grid, chosen, shelf_scale)
+			_add_stone_detail(
+				next_cell, grid, chosen, shelf_scale, shelf_spacing,
+				int(clearance_by_cell.get(next_cell, 1))
+			)
+		var component_details: Array[Dictionary] = []
+		for detail_index in range(detail_start, _details.size()):
+			component_details.append(_details[detail_index])
+		_build_rock_overlay(region, component_details, grid)
 
 
 func _add_stone_detail(
-		cell: int, grid: Grid, chosen: Array[Vector2], shelf_scale: float
+		cell: int, grid: Grid, chosen: Array[Vector2],
+		shelf_scale: float, shelf_spacing: float, clearance: int
 	) -> void:
 	var c := grid.coord(cell)
 	var center := grid.to_world(c)
 	for other in chosen:
-		if center.distance_squared_to(other) \
-				< STONE_SHELF_SPACING * STONE_SHELF_SPACING:
+		if center.distance_squared_to(other) < shelf_spacing * shelf_spacing:
 			return
 	chosen.append(center)
 	var seed := _mix(
 		c.x, c.y, World.seed_value + Terrain.Feature.STONE * 97
 	)
-	var scale_variation := lerpf(
-		0.90, 1.08, float((seed >> 8) % 1024) / 1023.0
-	)
 	_details.append({
 		"feature": Terrain.Feature.STONE, "center": center, "seed": seed,
-		"scale": shelf_scale * scale_variation,
+		"scale": shelf_scale, "clearance": clearance,
 	})
+
+
+## Paint the approved lab shelves as one clipped mask for this connected quarry.
+##
+## This deliberately mirrors `embergard--nightkeep-art-lab` instead of drawing
+## independent polygons: stamps are unioned first, clipped well inside the
+## authoritative stone cells, then receive a two-pixel face rim and a shallow
+## lower-right depth offset.
+func _build_rock_overlay(
+		region: PackedInt32Array, component_details: Array[Dictionary], grid: Grid
+	) -> void:
+	if region.is_empty() or component_details.is_empty():
+		return
+	var minimum := grid.coord(region[0])
+	var maximum := minimum
+	for cell in region:
+		var c := grid.coord(cell)
+		minimum.x = mini(minimum.x, c.x)
+		minimum.y = mini(minimum.y, c.y)
+		maximum.x = maxi(maximum.x, c.x)
+		maximum.y = maxi(maximum.y, c.y)
+	# One-cell halo accommodates the lab's overlapping rock ellipses beyond the
+	# strict cell rectangle.
+	var halo := Grid.TILE_SIZE
+	var width := (maximum.x - minimum.x + 1) * Grid.TILE_SIZE + halo * 2
+	var height := (maximum.y - minimum.y + 1) * Grid.TILE_SIZE + halo * 2
+	if width <= 0 or height <= 0:
+		return
+
+	var rock_mask := PackedByteArray()
+	rock_mask.resize(width * height)
+	for cell in region:
+		var world_c := grid.coord(cell)
+		var c := world_c - minimum
+		var center := Vector2i(
+			c.x * Grid.TILE_SIZE + halo + Grid.TILE_SIZE / 2,
+			c.y * Grid.TILE_SIZE + halo + Grid.TILE_SIZE / 2
+		)
+		var h := _mix(
+			world_c.x, world_c.y,
+			World.seed_value + Terrain.Feature.STONE * 101
+		)
+		_stamp_local_ellipse(
+			rock_mask, width, height, center,
+			14 + h % 2, 12 + (h >> 5) % 2
+		)
+		_stamp_local_ellipse(
+			rock_mask, width, height,
+			center + Vector2i(
+				int((h >> 9) % 7) - 3,
+				int((h >> 13) % 5) - 2
+			),
+			12 + int((h >> 17) % 2),
+			10 + int((h >> 20) % 2)
+		)
+
+	var shelf_mask := PackedByteArray()
+	shelf_mask.resize(width * height)
+	var world_origin := Vector2(minimum * Grid.TILE_SIZE) \
+		- Vector2(halo, halo)
+	for detail in component_details:
+		var center := Vector2(detail["center"]) - world_origin
+		var seed := int(detail["seed"])
+		var scale := float(detail.get("scale", 1.0))
+		var radius_x := roundi(float(58 + (seed >> 18) % 39) * scale)
+		var radius_y := roundi(float(36 + (seed >> 23) % 27) * scale)
+		var inset := clampi(roundi(10.0 * scale), 6, 10)
+		_stamp_clipped_shelf(
+			shelf_mask, rock_mask, width, height,
+			Vector2i(roundi(center.x), roundi(center.y)),
+			radius_x, radius_y, seed, inset
+		)
+
+	var rock_depth := _local_mask_depth(rock_mask, width, height)
+	var upper_face := PackedByteArray()
+	upper_face.resize(width * height)
+	for pixel in rock_depth.size():
+		if rock_depth[pixel] > 6:
+			upper_face[pixel] = 1
+	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	_paint_rock_mass(
+		image, rock_mask, rock_depth, upper_face, width, height
+	)
+	_paint_shelf_mask(image, shelf_mask, rock_mask, width, height)
+	var detail_seed := _mix(
+		minimum.x, minimum.y, World.seed_value + Terrain.Feature.STONE * 307
+	)
+	_scatter_rock_grain(
+		image, rock_mask, width, height, region.size() * 2, detail_seed
+	)
+	_paint_rock_cracks(
+		image, upper_face, width, height,
+		clampi(ceili(float(region.size()) / 18.0), 1, 24),
+		detail_seed + 19073
+	)
+	_rock_overlays.append({
+		"texture": ImageTexture.create_from_image(image),
+		"position": world_origin,
+	})
+
+
+func _stamp_local_ellipse(
+		mask: PackedByteArray, width: int, height: int,
+		center: Vector2i, radius_x: int, radius_y: int
+	) -> void:
+	for y in range(maxi(0, center.y - radius_y),
+			mini(height, center.y + radius_y + 1)):
+		var dy := float(y - center.y) / float(maxi(1, radius_y))
+		for x in range(maxi(0, center.x - radius_x),
+				mini(width, center.x + radius_x + 1)):
+			var dx := float(x - center.x) / float(maxi(1, radius_x))
+			if dx * dx + dy * dy <= 1.0:
+				mask[y * width + x] = 1
+
+
+func _stamp_clipped_shelf(
+		target: PackedByteArray, clip: PackedByteArray,
+		width: int, height: int, center: Vector2i,
+		radius_x: int, radius_y: int, seed: int, inset: int
+	) -> void:
+	var phase := float(seed % 628) / 100.0
+	for y in range(maxi(0, center.y - radius_y - 2),
+			mini(height, center.y + radius_y + 3)):
+		for x in range(maxi(0, center.x - radius_x - 2),
+				mini(width, center.x + radius_x + 3)):
+			if not _local_mask_at(clip, width, height, x, y) \
+					or _local_near_outside(
+						clip, width, height, x, y, inset
+					):
+				continue
+			var nx := float(x - center.x) / float(maxi(1, radius_x))
+			var ny := float(y - center.y) / float(maxi(1, radius_y))
+			var angle := atan2(ny, nx)
+			var radius := sqrt(nx * nx + ny * ny)
+			var edge := 1.0 \
+				+ sin(angle * 3.0 + phase) * 0.095 \
+				+ sin(angle * 5.0 - phase * 0.7) * 0.065 \
+				+ sin(angle * 9.0 + phase * 1.3) * 0.035
+			if radius <= edge:
+				target[y * width + x] = 1
+
+
+## The full outcrop is painted with the lab's same stepped masks. This replaces
+## the old centered Line2D border, whose evenly thick rings read as a sticker.
+func _paint_rock_mass(
+		image: Image, rock: PackedByteArray, rock_depth: PackedByteArray,
+		upper_face: PackedByteArray, width: int, height: int
+	) -> void:
+	# Four-by-five lower-right drop shadow.
+	for y in height:
+		for x in width:
+			if not _local_mask_at(rock, width, height, x, y) \
+					and _local_mask_at(rock, width, height, x - 4, y - 5):
+				image.set_pixel(x, y, ROCK_SHADOW)
+
+	# Two dark outer pixels, three deeper bevel pixels, then the broad base.
+	# The distance map also identifies the lab's six-pixel inset in this pass.
+	for y in height:
+		for x in width:
+			var depth := int(rock_depth[y * width + x])
+			if depth == 0:
+				continue
+			var color := ROCK_EDGE_BASE
+			if depth <= 2:
+				color = ROCK_OUTER
+			elif depth <= 5:
+				color = ROCK_LEDGE_SHADOW
+			elif depth <= 9:
+				# The inset belongs to the same silhouette; this is its three-pixel rim.
+				color = ROCK_LEDGE_SHADOW
+			else:
+				color = ROCK_MIDDLE
+			image.set_pixel(x, y, color)
+
+	# Directional lighting matches the lab: bright upper-left, occluded lower-right.
+	_paint_directional_mask_rim(
+		image, rock, width, height, ROCK_HIGHLIGHT, ROCK_SHADOW
+	)
+
+
+func _local_mask_depth(
+		mask: PackedByteArray, width: int, height: int
+	) -> PackedByteArray:
+	# Two linear passes produce the Chebyshev distance to open ground. Six rounds
+	# of the lab's 3x3 erosion have the same distance boundary, but cost roughly
+	# fifty times more work during repeated harvest redraws.
+	var depth := PackedByteArray()
+	depth.resize(width * height)
+	depth.fill(255)
+	for index in mask.size():
+		if mask[index] == 0:
+			depth[index] = 0
+	for y in height:
+		for x in width:
+			var index := y * width + x
+			if depth[index] == 0:
+				continue
+			var nearest := int(depth[index])
+			if x > 0:
+				nearest = mini(nearest, int(depth[index - 1]) + 1)
+			if y > 0:
+				nearest = mini(nearest, int(depth[index - width]) + 1)
+				if x > 0:
+					nearest = mini(nearest, int(depth[index - width - 1]) + 1)
+				if x + 1 < width:
+					nearest = mini(nearest, int(depth[index - width + 1]) + 1)
+			depth[index] = mini(nearest, 255)
+	for y in range(height - 1, -1, -1):
+		for x in range(width - 1, -1, -1):
+			var index := y * width + x
+			if depth[index] == 0:
+				continue
+			var nearest := int(depth[index])
+			if x + 1 < width:
+				nearest = mini(nearest, int(depth[index + 1]) + 1)
+			if y + 1 < height:
+				nearest = mini(nearest, int(depth[index + width]) + 1)
+				if x > 0:
+					nearest = mini(nearest, int(depth[index + width - 1]) + 1)
+				if x + 1 < width:
+					nearest = mini(nearest, int(depth[index + width + 1]) + 1)
+			depth[index] = mini(nearest, 255)
+	return depth
+
+
+func _paint_directional_mask_rim(
+		image: Image, mask: PackedByteArray, width: int, height: int,
+		light_color: Color, shadow_color: Color
+	) -> void:
+	for y in height:
+		for x in width:
+			if not _local_mask_at(mask, width, height, x, y):
+				continue
+			if not _local_mask_at(mask, width, height, x - 1, y - 1) \
+					and _local_mask_at(mask, width, height, x + 1, y + 1):
+				image.set_pixel(x, y, light_color)
+			elif not _local_mask_at(mask, width, height, x + 1, y + 1) \
+					and _local_mask_at(mask, width, height, x - 1, y - 1):
+				image.set_pixel(x, y, shadow_color)
+
+
+func _scatter_rock_grain(
+		image: Image, mask: PackedByteArray, width: int, height: int,
+		count: int, seed: int
+	) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var placed := 0
+	var attempts := 0
+	while placed < count and attempts < count * 6:
+		attempts += 1
+		var x := rng.randi_range(1, width - 2)
+		var y := rng.randi_range(1, height - 2)
+		if not _local_mask_at(mask, width, height, x, y) \
+				or _local_near_outside(mask, width, height, x, y, 5):
+			continue
+		image.set_pixel(
+			x, y, ROCK_HIGHLIGHT if rng.randi_range(0, 4) == 0 \
+			else ROCK_LEDGE_SHADOW
+		)
+		placed += 1
+
+
+func _paint_rock_cracks(
+		image: Image, surface: PackedByteArray, width: int, height: int,
+		count: int, seed: int
+	) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var painted := 0
+	var attempts := 0
+	while painted < count and attempts < count * 20:
+		attempts += 1
+		var start := Vector2i(
+			rng.randi_range(8, width - 9), rng.randi_range(8, height - 9)
+		)
+		if not _local_mask_at(surface, width, height, start.x, start.y) \
+				or _local_near_outside(
+					surface, width, height, start.x, start.y, 7
+				):
+			continue
+		var angle := rng.randf_range(0.0, TAU)
+		var direction := Vector2(cos(angle), sin(angle))
+		var position := Vector2(start)
+		var length := rng.randi_range(8, 18)
+		for step in length:
+			if step > 0 and step % 5 == 0:
+				direction = direction.rotated(rng.randf_range(-0.55, 0.55))
+			position += direction
+			var at := Vector2i(roundi(position.x), roundi(position.y))
+			if not _local_mask_at(surface, width, height, at.x, at.y):
+				break
+			image.set_pixel(at.x, at.y, ROCK_LEDGE_SHADOW)
+			if step % 3 == 0 and at.x > 0 and at.y > 0:
+				image.set_pixel(at.x - 1, at.y - 1, ROCK_HIGHLIGHT)
+		painted += 1
+
+
+func _paint_shelf_mask(
+		image: Image, shelf: PackedByteArray, rock: PackedByteArray,
+		width: int, height: int
+	) -> void:
+	# Lower-right depth layers, clipped to the same quarry.
+	for y in height:
+		for x in width:
+			if _local_mask_at(shelf, width, height, x, y) \
+					or not _local_mask_at(shelf, width, height, x - 3, y - 4) \
+					or not _local_mask_at(rock, width, height, x, y):
+				continue
+			image.set_pixel(x, y, ROCK_LEDGE_SHADOW)
+	for y in height:
+		for x in width:
+			if _local_mask_at(shelf, width, height, x, y) \
+					or not _local_mask_at(shelf, width, height, x - 1, y - 2) \
+					or not _local_mask_at(rock, width, height, x, y):
+				continue
+			image.set_pixel(x, y, ROCK_EDGE_BASE)
+
+	# The face itself: two-pixel mid-tone rim and the lab's warm exposed top.
+	for y in height:
+		for x in width:
+			if not _local_mask_at(shelf, width, height, x, y):
+				continue
+			var color := ROCK_EDGE_BASE \
+				if _local_near_outside(shelf, width, height, x, y, 2) \
+				else ROCK_INNER
+			image.set_pixel(x, y, color)
+
+	# Directional one-pixel lip. A full dark outline is what made the previous
+	# pass read as boulders.
+	for y in height:
+		for x in width:
+			if not _local_mask_at(shelf, width, height, x, y):
+				continue
+			if not _local_mask_at(shelf, width, height, x - 1, y - 1) \
+					and _local_mask_at(shelf, width, height, x + 1, y + 1):
+				image.set_pixel(x, y, ROCK_HIGHLIGHT)
+			elif not _local_mask_at(shelf, width, height, x + 1, y + 1) \
+					and _local_mask_at(shelf, width, height, x - 1, y - 1):
+				image.set_pixel(x, y, ROCK_EDGE_BASE)
+
+
+func _local_mask_at(
+		mask: PackedByteArray, width: int, height: int, x: int, y: int
+	) -> bool:
+	return x >= 0 and y >= 0 and x < width and y < height \
+		and mask[y * width + x] != 0
+
+
+func _local_near_outside(
+		mask: PackedByteArray, width: int, height: int,
+		x: int, y: int, radius: int
+	) -> bool:
+	return not _local_mask_at(mask, width, height, x - radius, y) \
+		or not _local_mask_at(mask, width, height, x + radius, y) \
+		or not _local_mask_at(mask, width, height, x, y - radius) \
+		or not _local_mask_at(mask, width, height, x, y + radius) \
+		or not _local_mask_at(mask, width, height, x - radius, y - radius) \
+		or not _local_mask_at(mask, width, height, x + radius, y - radius) \
+		or not _local_mask_at(mask, width, height, x - radius, y + radius) \
+		or not _local_mask_at(mask, width, height, x + radius, y + radius)
 
 
 func _sync_boundary_lines() -> void:
@@ -240,18 +674,11 @@ func _sync_boundary_lines() -> void:
 	_boundary_lines.clear()
 
 	for boundary in _boundaries:
-		var feature := int(boundary["feature"])
 		var points: PackedVector2Array = boundary["points"]
 		var closed := _closed(points)
-		if feature == Terrain.Feature.TREE:
-			_add_boundary_line(closed, FOREST_EDGE_DARK, 6.0)
-			_add_boundary_line(closed, FOREST_OUTER, 3.5)
-			_add_boundary_line(closed, FOREST_EDGE_BASE, 1.5)
-		else:
-			_add_boundary_line(closed, ROCK_SHADOW, 9.0)
-			_add_boundary_line(closed, ROCK_OUTER, 6.0)
-			_add_boundary_line(closed, ROCK_EDGE_BASE, 2.5)
-			_add_boundary_line(closed, ROCK_HIGHLIGHT, 1.0)
+		_add_boundary_line(closed, FOREST_EDGE_DARK, 6.0)
+		_add_boundary_line(closed, FOREST_OUTER, 3.5)
+		_add_boundary_line(closed, FOREST_EDGE_BASE, 1.5)
 
 
 func _add_boundary_line(points: PackedVector2Array, color: Color, width: float) -> void:
@@ -440,14 +867,26 @@ func _is_cross_interior(c: Vector2i, feature: int, grid: Grid) -> bool:
 	return true
 
 
+func _stone_clearance(
+		c: Vector2i, feature: int, grid: Grid, maximum: int = 7
+	) -> int:
+	var clearance := 0
+	for radius in range(1, maximum + 1):
+		if not _is_solid_interior(c, feature, radius, grid):
+			break
+		clearance = radius
+	return clearance
+
+
 func _draw() -> void:
+	for overlay in _rock_overlays:
+		draw_texture(
+			overlay["texture"] as Texture2D,
+			Vector2(overlay["position"])
+		)
+
 	for node in _tree_nodes:
 		_draw_tree_node(node)
-
-	for detail in _details:
-		var center: Vector2 = detail["center"]
-		var seed := int(detail["seed"])
-		_draw_rock_shelf(center, seed, float(detail.get("scale", 1.0)))
 
 	for node in _berry_nodes:
 		_draw_berry_node(node)
@@ -466,40 +905,6 @@ func _draw_tree_node(node: Dictionary) -> void:
 		Vector2(NODE_SPRITE_SIZE, NODE_SPRITE_SIZE)
 	)
 	draw_texture_rect_region(_node_atlas, destination, source)
-
-
-func _draw_rock_shelf(center: Vector2, seed: int, scale: float) -> void:
-	var width_variation := lerpf(
-		0.88, 1.14, float((seed >> 3) % 1024) / 1023.0
-	)
-	var height_variation := lerpf(
-		0.88, 1.10, float((seed >> 14) % 1024) / 1023.0
-	)
-	var outer := _organic_blob(
-		center, seed,
-		30.0 * scale * width_variation,
-		21.0 * scale * height_variation,
-		20, 5.0 * scale
-	)
-	# Four stepped layers make this read as raised bedrock instead of a loose
-	# boulder laid on a flat brown patch. The lower offset is intentionally
-	# heavier than the upper highlight: light comes from above-left throughout
-	# the tileset.
-	var shadow := _offset_points(outer, Vector2(0, 3.5 * scale))
-	var bevel := _scaled_points(
-		outer, center + Vector2(-1.0, -1.5) * scale, 0.91
-	)
-	var top := _scaled_points(
-		outer, center + Vector2(-2.0, -3.25) * scale, 0.78
-	)
-	draw_colored_polygon(shadow, ROCK_OUTER)
-	draw_colored_polygon(outer, ROCK_LEDGE_SHADOW)
-	draw_colored_polygon(bevel, ROCK_EDGE_BASE)
-	draw_colored_polygon(top, ROCK_INNER)
-	draw_polyline(_closed(outer), ROCK_OUTER, 1.5, false)
-	draw_polyline(_lower_arc(bevel), ROCK_OUTER, 2.0, false)
-	draw_polyline(_closed(top), ROCK_EDGE_BASE, 1.5, false)
-	draw_polyline(_upper_arc(top), ROCK_HIGHLIGHT, 2.0, false)
 
 
 func _draw_berry_node(node: Dictionary) -> void:
@@ -669,74 +1074,11 @@ func _set_sprite_pixel(
 		image.set_pixel(origin.x + point.x, origin.y + point.y, color)
 
 
-func _organic_blob(
-		center: Vector2, seed: int, radius_x: float, radius_y: float,
-		point_count: int, wobble: float
-	) -> PackedVector2Array:
-	var points := PackedVector2Array()
-	var phase_a := float(seed % 628) / 100.0
-	var phase_b := float((seed >> 7) % 628) / 100.0
-	for i in point_count:
-		var angle := TAU * float(i) / float(point_count)
-		var wobble_hash := _mix(i, seed & 0xffff, point_count + 19)
-		var variation := float((wobble_hash >> 10) % 1024) / 1023.0
-		# Broad two- and three-lobed waves produce the irregular plateaus in the
-		# concept. A small hashed component keeps separate shelves from sharing
-		# an obvious mathematical outline.
-		var offset := sin(angle * 2.0 + phase_a) * wobble * 0.52 \
-			+ sin(angle * 3.0 - phase_b) * wobble * 0.34 \
-			+ (variation * 2.0 - 1.0) * wobble * 0.28
-		var px := center.x + cos(angle) * (radius_x + offset)
-		var py := center.y + sin(angle) * (radius_y + offset * 0.65)
-		points.append(Vector2(roundf(px), roundf(py)))
-	return points
-
-
-func _scaled_points(
-		points: PackedVector2Array, center: Vector2, scale: float
-	) -> PackedVector2Array:
-	var scaled := PackedVector2Array()
-	for point in points:
-		scaled.append(Vector2(
-			roundf(center.x + (point.x - center.x) * scale),
-			roundf(center.y + (point.y - center.y) * scale)
-		))
-	return scaled
-
-
 func _closed(points: PackedVector2Array) -> PackedVector2Array:
 	var closed := points.duplicate()
 	if not points.is_empty():
 		closed.append(points[0])
 	return closed
-
-
-func _offset_points(points: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
-	var shifted := PackedVector2Array()
-	for point in points:
-		shifted.append(point + offset)
-	return shifted
-
-
-func _upper_arc(points: PackedVector2Array) -> PackedVector2Array:
-	var arc := PackedVector2Array()
-	if points.is_empty():
-		return arc
-	var halfway := points.size() / 2
-	for i in range(halfway, points.size()):
-		arc.append(points[i])
-	arc.append(points[0])
-	return arc
-
-
-func _lower_arc(points: PackedVector2Array) -> PackedVector2Array:
-	var arc := PackedVector2Array()
-	if points.is_empty():
-		return arc
-	var halfway := points.size() / 2
-	for i in range(0, halfway + 1):
-		arc.append(points[i])
-	return arc
 
 
 func _pixel(point: Vector2) -> Vector2:

@@ -886,8 +886,8 @@ func _check_phase0(seed_value: int) -> void:
 	_expect(berries > 0, seed_value, "the map has berries on it (%d)" % berries)
 	_expect(berries < 400, seed_value,
 		"berry thickets stay compact rather than taking over the map (%d)" % berries)
-	_expect(stone_cells >= 29, seed_value,
-		"every local map has at least one substantial quarry (%d cells)" % stone_cells)
+	_expect(stone_cells >= 120, seed_value,
+		"stone is distributed beyond the guaranteed quarry (%d cells)" % stone_cells)
 
 	# Water used to be filled in out to radius 7, so a lakeside site had its lake paved
 	# over. Only the pad is guaranteed dry now.

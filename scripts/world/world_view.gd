@@ -63,7 +63,8 @@ func _on_map_generated() -> void:
 
 ## Lay down one feature tile. Forests and quarries use a four-way connection
 ## mask: full-bleed on shared sides, irregular on exposed sides. Berry thickets
-## are drawn by FeatureDetails so neighboring bushes can overlap beyond one tile.
+## and the entire stone landform are drawn by FeatureDetails from continuous
+## region masks, so their older cell tiles must not show beneath the new edges.
 ##
 ## Nothing extra is saved; harvesting a cell repaints it and its four neighbors,
 ## which exposes a correctly shaped new rim automatically.
@@ -72,9 +73,8 @@ func _paint_feature(cell: int, c: Vector2i) -> void:
 	if f == Terrain.Feature.NONE:
 		feature_layer.erase_cell(c)
 		return
-	if f == Terrain.Feature.BERRIES:
-		# The old atlas icon was an isolated eye-shaped shrub. The view-only
-		# detail layer now draws a full overlapping bush for this same cell.
+	if f == Terrain.Feature.BERRIES or f == Terrain.Feature.STONE:
+		# The view-only detail layer now owns the complete visible resource.
 		feature_layer.erase_cell(c)
 		return
 	if TileAtlas.is_connected_feature(f):

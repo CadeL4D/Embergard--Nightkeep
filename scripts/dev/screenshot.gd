@@ -14,7 +14,7 @@ const SEED := 424242
 ## Phase to jump to, and how long to let it settle before capturing.
 const SHOTS := [
 	{"name": "01_day_close", "phase": Sim.Phase.DAY, "settle": 1.2, "zoom": 2.0, "panel": ""},
-	{"name": "01b_quarry_close", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 1.5,
+	{"name": "01b_quarry_close", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 0.75,
 		"panel": "", "focus": "stone"},
 	{"name": "01c_berries_close", "phase": Sim.Phase.DAY, "settle": 0.4, "zoom": 2.0,
 		"panel": "", "focus": "berries"},
