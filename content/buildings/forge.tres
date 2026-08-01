@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/toolsmith.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"forge"
+display_name = "BUILDING_FORGE"
+description = "BUILDING_FORGE_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"cut_stone": 10, &"ingots": 4, &"tools": 1}
+build_work = 32.0
+max_hp = 185.0
+resistances = {&"fire": 0.45}
+repair_cost = {&"cut_stone": 1, &"ingots": 1}
+light_radius = 2
+influence_radius = 5
+worker_slots = 2
+input_capacity = 36
+output_capacity = 50
+order = 28
+color = Color(0.74, 0.52, 0.34, 1)
+

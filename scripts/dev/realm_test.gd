@@ -48,6 +48,7 @@ func _ready() -> void:
 			"the selected-region preview can be captured for visual QA")
 	_expect(run.found_first_region(picked_region),
 		"choosing one square creates that square's full gameplay map")
+	run.confirm_site(World.keep_cell)
 	_expect(Realm.heart_region_id == picked_region and Realm.awake_id == picked_region,
 		"the chosen square becomes the first colony")
 	first_picker._finish_first_selection()
@@ -148,8 +149,14 @@ func _ready() -> void:
 		"supplies can cross one shared region edge")
 	_expect(Colony.amount_of(&"food") == outpost_food - 10,
 		"sending supplies subtracts them from the awake stockpile")
-	_expect(Realm.colony(heart_id).stock_of(&"food") == heart_food_before + 10,
-		"the destination receives exactly the same supplies")
+	_expect(Realm.colony(heart_id).stock_of(&"food") == heart_food_before \
+			and not Realm.active_routes().is_empty(),
+		"dispatched supplies remain in a countable caravan until arrival")
+	var supply_route: TradeRoute = Realm.routes.back()
+	Realm._process_routes(supply_route.arrival_day)
+	var delivered_food := 10 - int(supply_route.lost_cargo.get(&"food", 0))
+	_expect(Realm.colony(heart_id).stock_of(&"food") == heart_food_before + delivered_food,
+		"arrival delivers exactly the cargo not recorded as an interception loss")
 
 	var original := Realm.colony(heart_id)
 	var a := ColonyLedger.from_dict(original.to_dict())
@@ -505,6 +512,8 @@ func _snapshot_profile() -> void:
 		"run_history": Meta.run_history.duplicate(true),
 		"lifetime_stats": Meta.lifetime_stats.duplicate(true),
 		"achievements": Meta.achievements.duplicate(),
+		"chronicle_completed": Meta.chronicle_completed.duplicate(),
+		"equipped_doctrines": Meta.equipped_doctrines.duplicate(),
 	}
 
 
@@ -518,6 +527,8 @@ func _restore_profile() -> void:
 	Meta.run_history.assign(_profile_snapshot["run_history"])
 	Meta.lifetime_stats = _profile_snapshot["lifetime_stats"].duplicate(true)
 	Meta.achievements.assign(_profile_snapshot["achievements"])
+	Meta.chronicle_completed.assign(_profile_snapshot["chronicle_completed"])
+	Meta.equipped_doctrines.assign(_profile_snapshot["equipped_doctrines"])
 	Meta.save_profile()
 
 

@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/palisade.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"spike_barricade"
+display_name = "BUILDING_SPIKE_BARRICADE"
+description = "BUILDING_SPIKE_BARRICADE_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 1
+footprint = Vector2i(1, 1)
+blocks_movement = false
+max_blight = 70
+cost = {
+&"wood": 7
+}
+build_work = 5.0
+max_hp = 55.0
+resistances = {
+&"piercing": 0.25,
+&"fire": -0.4
+}
+repair_cost = {
+&"wood": 1
+}
+repair_work = 2.0
+repair_amount = 25.0
+attack_damage = 5.0
+attack_range = 1.15
+attack_cooldown = 1.2
+attack_type = &"piercing"
+requires_line_of_fire = false
+order = 36
+color = Color(0.66, 0.46, 0.3, 1)
+

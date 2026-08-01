@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"conjure_material"
+display_name = "POWER_CONJURE_MATERIAL"
+description = "POWER_CONJURE_MATERIAL_DESC"
+kind = 8
+faith_cost = 28.0
+cooldown = 30.0
+amount = 10.0
+resource_kind = &"stone"
+required_temple_tier = 1
+burden = 0.1
+color = Color(0.7, 0.72, 0.78, 1)
+order = 12
+

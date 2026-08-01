@@ -1,0 +1,25 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+Locale: 726 keys, languages en, using en
+   ok   the launch roster contains at least sixteen regular enemies and four bosses
+   ok   splitting behavior has an authored counter
+   ok   incendiary behavior has an authored counter
+   ok   phasing behavior has an authored counter
+   ok   tunneling behavior has an authored counter
+   ok   ranged behavior has an authored counter
+   ok   siege behavior has an authored counter
+   ok   infection behavior has an authored counter
+   ok   support behavior has an authored counter
+   ok   regional bosses are excluded from ordinary wave rolls
+   ok   the forecast marks each fifth night as empowered
+   ok   infection is forecastable state and deals deterministic typed damage
+   ok   splitting creates capped lightweight children through the shared director
+   ok   incendiary death bursts use scheduled area impacts instead of physics bodies
+   ok   a cleansing threshold can raise its regional guardian
+   ok   the guardian is a live boss entity
+   ok   regional bosses persist through dawn until defeated
+   ok   cleansing boss progression is captured by schema 7
+   ok   timed villager conditions survive an awake-colony checkpoint
+
+=== Phase 2 systems test ===
+all hostile-roster and boss checks passed

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"hallow_wall"
+display_name = "POWER_HALLOW_WALL"
+description = "POWER_HALLOW_WALL_DESC"
+kind = 9
+faith_cost = 26.0
+cooldown = 22.0
+radius = 4
+amount = 20.0
+duration = 30.0
+required_temple_tier = 1
+burden = 0.1
+color = Color(1, 0.86, 0.56, 1)
+order = 13
+

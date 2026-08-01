@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"forging"
+display_name = "JOB_FORGING"
+workplace = &"forge"
+cycle_yield = {&"tools": 2}
+cycle_cost = {&"ingots": 1, &"boards": 1}
+cycle_work = 16.0
+carry_capacity = 6
+priority = 6
+default_quota = 0
+color = Color(0.76, 0.54, 0.34, 1)
+

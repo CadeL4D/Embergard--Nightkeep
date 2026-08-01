@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"mail_shirt"
+display_name = "ITEM_MAIL_SHIRT"
+slot = &"armor"
+max_durability = 220
+resistances = {&"piercing": 0.24, &"crushing": 0.16}
+order = 22

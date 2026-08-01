@@ -122,7 +122,7 @@ func refresh() -> void:
 
 
 static func season_for_day(day: int) -> StringName:
-	var index := (maxi(day, 1) - 1) / DAYS_PER_SEASON
+	var index := (maxi(day, 1) - 1) / Difficulties.season_length()
 	return SEASONS[index % SEASONS.size()]
 
 
@@ -210,11 +210,12 @@ func light_multiplier() -> float:
 
 
 func farm_multiplier() -> float:
-	return float(effects.get("farm", 1.0))
+	return float(effects.get("farm", 1.0)) * Difficulties.yield_mult()
 
 
 func gather_multiplier(feature: int) -> float:
-	return float(effects.get("gather", 1.0)) * Biomes.yield_multiplier(biome, feature)
+	return float(effects.get("gather", 1.0)) * Biomes.yield_multiplier(biome, feature) \
+		* Difficulties.yield_mult()
 
 
 func blight_multiplier() -> float:

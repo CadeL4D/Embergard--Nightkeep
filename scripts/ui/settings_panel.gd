@@ -5,6 +5,8 @@ extends VBoxContainer
 var _listening_action: StringName = &""
 var _key_buttons: Dictionary = {}
 var _text_value: Label
+var _hold_value: Label
+var _shake_value: Label
 var _pages: Array[Control] = []
 var _tab_buttons: Array[Button] = []
 
@@ -35,7 +37,9 @@ func _build() -> void:
 	page_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(page_host)
-	_pages.assign([_audio_tab(), _accessibility_tab(), _controls_tab()])
+	_pages.assign([
+		_audio_tab(), _gameplay_tab(), _accessibility_tab(), _controls_tab(),
+	])
 	for index in _pages.size():
 		var page := _pages[index]
 		page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -45,12 +49,76 @@ func _build() -> void:
 		button.text = String(page.name)
 		button.toggle_mode = true
 		button.button_group = group
-		button.custom_minimum_size = Vector2(82, 24)
+		button.custom_minimum_size = Vector2(78, Accessibility.MIN_UI_TARGET_PX)
 		button.add_theme_font_size_override("font_size", 9)
 		button.pressed.connect(set_tab.bind(index))
 		header.add_child(button)
 		_tab_buttons.append(button)
 	set_tab(0)
+
+
+func _gameplay_tab() -> VBoxContainer:
+	var rows := VBoxContainer.new()
+	rows.name = tr(&"OPTIONS_GAMEPLAY")
+	rows.add_theme_constant_override("separation", 8)
+
+	var graphics_row := HBoxContainer.new()
+	var graphics_label := Label.new()
+	graphics_label.text = tr(&"OPTIONS_GRAPHICS")
+	graphics_label.custom_minimum_size.x = 110
+	var graphics := OptionButton.new()
+	graphics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for key: StringName in Accessibility.GRAPHICS_NAMES:
+		graphics.add_item(tr(key))
+	graphics.select(Accessibility.graphics_mode)
+	graphics.item_selected.connect(Accessibility.set_graphics_mode)
+	graphics_row.add_child(graphics_label)
+	graphics_row.add_child(graphics)
+	rows.add_child(graphics_row)
+
+	var hand_row := HBoxContainer.new()
+	var hand_label := Label.new()
+	hand_label.text = tr(&"OPTIONS_HANDEDNESS")
+	hand_label.custom_minimum_size.x = 110
+	var hand := OptionButton.new()
+	hand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for key: StringName in Accessibility.HANDEDNESS_NAMES:
+		hand.add_item(tr(key))
+	hand.select(Accessibility.handedness)
+	hand.item_selected.connect(Accessibility.set_handedness)
+	hand_row.add_child(hand_label)
+	hand_row.add_child(hand)
+	rows.add_child(hand_row)
+
+	var hold_row := HBoxContainer.new()
+	var hold_label := Label.new()
+	hold_label.text = tr(&"OPTIONS_HOLD_DURATION")
+	hold_label.custom_minimum_size.x = 110
+	var hold := HSlider.new()
+	hold.min_value = 0
+	hold.max_value = Accessibility.HOLD_DURATIONS.size() - 1
+	hold.step = 1
+	hold.value = Accessibility.HOLD_DURATIONS.find(Accessibility.hold_duration)
+	hold.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hold_value = Label.new()
+	_hold_value.custom_minimum_size.x = 46
+	_hold_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_refresh_hold_value()
+	hold.value_changed.connect(func(value: float) -> void:
+		Accessibility.set_hold_duration(Accessibility.HOLD_DURATIONS[int(value)])
+		_refresh_hold_value()
+	)
+	hold_row.add_child(hold_label)
+	hold_row.add_child(hold)
+	hold_row.add_child(_hold_value)
+	rows.add_child(hold_row)
+
+	var note := Label.new()
+	note.text = tr(&"OPTIONS_GRAPHICS_NOTE")
+	note.add_theme_color_override("font_color", UiPalette.TEXT_DIM)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rows.add_child(note)
+	return rows
 
 
 func set_tab(index: int) -> void:
@@ -84,9 +152,16 @@ func _audio_tab() -> VBoxContainer:
 
 
 func _accessibility_tab() -> VBoxContainer:
+	var outer := VBoxContainer.new()
+	outer.name = tr(&"OPTIONS_ACCESS_TAB")
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size.y = 174
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_child(scroll)
 	var rows := VBoxContainer.new()
-	rows.name = tr(&"OPTIONS_ACCESS_TAB")
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows.add_theme_constant_override("separation", 6)
+	scroll.add_child(rows)
 	var palette_row := HBoxContainer.new()
 	var palette_label := Label.new()
 	palette_label.text = tr(&"ACCESS_PALETTE")
@@ -124,12 +199,51 @@ func _accessibility_tab() -> VBoxContainer:
 	text_row.add_child(_text_value)
 	rows.add_child(text_row)
 
+	var shake_row := HBoxContainer.new()
+	var shake_label := Label.new()
+	shake_label.text = tr(&"ACCESS_SCREEN_SHAKE")
+	shake_label.custom_minimum_size.x = 110
+	var shake := HSlider.new()
+	shake.min_value = 0
+	shake.max_value = Accessibility.SCREEN_SHAKE_LEVELS.size() - 1
+	shake.step = 1
+	shake.value = Accessibility.SCREEN_SHAKE_LEVELS.find(Accessibility.screen_shake_strength)
+	shake.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_shake_value = Label.new()
+	_shake_value.custom_minimum_size.x = 42
+	_shake_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_refresh_shake_value()
+	shake.value_changed.connect(func(value: float) -> void:
+		Accessibility.set_screen_shake_strength(Accessibility.SCREEN_SHAKE_LEVELS[int(value)])
+		_refresh_shake_value()
+	)
+	shake_row.add_child(shake_label)
+	shake_row.add_child(shake)
+	shake_row.add_child(_shake_value)
+	rows.add_child(shake_row)
+
 	rows.add_child(_check(&"ACCESS_REDUCED_MOTION", Accessibility.reduced_motion,
 		Accessibility.set_reduced_motion))
 	rows.add_child(_check(&"ACCESS_HAPTICS", Accessibility.haptics,
 		Accessibility.set_haptics))
 	rows.add_child(_check(&"ACCESS_TUTORIALS", Accessibility.tutorials_enabled,
 		Accessibility.set_tutorials_enabled))
+	rows.add_child(_check(&"ACCESS_HIGH_VISIBILITY_TARGETS",
+		Accessibility.high_visibility_targets, Accessibility.set_high_visibility_targets))
+	rows.add_child(_check(&"ACCESS_PAUSE_WHILE_MANAGING",
+		Accessibility.pause_while_managing, Accessibility.set_pause_while_managing))
+	var diagnostics := _check(&"ACCESS_DIAGNOSTICS_OPT_IN",
+		Accessibility.diagnostics_export_opt_in, Accessibility.set_diagnostics_export_opt_in)
+	rows.add_child(diagnostics)
+	var export := Button.new()
+	export.text = tr(&"ACCESS_EXPORT_DIAGNOSTICS")
+	export.disabled = not Accessibility.diagnostics_export_opt_in
+	diagnostics.toggled.connect(func(enabled: bool) -> void: export.disabled = not enabled)
+	export.pressed.connect(func() -> void:
+		if Diagnostics.export_bundle():
+			export.text = tr(&"ACCESS_DIAGNOSTICS_EXPORTED")
+	)
+	rows.add_child(export)
 	var reset := Button.new()
 	reset.text = tr(&"ACCESS_RESET_TUTORIALS")
 	reset.pressed.connect(func() -> void:
@@ -137,7 +251,7 @@ func _accessibility_tab() -> VBoxContainer:
 		reset.text = tr(&"ACCESS_TUTORIALS_RESET")
 	)
 	rows.add_child(reset)
-	return rows
+	return outer
 
 
 func _controls_tab() -> VBoxContainer:
@@ -232,3 +346,13 @@ func _refresh_keys() -> void:
 func _refresh_text_value() -> void:
 	if _text_value != null:
 		_text_value.text = "%d%%" % roundi(Accessibility.text_scale * 100.0)
+
+
+func _refresh_hold_value() -> void:
+	if _hold_value != null:
+		_hold_value.text = "%.2fs" % Accessibility.hold_duration
+
+
+func _refresh_shake_value() -> void:
+	if _shake_value != null:
+		_shake_value.text = "%d%%" % roundi(Accessibility.screen_shake_strength * 100.0)

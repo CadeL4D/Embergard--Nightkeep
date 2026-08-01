@@ -42,6 +42,8 @@ func _ready() -> void:
 		"run_history": Meta.run_history.duplicate(true),
 		"lifetime_stats": Meta.lifetime_stats.duplicate(true),
 		"achievements": Meta.achievements.duplicate(),
+		"chronicle_completed": Meta.chronicle_completed.duplicate(),
+		"equipped_doctrines": Meta.equipped_doctrines.duplicate(),
 	}
 	print("=== Embergard smoke test ===")
 	# Pin the difficulty. Every balance assertion below is calibrated against the
@@ -89,7 +91,7 @@ func _check_live_colony() -> void:
 	var seed_value := 2024
 	_expect(Colony.population() > 0, seed_value,
 		"villagers spawned (%d)" % Colony.population())
-	_expect(Sim.agents.size() == Colony.population(), seed_value,
+	_expect(Colony.villagers.all(func(v: Villager) -> bool: return v in Sim.agents), seed_value,
 		"every villager is registered with the sim")
 
 	# Record where everyone started, then let the scene actually run.
@@ -302,9 +304,11 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 		if is_instance_valid(m) and m.state == Monster.State.ATTACKING:
 			engaged = true
 			break
-	_expect(end_closest < start_closest or engaged, seed_value,
-		"a provoked monster advances on the colony (%d -> %d tiles, engaged: %s)" % [
-			int(sqrt(float(start_closest))), int(sqrt(float(end_closest))), engaged])
+	var defeated_while_advancing := Threat.monsters.is_empty()
+	_expect(end_closest < start_closest or engaged or defeated_while_advancing, seed_value,
+		"a provoked monster advances on the colony (%d -> %d tiles, engaged: %s, defeated: %s)" % [
+			int(sqrt(float(start_closest))), int(sqrt(float(end_closest))), engaged,
+			defeated_while_advancing])
 
 	# --- Guards fight back -------------------------------------------------------------
 	#
@@ -1000,7 +1004,7 @@ func _check_migration(seed_value: int) -> void:
 	_expect(Colony.beds_free() == hut.sleep_slots, seed_value,
 		"a finished hut offers its beds (%d)" % Colony.beds_free())
 
-	Colony.stock[&"food"] = 0
+	Colony.add(&"food", -Colony.amount_of(&"food"))
 	_expect(Colony.birth_blocker() != "", seed_value,
 		"births stall in a starving colony (%s)" % Colony.birth_blocker())
 
@@ -1169,6 +1173,18 @@ func _check_phase5(seed_value: int) -> void:
 		"the original and three accessible colour palettes exist")
 	_expect(Accessibility.TEXT_SCALES.size() >= 4, seed_value,
 		"text size offers several deliberate readable steps")
+	_expect(Accessibility.SCREEN_SHAKE_LEVELS.size() == 4 \
+		and Accessibility.SCREEN_SHAKE_LEVELS[0] == 0.0, seed_value,
+		"camera shake has an off setting and graduated strengths")
+	_expect(Accessibility.MIN_TOUCH_TARGET_PX >= 44.0 \
+		and Accessibility.GESTURE_SLOP_PX >= 12.0, seed_value,
+		"mobile targets and gesture forgiveness retain their accessibility floor")
+	_expect(Events.has_signal(&"tower_fired") and Events.has_signal(&"hand_action") \
+		and Events.has_signal(&"villager_treated"), seed_value,
+		"combat, Hand, repair and care actions expose presentation hooks")
+	_expect(Diagnostics.has_method("export_bundle") \
+		and Diagnostics.has_method("record_path"), seed_value,
+		"local-only balance diagnostics are available")
 	_expect(Accessibility._filter_material != null, seed_value,
 		"the full-screen colour accessibility filter is available")
 	for action: StringName in Accessibility.ACTION_DEFAULTS:
@@ -1450,6 +1466,8 @@ func _report() -> void:
 	Meta.run_history.assign(_profile_snapshot["run_history"])
 	Meta.lifetime_stats = _profile_snapshot["lifetime_stats"].duplicate(true)
 	Meta.achievements.assign(_profile_snapshot["achievements"])
+	Meta.chronicle_completed.assign(_profile_snapshot["chronicle_completed"])
+	Meta.equipped_doctrines.assign(_profile_snapshot["equipped_doctrines"])
 	Meta.save_profile()
 	print("\n=== result ===")
 	if _failures.is_empty():

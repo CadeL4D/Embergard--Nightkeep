@@ -8,7 +8,7 @@ extends CanvasLayer
 @onready var _name: Label = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Name
 @onready var _status: Label = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Status
 @onready var _summary: Label = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Summary
-@onready var _warning: Label = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Warning
+@onready var _warning: LinkButton = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Warning
 @onready var _primary: Button = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Primary
 @onready var _transfers: Control = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Transfers
 @onready var _send_food: Button = $Backdrop/Safe/Panel/Layout/Main/Details/Layout/Transfers/SendFood
@@ -43,6 +43,7 @@ func _ready() -> void:
 	_send_wood.pressed.connect(_send_resource.bind(&"wood"))
 	_send_migrant.pressed.connect(_on_send_migrant)
 	_assault.pressed.connect(_on_assault)
+	_warning.pressed.connect(_on_warning_help)
 	Events.realm_changed.connect(_refresh)
 	Events.realm_victory.connect(close)
 
@@ -128,7 +129,7 @@ func _refresh() -> void:
 	var ledger := Realm.colony(_selected)
 	var is_awake := _selected == Realm.awake_id
 	var is_settled := ledger != null and not ledger.fallen
-	var is_connected := Realm.connected(Realm.awake_id, _selected)
+	var is_connected := Realm.has_route_path(Realm.awake_id, _selected)
 	var coord: Vector2i = row["coord"]
 	var biome_id := StringName(row.get("biome", Biomes.DEFAULT_ID))
 	var biome := tr(Biomes.name_key(biome_id))
@@ -177,6 +178,19 @@ func _refresh() -> void:
 			int(round(ledger.corruption * 100.0)),
 			int(round(ledger.defense_strength() * 100.0)),
 			int(round(ledger.pressure))])
+		var identity: Dictionary = row.get("economic_identity", {})
+		if not identity.is_empty():
+			_summary.text += "\n" + L10n.t(&"REALM_ECONOMIC_IDENTITY", [
+				L10n.resource(StringName(identity.get("specialty", &""))),
+				L10n.resource(StringName(identity.get("demand", &"")))])
+		var incoming := 0
+		var soonest := 0x7FFFFFFF
+		for route in Realm.active_routes():
+			if route.destination_id == _selected:
+				incoming += 1
+				soonest = mini(soonest, route.arrival_day)
+		if incoming > 0:
+			_summary.text += "\n" + L10n.t(&"REALM_INCOMING_ROUTES", [incoming, soonest])
 
 	_primary.visible = false
 	_back_to_world.visible = _canvas.zoomed_in
@@ -211,6 +225,13 @@ func _refresh() -> void:
 	_send_food.disabled = Colony.available(&"food") < 10
 	_send_wood.disabled = Colony.available(&"wood") < 10
 	_send_migrant.disabled = Colony.population() <= 1
+	if can_transfer:
+		var forecast := Realm.route_forecast(Realm.awake_id, _selected, {&"food": 10})
+		if bool(forecast.get("ok", false)):
+			_warning.text = L10n.t(&"REALM_ROUTE_FORECAST", [
+				int(forecast.get("arrival_day", Sim.day + 1)),
+				tr(StringName("REALM_RISK_" + String(forecast.get("risk_label", "safe")).to_upper())),
+				int(round(float(forecast.get("risk", 0.0)) * 100.0))])
 
 	_update_footer()
 	_canvas.queue_redraw()
@@ -264,3 +285,13 @@ func _on_send_migrant() -> void:
 func _on_assault() -> void:
 	Realm.assault_blight_heart()
 	_refresh()
+
+
+func _on_warning_help() -> void:
+	if _warning.text.is_empty() or _choosing_first:
+		return
+	var reason := _warning.text
+	close()
+	var pause_menu := get_parent().get_node_or_null("PauseMenu")
+	if pause_menu != null and pause_menu.has_method("open_codex_for_warning"):
+		pause_menu.open_codex_for_warning(reason)

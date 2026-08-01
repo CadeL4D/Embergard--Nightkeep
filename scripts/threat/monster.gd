@@ -29,17 +29,25 @@ var _anim_time: float = 0.0
 var _tint_timer: float = 0.0
 var _wander_turn: int = 0
 var _provoked: bool = false
+var charm_remaining: float = 0.0
+var empowered: bool = false
+var _support_timer: float = 0.0
+var _presentation_accum: float = 0.0
+var _visual_scale: float = 1.0
+var _outline: Sprite2D = null
 
 @onready var _sprite: Sprite2D = $Sprite
 
 
-func setup(monster_def: MonsterDef, stat_scale: float = 1.0, spawn_home: int = -1) -> void:
+func setup(monster_def: MonsterDef, stat_scale: float = 1.0, spawn_home: int = -1,
+		is_empowered: bool = false) -> void:
 	def = monster_def
 	# The director converts unspendable budget into stat multipliers rather than
 	# more bodies, so late nights get harder without exceeding the entity cap.
 	max_health = def.max_health * stat_scale
 	move_speed = def.move_speed
 	home_cell = spawn_home
+	empowered = is_empowered
 
 
 func _ready() -> void:
@@ -49,6 +57,8 @@ func _ready() -> void:
 	super()
 	_sprite.texture = def.sprite
 	_sprite.hframes = 2
+	_visual_scale = def.presentation_scale * (1.18 if empowered else 1.0)
+	_sprite.scale = Vector2.ONE * _visual_scale
 	Threat.register(self)
 
 
@@ -74,9 +84,16 @@ func _surface_speed(cell_index: int) -> float:
 
 func think(delta: float) -> void:
 	_attack_timer = maxf(_attack_timer - delta, 0.0)
+	_support_timer = maxf(_support_timer - delta, 0.0)
 	_burn(delta)
 	if not alive:
 		return
+	if charm_remaining > 0.0:
+		state = State.WANDERING
+		_wander_near_home()
+		return
+	if def.has_behavior(&"support") and _support_timer <= 0.0:
+		_support_allies()
 
 	var victim := _find_target()
 	if victim != null:
@@ -106,13 +123,13 @@ func _burn(delta: float) -> void:
 	if lit < def.burn_threshold:
 		return
 	var scale := float(lit - def.burn_threshold) / float(maxi(255 - def.burn_threshold, 1))
-	take_damage(def.burn_per_second * scale * delta)
+	take_damage(def.burn_per_second * scale * delta, null, &"holy")
 
 
 func _advance() -> void:
 	if is_moving():
 		return
-	if def.tunnels:
+	if def.tunnels or def.has_behavior(&"phasing"):
 		_tunnel()
 		return
 	var field: FlowField = Threat.threat_field
@@ -237,11 +254,59 @@ func _find_target() -> Node:
 func _strike(victim: Node) -> void:
 	_attack_timer = def.attack_cooldown
 	facing = (victim.global_position - position).normalized()
+	Events.monster_attacked.emit(self, victim)
 	if victim is Building:
-		victim.take_damage(def.damage * def.structure_damage_scale)
+		victim.take_damage(def.damage * def.structure_damage_scale, def.attack_type)
 		Events.breach_detected.emit(victim.global_position)
 	else:
-		victim.take_damage(def.damage, self)
+		victim.take_damage(def.damage, self, def.attack_type)
+		if victim is Villager:
+			for status in def.statuses_inflicted:
+				victim.apply_status(status, def.status_duration)
+
+
+func _support_allies() -> void:
+	_support_timer = maxf(def.support_cooldown, 0.25)
+	if def.support_heal <= 0.0 or def.support_radius <= 0.0:
+		return
+	var reach_sq := pow(def.support_radius * Grid.TILE_SIZE, 2.0)
+	for ally in Threat.monsters:
+		if ally == self or not is_instance_valid(ally) or not ally.alive:
+			continue
+		if position.distance_squared_to(ally.position) <= reach_sq:
+			ally.health = minf(ally.health + def.support_heal, ally.max_health)
+
+
+func damage_resistances() -> Dictionary:
+	return def.resistances if def != null else {}
+
+
+func has_behavior(tag: StringName) -> bool:
+	return def != null and def.has_behavior(tag)
+
+
+func knockback_from(origin: Vector2, tiles: float) -> void:
+	if tiles <= 0.0 or not alive:
+		return
+	var away := position - origin
+	if away.length_squared() < 0.01:
+		away = Vector2.RIGHT
+	var wanted := position + away.normalized() * tiles * Grid.TILE_SIZE
+	var wanted_cell := World.grid.to_cell_index(wanted)
+	if wanted_cell == -1:
+		return
+	var landing := World.nearest_walkable(wanted_cell, ceili(tiles) + 2)
+	if landing != -1:
+		stop()
+		position = World.grid.to_world_index(landing)
+		think_urgent = true
+
+
+func apply_charm(duration: float) -> void:
+	charm_remaining = maxf(charm_remaining, duration)
+	Threat.hostiles.erase(self)
+	stop()
+	think_urgent = true
 
 
 func on_damaged(_amount: float, _source: Node) -> void:
@@ -259,7 +324,18 @@ func on_damaged(_amount: float, _source: Node) -> void:
 ## budget as pure overhead.
 func _process(delta: float) -> void:
 	super(delta)
-	_anim_time += delta * (5.0 if is_moving() else 1.5)
+	if charm_remaining > 0.0 and not Sim.paused:
+		charm_remaining = maxf(charm_remaining - delta * Sim.time_scale, 0.0)
+		if charm_remaining <= 0.0 and self not in Threat.hostiles:
+			Threat.hostiles.append(self)
+			think_urgent = true
+	_presentation_accum += delta
+	var interval := Accessibility.animation_interval()
+	if interval > 0.0 and _presentation_accum < interval:
+		return
+	var visual_delta := _presentation_accum
+	_presentation_accum = 0.0
+	_anim_time += visual_delta * (5.0 if is_moving() else 2.8)
 	var want_frame := int(_anim_time) % 2
 	if _sprite.frame != want_frame:
 		_sprite.frame = want_frame
@@ -267,8 +343,30 @@ func _process(delta: float) -> void:
 		var want_flip := facing.x < 0.0
 		if _sprite.flip_h != want_flip:
 			_sprite.flip_h = want_flip
+		if _outline != null and _outline.flip_h != want_flip:
+			_outline.flip_h = want_flip
+	if Accessibility.high_visibility_targets and _outline == null:
+		_ensure_outline()
+	if _outline != null:
+		_outline.frame = want_frame
+		_outline.visible = Accessibility.high_visibility_targets
+	var phase := sin(_anim_time * PI)
+	var attack_lunge := maxf(phase, 0.0) * 0.12 if state == State.ATTACKING else 0.0
+	var wanted_scale := Vector2(_visual_scale * (1.0 + attack_lunge), _visual_scale)
+	var wanted_rotation := -facing.x * 0.08 if state == State.ATTACKING else 0.0
+	var wanted_position := Vector2(0.0, -absf(phase) if is_moving() else 0.0)
+	if not _sprite.scale.is_equal_approx(wanted_scale):
+		_sprite.scale = wanted_scale
+	if not is_equal_approx(_sprite.rotation, wanted_rotation):
+		_sprite.rotation = wanted_rotation
+	if not _sprite.position.is_equal_approx(wanted_position):
+		_sprite.position = wanted_position
+	if _outline != null:
+		_outline.position = wanted_position
+		_outline.rotation = wanted_rotation
+		_outline.scale = wanted_scale * 1.3
 
-	_tint_timer -= delta
+	_tint_timer -= visual_delta
 	if _tint_timer <= 0.0:
 		_tint_timer = TINT_INTERVAL
 		_apply_tint()
@@ -291,14 +389,42 @@ func _apply_tint() -> void:
 		1.0 + 0.35 * boost,
 		1.0 + 0.85 * boost
 	)
+	tint *= def.presentation_tint
+	if empowered:
+		tint *= Color(1.22, 0.72, 1.28)
+	if hurt_visual_remaining > 0.0:
+		tint = tint.lerp(Color(2.0, 0.3, 0.42), 0.7)
 	if not _sprite.modulate.is_equal_approx(tint):
 		_sprite.modulate = tint
 
 
+func _ensure_outline() -> void:
+	_outline = Sprite2D.new()
+	_outline.name = "VisibilityOutline"
+	_outline.texture = _sprite.texture
+	_outline.hframes = 2
+	_outline.offset = _sprite.offset
+	_outline.scale = Vector2.ONE * _visual_scale * 1.3
+	_outline.modulate = Color(1.0, 0.16, 0.72, 0.78)
+	_outline.show_behind_parent = true
+	_outline.z_index = -1
+	add_child(_outline)
+
+
 func on_death(cause: StringName) -> void:
 	state = State.DYING
+	spawn_death_ghost(_sprite)
 	# Only a kill pays. Creatures that burn off at sunrise were not defeated, they left — and
 	# paying for dawn would make the reward a function of the clock rather than of how the
 	# player fought.
 	if cause != &"dawn" and def != null:
-		Divine.reward_kill(def.faith_on_death)
+		Divine.reward_kill(def.faith_on_death * (1.5 if empowered else 1.0))
+		if def.boss_reward > 0:
+			Colony.add(&"emberglass", def.boss_reward)
+			Events.notice.emit(L10n.t(&"NOTICE_BOSS_FALLS", [tr(def.display_name),
+				def.boss_reward]), 0)
+		if def.death_burst_damage > 0.0 and def.death_burst_radius > 0.0:
+			Threat.resolve_death_burst(position, def.death_burst_damage,
+				def.death_burst_radius, def.death_burst_type)
+		if def.split_count > 0 and not def.split_into.is_empty():
+			Threat.spawn_children(def.split_into, def.split_count, cell(), home_cell)

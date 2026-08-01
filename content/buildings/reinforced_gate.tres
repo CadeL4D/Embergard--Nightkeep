@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/gate.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"reinforced_gate"
+display_name = "BUILDING_REINFORCED_GATE"
+description = "BUILDING_REINFORCED_GATE_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 2
+footprint = Vector2i(1, 1)
+blocks_movement = false
+blocks_monsters_only = true
+max_blight = 90
+cost = {
+&"boards": 4,
+&"cut_stone": 2,
+&"ingots": 1
+}
+build_work = 12.0
+max_hp = 240.0
+resistances = {
+&"piercing": 0.55,
+&"crushing": 0.1,
+&"fire": 0.25
+}
+repair_cost = {
+&"boards": 1,
+&"ingots": 1
+}
+repair_work = 4.0
+repair_amount = 60.0
+upgrades_from = &"gate"
+light_radius = 2
+influence_radius = 3
+order = 35
+color = Color(0.65, 0.66, 0.7, 1)
+

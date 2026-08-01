@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/longhouse.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"barracks"
+display_name = "BUILDING_BARRACKS"
+description = "BUILDING_BARRACKS_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 1
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"wood": 18, &"stone": 8}
+build_work = 22.0
+max_hp = 180.0
+resistances = {&"piercing": 0.2}
+repair_cost = {&"wood": 2, &"stone": 1}
+light_radius = 2
+influence_radius = 6
+sleep_slots = 6
+order = 44
+color = Color(0.68, 0.46, 0.4, 1)
+

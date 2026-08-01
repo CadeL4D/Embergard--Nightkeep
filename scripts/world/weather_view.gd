@@ -8,7 +8,7 @@ extends CanvasLayer
 func _ready() -> void:
 	Climate.changed.connect(_refresh)
 	Accessibility.changed.connect(func(kind: StringName) -> void:
-		if kind == &"motion":
+		if kind == &"motion" or kind == &"graphics":
 			_refresh()
 	)
 	_refresh()

@@ -16,9 +16,6 @@ signal confirmed(cell: int)
 
 ## Camera-relative touch handling is the camera rig's job; this only needs taps. Reuses the
 ## God Hand's touch target so picking a tile is no fiddlier than picking a villager.
-const TOUCH_SLOP := 12.0
-const TAP_MAX_TIME := 0.35
-
 @onready var _status: Label = $SafeArea/Layout/Panel/Rows/Status
 @onready var _hint: Label = $SafeArea/Layout/Panel/Rows/Hint
 @onready var _confirm: Button = $SafeArea/Layout/Buttons/ConfirmButton
@@ -158,7 +155,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	var elapsed := float(Time.get_ticks_msec()) / 1000.0 - _touch_time
-	if elapsed > TAP_MAX_TIME or touch.position.distance_to(_touch_start) > TOUCH_SLOP:
+	if elapsed > Accessibility.TAP_MAX_TIME \
+			or touch.position.distance_to(_touch_start) > Accessibility.GESTURE_SLOP_PX:
 		return
 	var world: Vector2 = _camera.get_canvas_transform().affine_inverse() * touch.position
 	var cell := World.grid.to_cell_index(world)

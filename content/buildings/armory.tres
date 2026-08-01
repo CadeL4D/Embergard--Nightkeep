@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/toolsmith.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"armory"
+display_name = "BUILDING_ARMORY"
+description = "BUILDING_ARMORY_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"boards": 8, &"cut_stone": 8, &"ingots": 3}
+build_work = 32.0
+max_hp = 175.0
+resistances = {&"piercing": 0.2}
+repair_cost = {&"boards": 1, &"ingots": 1}
+influence_radius = 5
+worker_slots = 2
+input_capacity = 40
+output_capacity = 60
+order = 29
+color = Color(0.56, 0.58, 0.64, 1)
+

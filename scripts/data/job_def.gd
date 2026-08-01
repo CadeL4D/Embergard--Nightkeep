@@ -25,6 +25,8 @@ extends Resource
 
 ## What one completed work cycle at the workplace produces, e.g. { &"food": 10 }.
 @export var cycle_yield: Dictionary = {}
+## Optional durable item made by one completed cycle instead of a resource load.
+@export var item_yield: StringName = &""
 
 ## What one cycle CONSUMES, e.g. { &"wood": 2 }. Empty means the job creates from nothing —
 ## a farm growing food, a forester felling a tree.
@@ -70,6 +72,13 @@ extends Resource
 ## is, and the only difference is that what comes out is an object owned by Divine instead of a
 ## number in the stockpile — so `cycle_yield` stays empty and no haul is queued.
 @export var scribes: bool = false
+## Repairs damaged buildings instead of running an ordinary workshop cycle.
+@export var repairs: bool = false
+## Future clinics use the same task-routing hook without adding an id branch.
+@export var heals: bool = false
+@export var catchment_radius: int = 0
+@export var equipment_tags: Array[StringName] = []
+@export var supports_production_policy: bool = true
 
 @export_group("Board")
 ## Fill order on the Job Board. Lower numbers are staffed first when there are not

@@ -1,0 +1,26 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+Locale: 728 keys, languages en, using en
+   ok   all eight enemy structure roles load
+   ok   fresh enemy mass and existing workers are derived from generated nests
+   ok   a visible enemy worker is spawned from the nest economy
+   ok   worker creation spends enemy mass
+   ok   the worker can claim corrupted ground to harvest
+   ok   gathered mass is conserved by removing matching corruption
+   ok   carried mass enters the enemy economy only on deposit
+   ok   development demand reserves a funded construction task
+   ok   construction reserves its declared mass before work begins
+   ok   the worker completes its claimed site
+   ok   completed worker construction becomes a real enemy structure
+   ok   enemy mass is included in the colony checkpoint
+   ok   enemy workers are included in the colony checkpoint
+   ok   schema 8 checkpoint commits the enemy economy
+   ok   schema 8 enemy economy restores
+   ok   enemy mass and worker roster survive save/load
+   ok   worker-built enemy structures survive save/load
+   ok   sleeping enemy ledgers produce identical outcomes from the same seed
+   ok   sleeping workers conserve corruption mass through harvesting and recruitment
+   ok   sleeping enemy workforces obey the same sixteen-worker mobile cap
+
+=== Blight economy test ===
+all physical enemy-economy checks passed

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"ash_sentinel"
+display_name = "POWER_ASH_SENTINEL"
+description = "POWER_ASH_SENTINEL_DESC"
+kind = 10
+faith_cost = 42.0
+cooldown = 12.0
+construct_id = &"divine_ash_sentinel"
+persistent_entity = true
+dismissible = true
+upkeep = 1.4
+persistent_limit = 8
+required_temple_tier = 2
+burden = 0.14
+color = Color(1, 0.52, 0.24, 1)
+order = 15

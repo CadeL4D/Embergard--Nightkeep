@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BlightStructureDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blight_structure_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/blight/hovel.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"siege_workshop"
+display_name = "BLIGHT_SIEGE_WORKSHOP"
+description = "BLIGHT_SIEGE_WORKSHOP_DESC"
+sprite = ExtResource("2_tex")
+max_hp = 125.0
+height_tiles = 1
+min_night = 6
+weight = 0.8
+mass_cost = 18
+worker_capacity = 1
+repairs_workers = true
+economy_role = &"siege"
+threat_bonus = 5.0
+monster_scale = 1.08
+resistances = {&"piercing": 0.2, &"fire": -0.2}
+color = Color(0.54, 0.13, 0.28, 1)
+order = 6
+

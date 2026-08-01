@@ -20,6 +20,17 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _breakdown: BreakdownPanel = $SafeArea/Layout/TopRow/ResourceColumn/Breakdown
 @onready var _jobs_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton
 @onready var _build_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BuildButton
+@onready var _hand_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/HandButton
+@onready var _library_button: Button = \
+	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/LibraryButton
+@onready var _library_panel: PanelContainer = $SafeArea/Layout/BottomRow/LibraryPanel
+@onready var _library_rows: VBoxContainer = \
+	$SafeArea/Layout/BottomRow/LibraryPanel/Layout/Scroll/Rows
+@onready var _library_capacity: Label = \
+	$SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header/Capacity
+@onready var _library_auto: CheckButton = \
+	$SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header/Auto
+@onready var _library_details: Label = $SafeArea/Layout/BottomRow/LibraryPanel/Layout/Details
 @onready var _realm_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/RealmButton
 @onready var _control_button: Button = \
 	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/ControlButton
@@ -62,11 +73,28 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/StorageFilter
 @onready var _storage_priority: Button = \
 	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/StoragePriority
+@onready var _combat_policies: HBoxContainer = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/CombatPolicies
+@onready var _target_policy: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/CombatPolicies/TargetPolicy
+@onready var _repair_priority: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/CombatPolicies/RepairPriority
+@onready var _production_policies: HBoxContainer = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies
+@onready var _production_pause: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies/ProductionPause
+@onready var _worker_limit: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies/WorkerLimit
+@onready var _production_priority: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies/ProductionPriority
+@onready var _maintain_target: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies/MaintainTarget
 @onready var _placement_bar: PanelContainer = $SafeArea/Layout/BottomRow/PlacementBar
 @onready var _placement_status: Label = $SafeArea/Layout/BottomRow/PlacementBar/Row/Status
 @onready var _confirm_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/ConfirmButton
 @onready var _cancel_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/CancelButton
 @onready var _powers: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/Powers
+@onready var _bottom_buttons: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons
 @onready var _phase_label: Label = $SafeArea/Layout/TopRow/PhaseBar/Row/Phase
 @onready var _pause_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/PauseButton
 @onready var _speed_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/SpeedButton
@@ -79,6 +107,8 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _sel_who: Label = $SafeArea/Layout/BottomRow/SelectionCard/Rows/Who
 @onready var _sel_doing: Label = $SafeArea/Layout/BottomRow/SelectionCard/Rows/Doing
 @onready var _sel_needs: Label = $SafeArea/Layout/BottomRow/SelectionCard/Rows/Needs
+@onready var _equipment_policy: Button = \
+	$SafeArea/Layout/BottomRow/SelectionCard/Rows/EquipmentPolicy
 
 ## job id -> {slider, count label}
 var _row_widgets: Dictionary = {}
@@ -102,14 +132,20 @@ var _tap_frame: int = -1
 ## Demolition is irreversible and refunds 40%, so it arms on the first press like Ascend does.
 var _demolish_armed: bool = false
 var _demolish_timer: float = 0.0
+var _management_pause_owned: bool = false
 
 
 func _ready() -> void:
 	_apply_safe_area()
 	get_tree().root.size_changed.connect(_apply_safe_area)
+	Accessibility.changed.connect(_on_accessibility_changed)
+	_apply_handedness()
 
 	_jobs_button.toggled.connect(_on_jobs_toggled)
 	_build_button.toggled.connect(_on_build_toggled)
+	_hand_button.toggled.connect(_on_hand_toggled)
+	_library_button.toggled.connect(_on_library_toggled)
+	_library_auto.toggled.connect(Divine.set_library_auto_manage)
 	_control_button.toggled.connect(_on_control_toggled)
 	_realm_button.pressed.connect(_on_realm)
 	_confirm_button.pressed.connect(_on_confirm)
@@ -128,6 +164,8 @@ func _ready() -> void:
 	_god_hand = get_node_or_null("../GodHand")
 	if _god_hand != null:
 		_god_hand.armed_changed.connect(_on_armed_changed)
+		_god_hand.hand_mode_changed.connect(func(active: bool) -> void:
+			_hand_button.set_pressed_no_signal(active))
 
 	# The resource bar is the tap target for the breakdown, so the affordance sits exactly on
 	# the numbers the player is questioning rather than on a separate "info" control.
@@ -140,6 +178,7 @@ func _ready() -> void:
 
 	_accept_button.pressed.connect(Colony.accept_migrants)
 	_refuse_button.pressed.connect(Colony.refuse_migrants)
+	_equipment_policy.pressed.connect(_on_equipment_policy)
 	Events.migrants_arrived.connect(_on_migrants_arrived)
 	Events.migrants_resolved.connect(_on_migrants_resolved)
 
@@ -152,6 +191,12 @@ func _ready() -> void:
 	_demolish_button.pressed.connect(_on_demolish)
 	_storage_filter.pressed.connect(_on_storage_filter)
 	_storage_priority.pressed.connect(_on_storage_priority)
+	_target_policy.pressed.connect(_on_target_policy)
+	_repair_priority.pressed.connect(_on_repair_priority)
+	_production_pause.pressed.connect(_on_production_pause)
+	_worker_limit.pressed.connect(_on_worker_limit)
+	_production_priority.pressed.connect(_on_production_priority)
+	_maintain_target.pressed.connect(_on_maintain_target)
 	_forbidden_button.pressed.connect(
 		DefenseControl.set_paint_mode.bind(DefenseControl.PaintMode.FORBIDDEN))
 	_work_zone_button.pressed.connect(
@@ -181,11 +226,13 @@ func _ready() -> void:
 	# Taking up or giving back an ability changes the bar. Rebuilt on the signal rather than polled,
 	# because a power appearing is one of the better moments in the game and should be immediate.
 	Events.powers_changed.connect(_build_powers)
+	Events.library_changed.connect(_rebuild_library)
 
 	_sync_rows()
 	_build_tabs()
 	_build_cards()
 	_build_powers()
+	_rebuild_library()
 	_refresh()
 
 
@@ -193,6 +240,31 @@ func _ready() -> void:
 
 func _apply_safe_area() -> void:
 	SafeArea.apply(_safe_area, 8)
+
+
+func _on_accessibility_changed(kind: StringName) -> void:
+	if kind == &"handedness":
+		_apply_handedness()
+	if kind == &"management_pause":
+		_sync_management_pause()
+
+
+func _apply_handedness() -> void:
+	if _bottom_buttons == null:
+		return
+	var right_handed: Array[Control] = [
+		_powers, _jobs_button, _build_button, _hand_button, _library_button,
+		_control_button, _realm_button,
+	]
+	var left_handed: Array[Control] = [
+		_realm_button, _control_button, _library_button, _hand_button, _build_button,
+		_jobs_button, _powers,
+	]
+	var order := left_handed \
+		if Accessibility.handedness == Accessibility.Handedness.LEFT \
+		else right_handed
+	for index in order.size():
+		_bottom_buttons.move_child(order[index], index)
 
 
 # --- Job rows ------------------------------------------------------------------------
@@ -277,12 +349,16 @@ func _nudge_job(job_id: StringName, delta: int) -> void:
 func _on_jobs_toggled(pressed: bool) -> void:
 	_job_panel.visible = pressed
 	if pressed:
+		if _god_hand != null:
+			_god_hand.set_hand_mode(false)
 		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
 		_build_button.button_pressed = false
 		_control_button.button_pressed = false
+		_library_button.button_pressed = false
 	_refresh_selection()
 	_refresh_building_card()
+	_sync_management_pause()
 
 
 func _on_gather_area(job_id: StringName) -> void:
@@ -300,8 +376,10 @@ func _on_gather_mode_changed(job_id: StringName, erasing: bool, radius: int) -> 
 	_jobs_button.set_pressed_no_signal(false)
 	_build_button.set_pressed_no_signal(false)
 	_control_button.set_pressed_no_signal(false)
+	_library_button.set_pressed_no_signal(false)
 	_build_panel.visible = false
 	_control_panel.visible = false
+	_library_panel.visible = false
 	_breakdown.visible = false
 	if _placement != null and _placement.active:
 		_placement.cancel()
@@ -449,6 +527,11 @@ func _on_demolish() -> void:
 		_refresh_building_card()
 		return
 	_demolish_armed = false
+	if b.def.menu_hidden:
+		b.destroy()
+		_god_hand.clear_building_selection()
+		_refresh_building_card()
+		return
 	if Colony.demolish_building(b):
 		_god_hand.clear_building_selection()
 	_refresh_building_card()
@@ -473,6 +556,22 @@ func _refresh_building_card() -> void:
 		_storage_filter.text = DefenseControl.stockpile_filter_name(store_cell)
 		_storage_priority.text = L10n.t(&"STORAGE_PRIORITY",
 			[DefenseControl.stockpile_priority(store_cell)])
+	var can_control := not b.is_site() and not b.is_demolishing()
+	_combat_policies.visible = can_control and (def.attack_damage > 0.0 or b.needs_repair())
+	_target_policy.visible = def.attack_damage > 0.0
+	_repair_priority.visible = can_control
+	_target_policy.text = L10n.t(&"TARGET_POLICY", [tr(StringName(
+		"TARGET_" + String(b.target_policy).to_upper()))])
+	_repair_priority.text = L10n.t(&"REPAIR_PRIORITY", [b.repair_priority])
+	_production_policies.visible = can_control and def.worker_slots > 0
+	if _production_policies.visible:
+		_production_pause.text = tr(&"PRODUCTION_RESUME" if b.production_paused \
+			else &"PRODUCTION_PAUSE")
+		var worker_cap := b.effective_worker_slots()
+		_worker_limit.text = L10n.t(&"WORKER_LIMIT", [worker_cap, def.worker_slots])
+		_production_priority.text = L10n.t(&"PRODUCTION_PRIORITY", [b.production_priority])
+		_maintain_target.text = tr(&"PRODUCTION_MAINTAIN_OFF") if b.production_target < 0 \
+			else L10n.t(&"PRODUCTION_MAINTAIN", [b.production_target])
 
 	# What state it is in matters more than what it is: a site waiting on timber and a finished
 	# workshop offer completely different decisions.
@@ -484,6 +583,19 @@ func _refresh_building_card() -> void:
 			else tr(&"BLD_UNDER_CONSTRUCTION")
 	else:
 		_bld_detail.text = L10n.t(&"BLD_INTACT", [int(b.health_fraction() * 100.0)])
+		if def.inventory_capacity > 0:
+			_bld_detail.text += L10n.t(&"BLD_STORAGE", [b.inventory_used(), def.inventory_capacity])
+		if def.input_capacity > 0:
+			_bld_detail.text += L10n.t(&"BLD_INPUTS",
+				[b._buffer_used(b.input_buffer), def.input_capacity])
+		if def.output_capacity > 0:
+			_bld_detail.text += L10n.t(&"BLD_OUTPUTS",
+				[b._buffer_used(b.output_buffer), def.output_capacity])
+		if not def.ammo_kind.is_empty():
+			_bld_detail.text += L10n.t(&"BLD_AMMO", [Colony.amount_of(def.ammo_kind),
+				L10n.resource(def.ammo_kind)])
+		if def.faith_upkeep > 0.0:
+			_bld_detail.text += L10n.t(&"BLD_FAITH_UPKEEP", [def.faith_upkeep])
 
 	var check := Colony.upgrade_check(b)
 	var next: BuildingDef = check["def"]
@@ -501,7 +613,10 @@ func _refresh_building_card() -> void:
 	# Nothing to tear down on a site that is already coming apart, and never on the Village Center —
 	# see Colony.can_demolish.
 	_demolish_button.visible = not b.is_demolishing() and Colony.can_demolish(b)
-	_demolish_button.text = tr(&"UI_DEMOLISH_CONFIRM" if _demolish_armed else &"UI_DEMOLISH")
+	if def.menu_hidden:
+		_demolish_button.text = tr(&"UI_DISMISS_CONFIRM" if _demolish_armed else &"UI_DISMISS")
+	else:
+		_demolish_button.text = tr(&"UI_DEMOLISH_CONFIRM" if _demolish_armed else &"UI_DEMOLISH")
 
 
 func _on_storage_filter() -> void:
@@ -518,27 +633,102 @@ func _on_storage_priority() -> void:
 		_refresh_building_card()
 
 
+func _selected_building() -> Building:
+	var b: Building = _god_hand.selected_building if _god_hand != null else null
+	return b if b != null and is_instance_valid(b) and not b.is_site() else null
+
+
+func _on_target_policy() -> void:
+	var b := _selected_building()
+	if b != null:
+		b.cycle_target_policy()
+		_refresh_building_card()
+
+
+func _on_repair_priority() -> void:
+	var b := _selected_building()
+	if b != null:
+		b.cycle_repair_priority()
+		_refresh_building_card()
+
+
+func _on_production_pause() -> void:
+	var b := _selected_building()
+	if b != null:
+		b.production_paused = not b.production_paused
+		_refresh_building_card()
+
+
+func _on_worker_limit() -> void:
+	var b := _selected_building()
+	if b != null and b.def.worker_slots > 0:
+		var current := b.effective_worker_slots()
+		b.production_worker_limit = (current + 1) % (b.def.worker_slots + 1)
+		_refresh_building_card()
+
+
+func _on_production_priority() -> void:
+	var b := _selected_building()
+	if b != null:
+		b.production_priority = b.production_priority % 3 + 1
+		_refresh_building_card()
+
+
+func _on_maintain_target() -> void:
+	var b := _selected_building()
+	if b == null:
+		return
+	var targets: Array[int] = [-1, 10, 25, 50, 100, 200]
+	var at := targets.find(b.production_target)
+	b.production_target = targets[(maxi(at, 0) + 1) % targets.size()]
+	_refresh_building_card()
+
+
 func _on_build_toggled(pressed: bool) -> void:
 	_build_panel.visible = pressed
 	if pressed:
+		if _god_hand != null:
+			_god_hand.set_hand_mode(false)
 		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
 		_jobs_button.button_pressed = false
 		_control_button.button_pressed = false
+		_library_button.button_pressed = false
 	elif _placement != null and _placement.active:
 		_placement.cancel()
 	_refresh_cards()
 	_refresh_selection()
 	_refresh_building_card()
+	_sync_management_pause()
+
+
+func _on_hand_toggled(pressed: bool) -> void:
+	if _god_hand == null:
+		return
+	_god_hand.set_hand_mode(pressed)
+	if pressed:
+		_jobs_button.button_pressed = false
+		_build_button.button_pressed = false
+		_control_button.button_pressed = false
+		_library_button.button_pressed = false
+		_job_panel.visible = false
+		_build_panel.visible = false
+		_control_panel.visible = false
+		_library_panel.visible = false
+		_breakdown.visible = false
+	_sync_management_pause()
 
 
 func _on_control_toggled(pressed: bool) -> void:
 	_control_panel.visible = pressed
 	if pressed:
+		if _god_hand != null:
+			_god_hand.set_hand_mode(false)
 		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
 		_jobs_button.button_pressed = false
 		_build_button.button_pressed = false
+		_library_button.button_pressed = false
 		if _placement != null and _placement.active:
 			_placement.cancel()
 	else:
@@ -546,6 +736,109 @@ func _on_control_toggled(pressed: bool) -> void:
 	_refresh_control_panel()
 	_refresh_selection()
 	_refresh_building_card()
+	_sync_management_pause()
+
+
+# --- Tome library -----------------------------------------------------------------------
+
+func _on_library_toggled(pressed: bool) -> void:
+	_library_panel.visible = pressed
+	if pressed:
+		if _god_hand != null:
+			_god_hand.set_hand_mode(false)
+		DefenseControl.cancel_gather_paint()
+		DefenseControl.cancel_paint()
+		_breakdown.visible = false
+		_jobs_button.button_pressed = false
+		_build_button.button_pressed = false
+		_control_button.button_pressed = false
+		_job_panel.visible = false
+		_build_panel.visible = false
+		_control_panel.visible = false
+		if _placement != null and _placement.active:
+			_placement.cancel()
+		_rebuild_library()
+	_refresh_selection()
+	_refresh_building_card()
+	_sync_management_pause()
+
+
+func _rebuild_library() -> void:
+	if not is_node_ready():
+		return
+	for child in _library_rows.get_children():
+		_library_rows.remove_child(child)
+		child.queue_free()
+	_library_capacity.text = L10n.t(&"LIBRARY_CAPACITY", [Divine.installed_count(),
+		Divine.tome_capacity()])
+	_library_auto.set_pressed_no_signal(Divine.auto_manage_library)
+	if Divine.tomes.is_empty():
+		var empty := Label.new()
+		empty.text = tr(&"LIBRARY_EMPTY")
+		empty.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
+		_library_rows.add_child(empty)
+		return
+	for index in Divine.tomes.size():
+		var tome = Divine.tomes[index]
+		var row := HBoxContainer.new()
+		row.name = "Tome_%d" % index
+		row.add_theme_constant_override("separation", 4)
+		var label := Label.new()
+		label.custom_minimum_size = Vector2(180, 22)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
+		label.text = L10n.t(&"LIBRARY_ROW", [tome.label(), int(tome.durability),
+			"%.2f" % tome.rate()])
+		var inspect := _library_action_button(&"LIBRARY_INSPECT", 48)
+		inspect.pressed.connect(_inspect_tome.bind(index))
+		var install := _library_action_button(
+			&"LIBRARY_REMOVE" if tome.installed else &"LIBRARY_INSTALL", 58)
+		install.disabled = not tome.installed and Divine.installed_count() >= Divine.tome_capacity()
+		install.pressed.connect(_toggle_tome_install.bind(index))
+		var lock := _library_action_button(
+			&"LIBRARY_UNLOCK" if tome.locked else &"LIBRARY_LOCK", 52)
+		lock.pressed.connect(_toggle_tome_lock.bind(index))
+		var combine := _library_action_button(&"LIBRARY_COMBINE", 58)
+		combine.disabled = tome.installed or tome.locked or tome.tier >= 3 \
+			or _combine_candidates(tome.tier) < 3
+		combine.pressed.connect(_combine_tome.bind(index))
+		for control in [label, inspect, install, lock, combine]:
+			row.add_child(control)
+		_library_rows.add_child(row)
+
+
+func _library_action_button(key: StringName, width: float) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(width, 22)
+	button.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
+	button.text = tr(key)
+	return button
+
+
+func _combine_candidates(tier: int) -> int:
+	var total := 0
+	for tome in Divine.tomes:
+		if not tome.installed and not tome.locked and tome.tier == tier and tome.durability > 0.0:
+			total += 1
+	return total
+
+
+func _inspect_tome(index: int) -> void:
+	_library_details.text = Divine.tome_details(index)
+
+
+func _toggle_tome_install(index: int) -> void:
+	if not Divine.install_tome(index):
+		Events.notice.emit(tr(&"LIBRARY_NO_SLOT"), 1)
+
+
+func _toggle_tome_lock(index: int) -> void:
+	Divine.toggle_tome_lock(index)
+
+
+func _combine_tome(index: int) -> void:
+	if not Divine.combine_tome(index):
+		Events.notice.emit(tr(&"LIBRARY_COMBINE_NEEDS"), 1)
 
 
 func _refresh_control_panel() -> void:
@@ -758,6 +1051,7 @@ func _process(delta: float) -> void:
 	if _refresh_accum < 0.25:
 		return
 	_refresh_accum = 0.0
+	_sync_management_pause()
 	# Mood and Faith drift continuously rather than firing a signal, so the top bar
 	# has to poll. Resource counts still refresh on their signal for immediacy.
 	_refresh_resources()
@@ -765,6 +1059,8 @@ func _process(delta: float) -> void:
 	_refresh_phase()
 	_refresh_selection()
 	_refresh_building_card()
+	if _god_hand != null:
+		_hand_button.text = _god_hand.hand_status()
 	if _job_panel.visible:
 		_refresh_counts()
 	if _gather_bar.visible:
@@ -776,6 +1072,9 @@ func _process(delta: float) -> void:
 		_refresh_cards()
 	if _control_panel.visible:
 		_refresh_control_panel()
+	if _library_panel.visible:
+		_library_capacity.text = L10n.t(&"LIBRARY_CAPACITY", [Divine.installed_count(),
+			Divine.tome_capacity()])
 
 
 ## The phase clock is the game's spine, and at dusk it becomes the most important
@@ -836,11 +1135,14 @@ func _on_resource_bar_input(event: InputEvent) -> void:
 		_jobs_button.button_pressed = false
 		_build_button.button_pressed = false
 		_control_button.button_pressed = false
+		_library_button.button_pressed = false
 		if _placement != null and _placement.active:
 			_placement.cancel()
 	_breakdown.toggle()
 	_refresh_selection()
 	_refresh_building_card()
+	if _god_hand != null:
+		_hand_button.text = _god_hand.hand_status()
 	# On the CONTROL that received the event, not on self — the Hud is a CanvasLayer and
 	# accept_event() is a Control method. Consuming it stops the tap falling through to the
 	# God Hand and sending the Ember to wherever the resource bar happens to be.
@@ -949,10 +1251,28 @@ func _refresh_selection() -> void:
 		return
 
 	_selection_card.visible = true
-	_sel_who.text = tr(&"SELECT_SURVIVOR") if who.job == &"" else tr(Jobs.get_job(who.job).display_name)
+	var role := tr(&"SELECT_CHILD") if not who.is_adult() else (
+		tr(&"SELECT_SURVIVOR") if who.job == &"" else tr(Jobs.get_job(who.job).display_name))
+	_sel_who.text = L10n.t(&"SELECT_IDENTITY",
+		[who.profile.display_name, who.profile.age_days, role])
 	_sel_doing.text = who.describe()
+	var gear: PackedStringArray = []
+	for row in who.profile.equipment.values():
+		if typeof(row) != TYPE_DICTIONARY:
+			continue
+		var item_def := Items.get_item(StringName(row.get("def", &"")))
+		if item_def != null:
+			gear.append(tr(item_def.display_name))
+	if not gear.is_empty():
+		_sel_doing.text += L10n.t(&"SELECT_EQUIPMENT", [", ".join(gear)])
 	_sel_needs.text = L10n.t(&"SELECT_NEEDS",
 		[int(who.food), int(who.water), int(who.rest), int(who.mood)])
+	_equipment_policy.visible = who.is_adult()
+	_equipment_policy.text = tr({
+		&"best_available": &"EQUIP_BEST",
+		&"preserve_durability": &"EQUIP_PRESERVE",
+		&"none": &"EQUIP_NONE",
+	}.get(who.profile.equipment_policy, &"EQUIP_BEST"))
 	# Colour the needs line by its worst value, so a starving villager is visible without
 	# the player having to read four numbers.
 	var worst: float = minf(minf(who.food, who.water), who.rest)
@@ -962,12 +1282,33 @@ func _refresh_selection() -> void:
 	_sel_needs.add_theme_color_override("font_color", tint)
 
 
+func _on_equipment_policy() -> void:
+	var who: Villager = _god_hand.selected if _god_hand != null else null
+	if who == null or not is_instance_valid(who) or not who.is_adult():
+		return
+	var policies: Array[StringName] = [&"best_available", &"preserve_durability", &"none"]
+	var at := policies.find(who.profile.equipment_policy)
+	who.set_equipment_policy(policies[(maxi(at, 0) + 1) % policies.size()])
+	_refresh_selection()
+
+
 ## Only one large drawer is allowed in the thumb zone. This is both a readability
 ## rule and a hard layout guarantee for the 360 px-tall mobile viewport.
 func _action_panel_open() -> bool:
 	return _breakdown.visible or _job_panel.visible or _build_panel.visible \
-		or _control_panel.visible or _placement_bar.visible or _gather_bar.visible \
+		or _control_panel.visible or _library_panel.visible or _placement_bar.visible \
+		or _gather_bar.visible \
 		or _migrant_prompt.visible
+
+
+func _sync_management_pause() -> void:
+	var should_pause := Accessibility.pause_while_managing and _action_panel_open()
+	if should_pause and not Sim.paused:
+		_management_pause_owned = true
+		Sim.set_paused(true)
+	elif not should_pause and _management_pause_owned:
+		_management_pause_owned = false
+		Sim.set_paused(false)
 
 
 func _refresh() -> void:

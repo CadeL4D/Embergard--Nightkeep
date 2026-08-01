@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"padded_coat"
+display_name = "ITEM_PADDED_COAT"
+slot = &"armor"
+max_durability = 90
+resistances = {&"crushing": 0.08}
+order = 20

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="DifficultyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/difficulty_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"homestead"
+display_name = "DIFFICULTY_HOMESTEAD"
+description = "DIFFICULTY_HOMESTEAD_DESC"
+threat_mult = 0.6
+blight_mult = 0.5
+needs_mult = 0.75
+yield_mult = 1.15
+migration_mult = 1.4
+start_pop_bonus = 2
+shard_mult = 0.7
+order = 0
+color = Color(0.62, 0.82, 0.68, 1)

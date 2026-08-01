@@ -14,6 +14,7 @@ cycle_yield = {
 cycle_work = 18.0
 work_rate = 1.0
 carry_capacity = 10
+equipment_tags = Array[StringName]([&"farming"])
 priority = 1
 default_quota = 0
 color = Color(0.55, 0.72, 0.36, 1)

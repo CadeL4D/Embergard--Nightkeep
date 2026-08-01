@@ -20,6 +20,7 @@ build_work = 0.0
 max_hp = 400.0
 light_radius = 5
 is_stockpile = true
+inventory_capacity = 600
 faith_capacity = 60.0
 influence_radius = 14
 sleep_slots = 0

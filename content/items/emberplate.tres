@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"emberplate"
+display_name = "ITEM_EMBERPLATE"
+slot = &"armor"
+max_durability = 320
+resistances = {&"piercing": 0.32, &"crushing": 0.28, &"fire": 0.25}
+order = 23

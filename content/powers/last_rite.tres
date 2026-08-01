@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"last_rite"
+display_name = "POWER_LAST_RITE"
+description = "POWER_LAST_RITE_DESC"
+kind = 14
+faith_cost = 75.0
+cooldown = 100.0
+radius = 6
+amount = 55.0
+damage_type = &"holy"
+required_temple_tier = 3
+burden = 0.3
+color = Color(1, 0.92, 0.72, 1)
+order = 19
+

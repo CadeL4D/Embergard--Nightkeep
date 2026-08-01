@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/sawmill.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"lumber_lodge"
+display_name = "BUILDING_LUMBER_LODGE"
+description = "BUILDING_LUMBER_LODGE_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 1
+footprint = Vector2i(2, 2)
+blocks_movement = false
+cost = {&"wood": 22}
+build_work = 18.0
+max_hp = 95.0
+repair_cost = {&"wood": 2}
+is_stockpile = true
+inventory_capacity = 80
+storage_tags = Array[StringName]([&"wood", &"boards"])
+influence_radius = 4
+worker_slots = 3
+order = 15
+color = Color(0.48, 0.62, 0.34, 1)

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BlightStructureDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blight_structure_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/blight/totem.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"road_node"
+display_name = "BLIGHT_ROAD_NODE"
+description = "BLIGHT_ROAD_NODE_DESC"
+sprite = ExtResource("2_tex")
+max_hp = 55.0
+height_tiles = 1
+min_night = 3
+weight = 1.8
+mass_cost = 7
+worker_capacity = 1
+economy_role = &"road"
+threat_bonus = 0.5
+monster_scale = 1.04
+color = Color(0.56, 0.16, 0.34, 1)
+order = 5
+

@@ -182,10 +182,39 @@ theme_override_colors/font_color = Color(1, 0.603922, 0.235294, 1)
 theme_override_font_sizes/font_size = 10
 text = "UI_NEW_WORLD"
 
-[node name="Difficulties" type="VBoxContainer" parent="Center/Create/Rows"]
+[node name="Difficulties" type="GridContainer" parent="Center/Create/Rows"]
 custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 theme_override_constants/separation = 3
+columns = 2
+
+[node name="DoctrineLabel" type="Label" parent="Center/Create/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.823529, 0.760784, 0.603922, 1)
+theme_override_font_sizes/font_size = 9
+text = "UI_DOCTRINES"
+
+[node name="DoctrineRow" type="HBoxContainer" parent="Center/Create/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Doctrine1" type="OptionButton" parent="Center/Create/Rows/DoctrineRow"]
+custom_minimum_size = Vector2(78, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 8
+
+[node name="Doctrine2" type="OptionButton" parent="Center/Create/Rows/DoctrineRow"]
+custom_minimum_size = Vector2(78, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 8
+
+[node name="Doctrine3" type="OptionButton" parent="Center/Create/Rows/DoctrineRow"]
+custom_minimum_size = Vector2(78, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 8
 
 [node name="Blurb" type="Label" parent="Center/Create/Rows"]
 custom_minimum_size = Vector2(240, 40)

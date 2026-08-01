@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/well.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"bottler"
+display_name = "BUILDING_BOTTLER"
+description = "BUILDING_BOTTLER_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 2
+footprint = Vector2i(1, 1)
+blocks_movement = false
+cost = {&"cut_stone": 6, &"boards": 3, &"tools": 1}
+build_work = 16.0
+max_hp = 95.0
+repair_cost = {&"cut_stone": 1}
+provides_water = true
+influence_radius = 3
+worker_slots = 1
+input_capacity = 12
+inventory_capacity = 30
+storage_tags = Array[StringName]([&"waterskin"])
+order = 30
+color = Color(0.42, 0.64, 0.8, 1)

@@ -3,6 +3,7 @@ extends Node
 ## scheduling, the monster registry, and the storyteller's pressure model.
 
 const MONSTER_SCENE := preload("res://scenes/entities/monster.tscn")
+const BLIGHT_WORKER_SCENE := preload("res://scenes/entities/blight_worker.tscn")
 
 ## Hard ceiling on live monsters. A performance safety valve that exists from day
 ## one deliberately: budget that cannot be spent on bodies is converted into stat
@@ -25,7 +26,21 @@ const FIELD_BUDGET := 900
 const PULSES := 3
 
 var monsters: Array = []
+var workers: Array = []
+var hostiles: Array = []
+const MAX_WORKERS := 16
+const INITIAL_MASS_PER_NEST := 8
+const WORKER_SPAWN_COST := 5
+const HARVEST_INTENSITY_PER_MASS := 8
+
+var blight_mass: int = 0
+var _harvest_claims: Dictionary = {}      # cell -> worker id
+var _construction_claims: Dictionary = {} # cell -> worker id
+var _worker_tasks: Dictionary = {}        # worker id -> task row
+var _economy_timer: float = 0.0
 var night_index: int = 0
+var boss_stage: int = 0
+var _initial_nest_count: int = 0
 
 var threat_field: FlowField = null
 
@@ -50,6 +65,7 @@ func _ready() -> void:
 	Events.phase_changed.connect(_on_phase_changed)
 	Events.building_completed.connect(_on_structures_changed)
 	Events.building_destroyed.connect(_on_structures_changed)
+	Events.nest_destroyed.connect(_on_nest_destroyed)
 
 
 func reset() -> void:
@@ -57,9 +73,21 @@ func reset() -> void:
 		if is_instance_valid(m):
 			m.queue_free()
 	monsters.clear()
+	for worker in workers:
+		if is_instance_valid(worker):
+			worker.queue_free()
+	workers.clear()
+	hostiles.clear()
 	night_index = 0
+	boss_stage = 0
+	_initial_nest_count = World.nest_cells.size()
 	pressure = 0.0
 	_growth_progress = 0.0
+	blight_mass = World.live_nest_cells().size() * INITIAL_MASS_PER_NEST
+	_harvest_claims.clear()
+	_construction_claims.clear()
+	_worker_tasks.clear()
+	_economy_timer = 0.0
 	# The enemy's settlement is run state. World.generate() lays out fresh nests but does not know
 	# about anything that was built around the old ones, so leaving this would carry a previous
 	# world's spires into the next one — as threat budget and as occupancy on cells that no longer
@@ -86,6 +114,247 @@ func step(delta: float) -> void:
 	_update_pressure(delta)
 	_step_field()
 	_step_waves(delta)
+	_step_enemy_economy()
+	_step_enemy_structures(delta)
+
+
+# --- Physical Blight economy ------------------------------------------------------------
+
+func _step_enemy_economy() -> void:
+	if not Difficulties.hostile_spawning() or _spawn_parent == null \
+			or World.live_nest_cells().is_empty():
+		return
+	_economy_timer -= Sim.TICK_DT
+	if _economy_timer > 0.0:
+		return
+	_economy_timer = 1.0
+	var capacity := World.live_nest_cells().size()
+	for cell in World.blight_structures:
+		var def := World.blight_structure_def(cell)
+		if def != null:
+			capacity += def.worker_capacity
+	capacity = mini(capacity, mini(MAX_WORKERS, Difficulties.max_enemy_workers()))
+	if workers.size() >= capacity or blight_mass < WORKER_SPAWN_COST:
+		return
+	var nests := World.live_nest_cells()
+	var home: int = nests[_rng.randi() % nests.size()]
+	var spawn_cell := World.nearest_walkable(home, 4)
+	if spawn_cell == -1:
+		return
+	blight_mass -= WORKER_SPAWN_COST
+	var worker: BlightWorker = BLIGHT_WORKER_SCENE.instantiate()
+	worker.setup(home)
+	worker.position = World.grid.to_world_index(spawn_cell)
+	_spawn_parent.add_child(worker)
+
+
+func register_worker(worker: BlightWorker) -> void:
+	if worker in workers:
+		return
+	workers.append(worker)
+	hostiles.append(worker)
+
+
+func unregister_worker(worker: BlightWorker) -> void:
+	cancel_worker_task(worker)
+	release_harvest_claim(worker)
+	workers.erase(worker)
+	hostiles.erase(worker)
+
+
+func claim_harvest_cell(worker: BlightWorker, home: int) -> int:
+	if worker == null or not World.grid.is_valid_index(home):
+		return -1
+	# Prefer the camp edge deterministically. This is where a fresh nest first
+	# spreads, and it prevents workers standing idle because a random sample missed
+	# the handful of harvestable cells that exist early on.
+	for cell in World.grid.neighbours_8(home):
+		if not _harvest_claims.has(cell) \
+				and World.blight[cell] >= HARVEST_INTENSITY_PER_MASS \
+				and World.is_walkable(cell) and not World.in_influence(cell):
+			_harvest_claims[cell] = worker.get_instance_id()
+			return cell
+	var origin := World.grid.coord(home)
+	for radius in [8, 14, 22]:
+		for _attempt in 48:
+			var point := origin + Vector2i(
+				_rng.randi_range(-radius, radius), _rng.randi_range(-radius, radius))
+			if not World.grid.is_valid_v(point):
+				continue
+			var cell := World.grid.index_v(point)
+			if _harvest_claims.has(cell) or World.blight[cell] < HARVEST_INTENSITY_PER_MASS:
+				continue
+			if not World.is_walkable(cell) or World.in_influence(cell):
+				continue
+			_harvest_claims[cell] = worker.get_instance_id()
+			return cell
+	return -1
+
+
+func harvest_blight_mass(worker: BlightWorker, cell: int, capacity: int = 4) -> int:
+	if worker == null or _harvest_claims.get(cell, 0) != worker.get_instance_id():
+		return 0
+	var before := int(World.blight[cell]) if World.grid.is_valid_index(cell) else 0
+	var amount := mini(capacity, before / HARVEST_INTENSITY_PER_MASS)
+	if amount > 0:
+		World.blight_field.purify(cell, amount * HARVEST_INTENSITY_PER_MASS)
+	_harvest_claims.erase(cell)
+	return amount
+
+
+func release_harvest_claim(worker: BlightWorker) -> void:
+	if worker == null:
+		return
+	var id := worker.get_instance_id()
+	for cell in _harvest_claims.keys():
+		if int(_harvest_claims[cell]) == id:
+			_harvest_claims.erase(cell)
+
+
+func deposit_blight_mass(amount: int) -> void:
+	blight_mass += maxi(amount, 0)
+
+
+func _step_enemy_structures(delta: float) -> void:
+	for raw_cell in World.blight_structures.keys():
+		var cell := int(raw_cell)
+		var def := World.blight_structure_def(cell)
+		if def == null or def.attack_damage <= 0.0:
+			continue
+		var row: Dictionary = World.blight_structures[cell]
+		var cooldown := maxf(float(row.get("cooldown", 0.0)) - delta, 0.0)
+		row["cooldown"] = cooldown
+		if cooldown > 0.0:
+			World.blight_structures[cell] = row
+			continue
+		var origin := World.grid.to_world_index(cell)
+		var reach_sq := pow(def.attack_range * Grid.TILE_SIZE, 2.0)
+		var victim: Villager = null
+		var best_dist := reach_sq
+		for villager in Colony.villagers:
+			if not is_instance_valid(villager) or not villager.alive:
+				continue
+			var distance := origin.distance_squared_to(villager.position)
+			if distance <= best_dist:
+				best_dist = distance
+				victim = villager
+		if victim != null:
+			victim.take_damage(def.attack_damage, null, def.attack_type)
+			row["cooldown"] = def.attack_cooldown
+		World.blight_structures[cell] = row
+
+
+func worker_home(from: int) -> int:
+	return _nearest_corrupt_anchor(from)
+
+
+func assign_worker_task(worker: BlightWorker) -> Dictionary:
+	if worker == null or _worker_tasks.has(worker.get_instance_id()):
+		return {}
+	var worker_id := worker.get_instance_id()
+	# Damaged enemy structures consume the same mass economy as expansion.
+	for raw_cell in World.blight_structures:
+		var cell := int(raw_cell)
+		if _construction_claims.has(cell):
+			continue
+		var row: Dictionary = World.blight_structures[cell]
+		var def := World.blight_structure_def(cell)
+		if def == null or not def.repairs_workers or float(row["hp"]) >= def.max_hp or blight_mass < 2:
+			continue
+		blight_mass -= 2
+		var repair_task := {"kind": &"repair", "cell": cell, "cost": 2}
+		_worker_tasks[worker_id] = repair_task
+		_construction_claims[cell] = worker_id
+		return repair_task.duplicate(true)
+
+	if _growth_progress < 1.0:
+		return {}
+	var def := BlightStructures.roll(night_index, _rng)
+	if def == null or blight_mass < def.mass_cost:
+		return {}
+	var site := _find_worker_build_site(def)
+	if site == -1:
+		return {}
+	blight_mass -= def.mass_cost
+	_growth_progress -= 1.0
+	var task := {"kind": &"build", "cell": site, "def": def.id, "cost": def.mass_cost}
+	_worker_tasks[worker_id] = task
+	_construction_claims[site] = worker_id
+	return task.duplicate(true)
+
+
+func _find_worker_build_site(_def: BlightStructureDef) -> int:
+	var nests := World.live_nest_cells()
+	for _nest_attempt in nests.size():
+		var nest: int = nests[_rng.randi() % nests.size()]
+		if _structures_near(nest) >= GROWTH_PER_NEST:
+			continue
+		var origin := World.grid.coord(nest)
+		for _attempt in 32:
+			var point := origin + Vector2i(_rng.randi_range(-GROWTH_RADIUS, GROWTH_RADIUS),
+				_rng.randi_range(-GROWTH_RADIUS, GROWTH_RADIUS))
+			if not World.grid.is_valid_v(point):
+				continue
+			var cell := World.grid.index_v(point)
+			if _construction_claims.has(cell) or World.in_influence(cell):
+				continue
+			if World.claimed[cell] == 0 and World.occupancy[cell] == 0 \
+					and World.feature[cell] == Terrain.Feature.NONE \
+					and Terrain.WALKABLE.get(World.terrain[cell], false):
+				return cell
+	return -1
+
+
+func complete_worker_task(worker: BlightWorker) -> bool:
+	if worker == null or not _worker_tasks.has(worker.get_instance_id()):
+		return false
+	var id := worker.get_instance_id()
+	var task: Dictionary = _worker_tasks[id]
+	var cell := int(task.get("cell", -1))
+	var success := false
+	if task.get("kind", &"") == &"repair" and World.blight_structures.has(cell):
+		var def := World.blight_structure_def(cell)
+		if def != null:
+			var row: Dictionary = World.blight_structures[cell]
+			row["hp"] = minf(float(row["hp"]) + 35.0, def.max_hp)
+			World.blight_structures[cell] = row
+			success = true
+	elif task.get("kind", &"") == &"build":
+		var def := BlightStructures.get_structure(StringName(task.get("def", &"")))
+		success = World.add_blight_structure(cell, def)
+		if success and def.blight_seed > 0:
+			World.blight_field.seed_at(cell, def.blight_seed)
+	if not success:
+		blight_mass += int(task.get("cost", 0))
+	_worker_tasks.erase(id)
+	_construction_claims.erase(cell)
+	return success
+
+
+func cancel_worker_task(worker: BlightWorker) -> void:
+	if worker == null or not _worker_tasks.has(worker.get_instance_id()):
+		return
+	var id := worker.get_instance_id()
+	var task: Dictionary = _worker_tasks[id]
+	blight_mass += int(task.get("cost", 0))
+	_construction_claims.erase(int(task.get("cell", -1)))
+	_worker_tasks.erase(id)
+
+
+func worker_task_for_save(worker: BlightWorker) -> Dictionary:
+	if worker == null:
+		return {}
+	return _worker_tasks.get(worker.get_instance_id(), {}).duplicate(true)
+
+
+func restore_worker_task(worker: BlightWorker, task: Dictionary) -> void:
+	if worker == null or task.is_empty():
+		return
+	var id := worker.get_instance_id()
+	var cell := int(task.get("cell", -1))
+	_worker_tasks[id] = task.duplicate(true)
+	if cell != -1:
+		_construction_claims[cell] = id
 
 
 # --- Flow field ---------------------------------------------------------------------
@@ -151,6 +420,8 @@ func _begin_night() -> void:
 	_pulse_timer = 0.0
 	Events.wave_incoming.emit(int(_pending_budget), {})
 	Events.notice.emit(L10n.t(&"NOTICE_BLIGHT_STIRS", [night_index]), 2)
+	if night_index % 5 == 0:
+		Events.notice.emit(tr(&"NOTICE_EMPOWERED_NIGHT"), 2)
 
 
 # --- The Blight builds ----------------------------------------------------------------------
@@ -204,7 +475,7 @@ func _grow_settlements(night: int) -> void:
 
 ## Pick a live nest with room left and raise one structure near it. False if nothing could be built.
 func _raise_one(night: int) -> bool:
-	var def := BlightStructures.roll(night)
+	var def := BlightStructures.roll(night, _rng)
 	if def == null:
 		return false
 
@@ -217,7 +488,7 @@ func _raise_one(night: int) -> bool:
 	# one and starting the next.
 	var order := PackedInt32Array(nests)
 	for i in range(order.size() - 1, 0, -1):
-		var j := randi() % (i + 1)
+		var j := _rng.randi() % (i + 1)
 		var tmp := order[i]
 		order[i] = order[j]
 		order[j] = tmp
@@ -227,8 +498,8 @@ func _raise_one(night: int) -> bool:
 			continue
 		var c := grid.coord(nest)
 		for _attempt in 24:
-			var x := c.x + randi_range(-GROWTH_RADIUS, GROWTH_RADIUS)
-			var y := c.y + randi_range(-GROWTH_RADIUS, GROWTH_RADIUS)
+			var x := c.x + _rng.randi_range(-GROWTH_RADIUS, GROWTH_RADIUS)
+			var y := c.y + _rng.randi_range(-GROWTH_RADIUS, GROWTH_RADIUS)
 			if not grid.is_valid(x, y):
 				continue
 			var cell := grid.index(x, y)
@@ -267,6 +538,8 @@ func _end_night() -> void:
 	var fled := 0
 	for m in monsters.duplicate():
 		if is_instance_valid(m):
+			if m.def != null and m.def.is_boss:
+				continue
 			fled += 1
 			m.die(&"dawn")
 	_pending_budget = 0.0
@@ -283,7 +556,9 @@ func _end_night() -> void:
 
 	# And the Blight spent the night building. Done at dawn so it is something the player wakes up
 	# to and can see has changed, rather than something that creeps while they watch a wall.
-	_grow_settlements(night_index)
+	# Dawn adds development demand. Physical workers must still fund and visit a site.
+	_growth_progress = minf(_growth_progress + GROWTH_PER_DAWN \
+		* Difficulties.blight_mult() * Climate.blight_multiplier(), 4.0)
 
 
 func _step_waves(delta: float) -> void:
@@ -365,11 +640,86 @@ func _spawn_one(def: MonsterDef, stat_scale: float) -> bool:
 	if Realm.intercept_threat(cell, def.threat_cost):
 		return false
 	var m: Monster = MONSTER_SCENE.instantiate()
+	var empowered := night_index > 0 and night_index % 5 == 0
 	# Totems empower the horde. Folded into the same stat_scale the overflow director already uses,
 	# rather than a second multiplier on Monster — one place decides how tough a spawn is.
-	m.setup(def, stat_scale * World.blight_monster_scale(), _nearest_corrupt_anchor(cell))
+	m.setup(def, stat_scale * World.blight_monster_scale() * (1.18 if empowered else 1.0),
+		_nearest_corrupt_anchor(cell), empowered)
 	m.position = World.grid.to_world_index(cell)
 	_spawn_parent.add_child(m)
+	return true
+
+
+## Spawn children without paying wave budget, but never evade the global body cap. The parent
+## already paid the splitting premium through its threat cost; the cap remains the mobile safety
+## valve when several husks burst together.
+func spawn_children(kind: StringName, count: int, origin_cell: int, home: int) -> void:
+	var child_def := Monsters.get_monster(kind)
+	if child_def == null or _spawn_parent == null:
+		return
+	for i in mini(count, mini(MAX_MONSTERS, Difficulties.max_hostiles()) - monsters.size()):
+		var cell := World.nearest_walkable(origin_cell, 2 + i)
+		if cell == -1:
+			continue
+		var child: Monster = MONSTER_SCENE.instantiate()
+		child.setup(child_def, World.blight_monster_scale(), home)
+		child.position = World.grid.to_world_index(cell)
+		_spawn_parent.add_child(child)
+
+
+## A scheduled area impact used by incendiary creatures. It deliberately checks the same typed
+## damage interfaces as towers and miracles and has no physics-body or projectile allocation.
+func resolve_death_burst(origin: Vector2, damage: float, radius_tiles: float,
+		damage_type: StringName) -> void:
+	var reach_sq := pow(radius_tiles * Grid.TILE_SIZE, 2.0)
+	for villager in Colony.villagers.duplicate():
+		if is_instance_valid(villager) and villager.alive \
+				and origin.distance_squared_to(villager.position) <= reach_sq:
+			villager.take_damage(damage, null, damage_type)
+	for building in Colony.buildings.duplicate():
+		if is_instance_valid(building) and not building.is_site() \
+				and origin.distance_squared_to(building.centre_position()) <= reach_sq:
+			building.take_damage(damage * 0.65, damage_type)
+
+
+func _on_nest_destroyed(cell: int) -> void:
+	if _initial_nest_count <= 0:
+		_initial_nest_count = World.nest_cells.size()
+	var live := World.live_nest_cells().size()
+	if boss_stage == 0 and live * 2 <= _initial_nest_count:
+		boss_stage = 1
+		_spawn_regional_boss(_regional_boss_id(), cell)
+	elif boss_stage == 1 and live <= 1:
+		boss_stage = 2
+		_spawn_regional_boss(&"heart_warden", cell)
+
+
+func _regional_boss_id() -> StringName:
+	match World.biome_id:
+		&"marsh", &"coast":
+			return &"mire_matron"
+		&"badlands", &"grassland":
+			return &"cinder_colossus"
+		&"tundra", &"highland":
+			return &"frost_widow"
+		_:
+			return &"mire_matron"
+
+
+func _spawn_regional_boss(kind: StringName, threatened_cell: int) -> bool:
+	var boss_def := Monsters.get_monster(kind)
+	if boss_def == null or _spawn_parent == null or at_cap():
+		return false
+	var spawn_cell := World.nearest_walkable(threatened_cell, 8)
+	if spawn_cell == -1:
+		spawn_cell = _spawn_cell()
+	if spawn_cell == -1:
+		return false
+	var boss: Monster = MONSTER_SCENE.instantiate()
+	boss.setup(boss_def, World.blight_monster_scale(), _nearest_corrupt_anchor(spawn_cell))
+	boss.position = World.grid.to_world_index(spawn_cell)
+	_spawn_parent.add_child(boss)
+	Events.notice.emit(L10n.t(&"NOTICE_BOSS_RISES", [tr(boss_def.display_name)]), 2)
 	return true
 
 
@@ -431,7 +781,13 @@ func _update_pressure(delta: float) -> void:
 	var blight_cover: float = World.blight_field.coverage() if World.blight_field else 0.0
 	var pop := float(maxi(Colony.population(), 1))
 
-	target_pressure = 0.35 + day * 0.04 + blight_cover * 0.5
+	# Territory pressure is legible and counter-playable. Confining the Blight below the ground it
+	# wants raises aggression, while razing its actual economy removes that pressure immediately.
+	var desired_territory := clampf(0.08 + day * 0.006, 0.08, 0.34)
+	var boxed_in := maxf(desired_territory - blight_cover, 0.0)
+	var economy_pressure := float(World.blight_structures.size()) * 0.025
+	target_pressure = 0.35 + day * 0.04 + blight_cover * 0.35 \
+		+ boxed_in * 0.9 + economy_pressure
 	var strength := clampf(pop / 20.0, 0.0, 1.5)
 	target_pressure = clampf(target_pressure * (0.6 + strength * 0.4), 0.0, 2.0)
 	pressure = lerpf(pressure, target_pressure, clampf(delta * 0.1, 0.0, 1.0))
@@ -485,21 +841,21 @@ func wave_budget_for_night(night: int) -> float:
 ## opening week. The first night is peaceful on Sheltered and exactly one creature on
 ## every other tier; harder modes shorten the grace period without removing it.
 func body_cap_for_night(night: int) -> int:
-	if night <= 0:
+	if night <= 0 or not Difficulties.hostile_spawning():
 		return 0
 	var opening: Array[int]
 	match Difficulties.current_id():
-		&"sheltered":
+		&"sheltered", &"homestead":
 			opening = [0, 1, 1, 2, 2, 3, 4]
 		&"besieged":
 			opening = [1, 1, 2, 3, 4, 5, 7]
-		&"forsaken":
+		&"forsaken", &"nightmare":
 			opening = [1, 2, 3, 4, 5, 7, 9]
 		_:
 			opening = [1, 1, 2, 2, 3, 4, 5]
 	if night <= opening.size():
 		return opening[night - 1]
-	return MAX_MONSTERS
+	return mini(MAX_MONSTERS, Difficulties.max_hostiles())
 
 
 ## An idle creature only becomes an invader when the colony enters its interaction
@@ -512,11 +868,11 @@ func monster_should_raid(home_cell: int, current_cell: int) -> bool:
 		return true
 	var first_raid := 7
 	match Difficulties.current_id():
-		&"sheltered":
+		&"sheltered", &"homestead":
 			first_raid = 8
 		&"besieged":
 			first_raid = 5
-		&"forsaken":
+		&"forsaken", &"nightmare":
 			first_raid = 3
 	var development_bonus := mini(World.blight_structures.size() / 3, 2)
 	return night_index >= maxi(first_raid - development_bonus, 2)
@@ -569,6 +925,7 @@ func next_night_forecast() -> Dictionary:
 		"names": names,
 		"readiness": roundi(readiness),
 		"risk": risk,
+		"empowered": next_night % 5 == 0,
 	}
 
 
@@ -576,11 +933,13 @@ func next_night_forecast() -> Dictionary:
 
 func register(monster: Node) -> void:
 	monsters.append(monster)
+	hostiles.append(monster)
 	Events.monster_spawned.emit(monster)
 
 
 func unregister(monster: Node) -> void:
 	monsters.erase(monster)
+	hostiles.erase(monster)
 	Events.monster_died.emit(monster)
 	if monsters.is_empty() and Sim.phase == Sim.Phase.NIGHT and _pulses_left <= 0:
 		Events.wave_cleared.emit(night_index)
@@ -588,7 +947,7 @@ func unregister(monster: Node) -> void:
 
 
 func at_cap() -> bool:
-	return monsters.size() >= MAX_MONSTERS
+	return monsters.size() >= mini(MAX_MONSTERS, Difficulties.max_hostiles())
 
 
 func alive_count() -> int:

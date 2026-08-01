@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/shade.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"frost_widow"
+display_name = "BOSS_FROST_WIDOW"
+sprite = ExtResource("2_tex")
+max_health = 490.0
+move_speed = 16.0
+damage = 14.0
+attack_range = 5.5
+attack_cooldown = 1.15
+structure_damage_scale = 0.8
+attack_type = &"elemental"
+behavior_tags = Array[StringName]([&"boss", &"phasing", &"ranged"])
+statuses_inflicted = Array[StringName]([&"slowed"])
+status_duration = 20.0
+resistances = {&"piercing": 0.55, &"elemental": 0.7, &"fire": -0.55, &"holy": -0.2}
+faith_on_death = 30.0
+is_boss = true
+presentation_scale = 1.7
+presentation_tint = Color(0.72, 0.94, 1.22, 1)
+boss_reward = 5
+weight = 0.0
+burn_per_second = 0.0
+burn_threshold = 255

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/longhouse.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"warehouse"
+display_name = "BUILDING_WAREHOUSE"
+description = "BUILDING_WAREHOUSE_DESC"
+sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = false
+cost = {&"boards": 12, &"cut_stone": 6, &"tools": 1}
+build_work = 25.0
+max_hp = 170.0
+repair_cost = {&"boards": 2, &"cut_stone": 1}
+is_stockpile = true
+inventory_capacity = 420
+influence_radius = 5
+order = 11
+color = Color(0.62, 0.58, 0.5, 1)
+

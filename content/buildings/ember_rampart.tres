@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/palisade.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"ember_rampart"
+display_name = "BUILDING_EMBER_RAMPART"
+description = "BUILDING_EMBER_RAMPART_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 3
+footprint = Vector2i(1, 1)
+blocks_movement = true
+drag_placeable = true
+max_blight = 120
+cost = {
+&"cut_stone": 5,
+&"emberglass": 2,
+&"ingots": 1
+}
+build_work = 10.0
+max_hp = 360.0
+resistances = {
+&"piercing": 0.75,
+&"crushing": 0.3,
+&"fire": 0.85,
+&"blight": 0.4
+}
+repair_cost = {
+&"cut_stone": 1,
+&"emberglass": 1
+}
+repair_work = 5.0
+repair_amount = 70.0
+upgrades_from = &"stone_wall"
+light_radius = 2
+influence_radius = 3
+order = 34
+color = Color(0.9, 0.48, 0.24, 1)
+

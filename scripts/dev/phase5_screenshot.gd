@@ -17,9 +17,12 @@ func _ready() -> void:
 		"run_history": Meta.run_history.duplicate(true),
 		"lifetime_stats": Meta.lifetime_stats.duplicate(true),
 		"achievements": Meta.achievements.duplicate(),
+		"chronicle_completed": Meta.chronicle_completed.duplicate(),
+		"equipped_doctrines": Meta.equipped_doctrines.duplicate(),
 	}
 	var tutorial_enabled := Accessibility.tutorials_enabled
 	var tutorial_seen := Accessibility.tutorial_seen.duplicate()
+	var high_visibility := Accessibility.high_visibility_targets
 	Accessibility.tutorials_enabled = true
 	Accessibility.tutorial_seen.clear()
 	NewRunRequest.set_request(7302026, &"harried", false)
@@ -32,6 +35,22 @@ func _ready() -> void:
 	onboarding.call("_dismiss")
 	onboarding.call("_dismiss")
 	onboarding.call("_dismiss")
+	var pause_menu := run.get_node("PauseMenu")
+	pause_menu.open()
+	pause_menu.call("_show_settings")
+	pause_menu.get_node("Center/Card/Views/Settings/SettingsPanel").set_tab(2)
+	await _settle()
+	_capture("phase5_accessibility")
+	pause_menu.close()
+	onboarding.call("_skip_all")
+	Accessibility.high_visibility_targets = true
+	var hand := run.get_node("GodHand")
+	hand.call("_select", Colony.villagers[0])
+	Threat._spawn_one(Monsters.get_monster(&"shambler"), 1.0)
+	if not Threat.monsters.is_empty():
+		Threat.monsters[-1].position = World.grid.to_world_index(World.keep_cell) + Vector2(42, 8)
+	await _settle()
+	_capture("phase5_high_visibility")
 	run.ascend()
 	await _settle()
 	_capture("phase5_summary")
@@ -45,9 +64,12 @@ func _ready() -> void:
 	Meta.run_history.assign(profile["run_history"])
 	Meta.lifetime_stats = profile["lifetime_stats"]
 	Meta.achievements.assign(profile["achievements"])
+	Meta.chronicle_completed.assign(profile["chronicle_completed"])
+	Meta.equipped_doctrines.assign(profile["equipped_doctrines"])
 	Meta.save_profile()
 	Accessibility.tutorials_enabled = tutorial_enabled
 	Accessibility.tutorial_seen.assign(tutorial_seen)
+	Accessibility.high_visibility_targets = high_visibility
 	Accessibility.save_settings()
 	RunSave.clear()
 	get_tree().quit(0)

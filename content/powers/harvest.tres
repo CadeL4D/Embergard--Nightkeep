@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"harvest"
+display_name = "POWER_HARVEST"
+description = "POWER_HARVEST_DESC"
+kind = 7
+faith_cost = 22.0
+cooldown = 24.0
+radius = 3
+required_temple_tier = 1
+burden = 0.08
+color = Color(0.58, 0.82, 0.38, 1)
+order = 11
+

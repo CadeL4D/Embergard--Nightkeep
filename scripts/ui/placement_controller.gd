@@ -20,15 +20,10 @@ signal placement_changed(active: bool, status: String, valid: bool)
 ## Minimum comfortable touch target for the confirm tap, in screen pixels. A 1x1
 ## building is 16px of world art — far too small to demand a thumb land on it — so
 ## the ghost's grab zone is padded out to this at the current zoom.
-const TOUCH_TARGET_PX := 44.0
-
 ## How far the finger must travel before a touch that started on the ghost counts as
 ## a move rather than a tap. Without it a slightly smeared confirm tap drags the
 ## building off its site instead of building it.
 const DRAG_COMMIT_PX := 10.0
-
-const TAP_MAX_TIME := 0.35
-const TAP_MAX_TRAVEL := 12.0
 
 var active: bool = false
 var def: BuildingDef = null
@@ -274,7 +269,8 @@ func _on_touch(event: InputEventScreenTouch) -> void:
 		var was_grab := _grabbed_ghost
 		_drag_finger = -1
 		_grabbed_ghost = false
-		if was_grab and elapsed < TAP_MAX_TIME and travelled < TAP_MAX_TRAVEL:
+		if was_grab and elapsed < Accessibility.TAP_MAX_TIME \
+				and travelled < Accessibility.GESTURE_SLOP_PX:
 			confirm()
 	get_viewport().set_input_as_handled()
 
@@ -300,7 +296,7 @@ func _is_on_ghost(world_pos: Vector2) -> bool:
 		Vector2(c) * float(Grid.TILE_SIZE),
 		Vector2(def.footprint) * float(Grid.TILE_SIZE)
 	)
-	var target := TOUCH_TARGET_PX / maxf(_camera.zoom.x, 0.01)
+	var target := Accessibility.MIN_TOUCH_TARGET_PX / maxf(_camera.zoom.x, 0.01)
 	rect = rect.grow(maxf(0.0, (target - minf(rect.size.x, rect.size.y)) * 0.5))
 	return rect.has_point(world_pos)
 
@@ -310,7 +306,7 @@ func _is_on_preview(world_pos: Vector2) -> bool:
 		return false
 	if _pending_line.is_empty():
 		return _is_on_ghost(world_pos)
-	var target := TOUCH_TARGET_PX / maxf(_camera.zoom.x, 0.01)
+	var target := Accessibility.MIN_TOUCH_TARGET_PX / maxf(_camera.zoom.x, 0.01)
 	for point: Vector2i in _pending_line:
 		var rect := Rect2(
 			Vector2(point) * float(Grid.TILE_SIZE),

@@ -28,6 +28,12 @@ extends Resource
 @export var min_night: int = 2
 ## Relative likelihood of being chosen once eligible.
 @export var weight: float = 1.0
+## Physical Blight mass carried by workers and spent to raise this structure.
+@export var mass_cost: int = 8
+## Additional worker capacity supplied while this structure stands.
+@export var worker_capacity: int = 0
+@export var repairs_workers: bool = false
+@export var economy_role: StringName = &""
 
 @export_group("Effect")
 ## Added to the night's threat budget while this stands.
@@ -48,6 +54,14 @@ extends Resource
 
 ## Multiplier on the stats of monsters spawned while this stands.
 @export var monster_scale: float = 1.0
+@export var mass_harvest_multiplier: float = 1.0
+
+@export_group("Defence")
+@export var attack_damage: float = 0.0
+@export var attack_range: float = 0.0
+@export var attack_cooldown: float = 1.0
+@export var attack_type: StringName = &"blight"
+@export var resistances: Dictionary = {}
 
 @export var color: Color = Color(0.56, 0.14, 0.34)
 @export var order: int = 0

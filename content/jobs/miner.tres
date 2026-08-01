@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"miner"
+display_name = "JOB_MINER"
+target_features = Array[int]([2])
+workplace = &"mining_camp"
+catchment_radius = 18
+work_rate = 1.1
+carry_capacity = 12
+equipment_tags = Array[StringName]([&"mining", &"quarrying"])
+priority = 0
+default_quota = 0
+color = Color(0.57, 0.54, 0.46, 1)

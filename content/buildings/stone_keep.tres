@@ -26,6 +26,7 @@ upgrades_from = &"great_hall"
 min_population = 18
 light_radius = 7
 is_stockpile = true
+inventory_capacity = 1200
 faith_capacity = 180.0
 influence_radius = 26
 sleep_slots = 0

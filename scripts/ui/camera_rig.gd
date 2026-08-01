@@ -10,8 +10,6 @@ extends Camera2D
 ## and so the placement controller and God Hand (added in later milestones) can sit
 ## in front of it in the input order.
 
-const PAN_THRESHOLD := 12.0            ## px of movement before a touch becomes a pan
-const TAP_MAX_TIME := 0.25             ## seconds; longer than this is not a tap
 const INERTIA_DECAY := 6.0             ## higher = the flick stops sooner
 const INERTIA_CUTOFF := 4.0            ## px/s below which we just stop
 ## The art is authored at 16 px per cell, but a 2x camera inside a 2x desktop
@@ -38,22 +36,56 @@ var _touch_start_time: float = 0.0
 var _velocity: Vector2 = Vector2.ZERO
 var _pinch_prev_dist: float = 0.0
 var _snap_tween: Tween
+var _shake_time: float = 0.0
+var _shake_duration: float = 0.0
+var _shake_strength: float = 0.0
+var _shake_phase: float = 0.0
 
 
 func _ready() -> void:
 	zoom = Vector2(DEFAULT_ZOOM, DEFAULT_ZOOM)
 	make_current()
+	Events.breach_detected.connect(func(_where: Vector2) -> void: shake(3.0, 0.22))
+	Events.building_destroyed.connect(func(_building: Node) -> void: shake(5.0, 0.34))
+	Events.monster_spawned.connect(func(monster: Node) -> void:
+		if monster is Monster and monster.def != null and monster.def.is_boss:
+			shake(6.0, 0.5)
+	)
 
 
 func _process(delta: float) -> void:
-	if _state != State.NONE:
+	if _state == State.NONE:
+		if _velocity.length() <= INERTIA_CUTOFF:
+			_velocity = Vector2.ZERO
+		else:
+			position -= _velocity * delta / zoom.x
+			_velocity = _velocity.lerp(Vector2.ZERO, clampf(INERTIA_DECAY * delta, 0.0, 1.0))
+			_clamp_position()
+	_tick_shake(delta)
+
+
+func shake(strength: float, duration: float) -> void:
+	var scale := Accessibility.shake_scale()
+	if scale <= 0.0:
 		return
-	if _velocity.length() <= INERTIA_CUTOFF:
-		_velocity = Vector2.ZERO
+	_shake_strength = maxf(_shake_strength, strength * scale)
+	_shake_duration = maxf(_shake_duration, duration)
+	_shake_time = maxf(_shake_time, duration)
+
+
+func _tick_shake(delta: float) -> void:
+	if _shake_time <= 0.0:
+		if offset != Vector2.ZERO:
+			offset = Vector2.ZERO
 		return
-	position -= _velocity * delta / zoom.x
-	_velocity = _velocity.lerp(Vector2.ZERO, clampf(INERTIA_DECAY * delta, 0.0, 1.0))
-	_clamp_position()
+	_shake_time = maxf(_shake_time - delta, 0.0)
+	_shake_phase += delta * 61.0
+	var fade := _shake_time / maxf(_shake_duration, 0.001)
+	offset = Vector2(sin(_shake_phase * 1.73), cos(_shake_phase * 2.11)) \
+		* _shake_strength * fade
+	if _shake_time <= 0.0:
+		_shake_strength = 0.0
+		_shake_duration = 0.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -118,7 +150,9 @@ func _handle_touch(event: InputEventScreenTouch) -> void:
 	_touches.erase(event.index)
 
 	if _touches.is_empty():
-		if was_state != State.PINCHING and travelled < PAN_THRESHOLD and elapsed < TAP_MAX_TIME:
+		if was_state != State.PINCHING \
+				and travelled < Accessibility.GESTURE_SLOP_PX \
+				and elapsed < Accessibility.TAP_MAX_TIME:
 			_velocity = Vector2.ZERO
 			tapped.emit(_screen_to_world(event.position))
 		_state = State.NONE
@@ -144,7 +178,7 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 		return
 
 	if _state == State.NONE:
-		if event.position.distance_to(_touch_start) < PAN_THRESHOLD:
+		if event.position.distance_to(_touch_start) < Accessibility.GESTURE_SLOP_PX:
 			return
 		_state = State.PANNING
 

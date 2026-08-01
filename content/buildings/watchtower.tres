@@ -10,16 +10,15 @@ display_name = "BUILDING_WATCHTOWER"
 description = "BUILDING_WATCHTOWER_DESC"
 sprite = ExtResource("2_tex")
 category = &"defence"
-tier = 2
+tier = 1
 footprint = Vector2i(2, 2)
 blocks_movement = true
 max_blight = 60
 cost = {
-&"wood": 18,
-&"stone": 14,
-&"tools": 2
+&"wood": 12,
+&"stone": 6
 }
-build_work = 30.0
+build_work = 20.0
 max_hp = 200.0
 light_radius = 7
 is_stockpile = false
@@ -29,6 +28,10 @@ worker_slots = 0
 attack_damage = 9.0
 attack_range = 6.5
 attack_cooldown = 0.85
+attack_type = &"piercing"
+repair_cost = {
+&"wood": 2
+}
 order = 32
 color = Color(0.6, 0.68, 0.78, 1)
-unlock_cost = 30
+unlock_cost = 0

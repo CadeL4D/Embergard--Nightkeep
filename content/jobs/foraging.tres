@@ -9,6 +9,7 @@ display_name = "JOB_FORAGING"
 target_features = Array[int]([6])
 work_rate = 1.0
 carry_capacity = 8
+equipment_tags = Array[StringName]([&"foraging"])
 priority = 2
 default_quota = 2
 color = Color(0.72, 0.35, 0.42, 1)

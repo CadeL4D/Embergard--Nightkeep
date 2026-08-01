@@ -7,7 +7,48 @@ extends Node
 
 const EVENT_IDS: Array[StringName] = [
 	&"caravan", &"refugees", &"blight_surge", &"stormfront", &"drought",
+	&"lost_caravan", &"emberglass_peddler", &"road_wardens", &"broken_wheel",
+	&"harvest_fair", &"separated_family", &"orphaned_band", &"returning_scouts",
+	&"healers_pilgrimage", &"oathbound_rangers", &"creeping_roots", &"silent_totem",
+	&"infected_well", &"hollow_chant", &"besieged_outpost", &"lightning_harvest",
+	&"flooded_storehouse", &"fogbound_patrol", &"hail_on_roofs", &"ashfall",
+	&"failed_harvest", &"dry_cistern", &"herb_bloom", &"ration_dispute", &"emberwind",
 ]
+
+const EVENT_FAMILY := {
+	&"caravan": &"caravan", &"lost_caravan": &"caravan",
+	&"emberglass_peddler": &"caravan", &"road_wardens": &"caravan",
+	&"broken_wheel": &"caravan", &"harvest_fair": &"caravan",
+	&"refugees": &"refugees", &"separated_family": &"refugees",
+	&"orphaned_band": &"refugees", &"returning_scouts": &"refugees",
+	&"healers_pilgrimage": &"refugees", &"oathbound_rangers": &"refugees",
+	&"blight_surge": &"blight_surge", &"creeping_roots": &"blight_surge",
+	&"silent_totem": &"blight_surge", &"infected_well": &"blight_surge",
+	&"hollow_chant": &"blight_surge", &"besieged_outpost": &"blight_surge",
+	&"stormfront": &"stormfront", &"lightning_harvest": &"stormfront",
+	&"flooded_storehouse": &"stormfront", &"fogbound_patrol": &"stormfront",
+	&"hail_on_roofs": &"stormfront", &"ashfall": &"stormfront",
+	&"drought": &"drought", &"failed_harvest": &"drought", &"dry_cistern": &"drought",
+	&"herb_bloom": &"drought", &"ration_dispute": &"drought", &"emberwind": &"drought",
+}
+
+const EVENT_TAGS := {
+	&"lost_caravan": [&"route"], &"road_wardens": [&"route"],
+	&"broken_wheel": [&"route", &"weather"], &"harvest_fair": [&"region"],
+	&"emberglass_peddler": [&"faith", &"region"],
+	&"separated_family": [&"household"], &"orphaned_band": [&"household"],
+	&"returning_scouts": [&"route"], &"healers_pilgrimage": [&"faith", &"household"],
+	&"oathbound_rangers": [&"blight", &"route"],
+	&"creeping_roots": [&"blight"], &"silent_totem": [&"blight"],
+	&"infected_well": [&"blight", &"region"], &"hollow_chant": [&"blight", &"faith"],
+	&"besieged_outpost": [&"blight", &"route"],
+	&"lightning_harvest": [&"weather", &"faith"],
+	&"flooded_storehouse": [&"weather"], &"fogbound_patrol": [&"weather", &"route"],
+	&"hail_on_roofs": [&"weather", &"region"], &"ashfall": [&"weather", &"blight"],
+	&"failed_harvest": [&"region"], &"dry_cistern": [&"weather"],
+	&"herb_bloom": [&"region"], &"ration_dispute": [&"household"],
+	&"emberwind": [&"faith", &"blight"],
+}
 
 var world_seed: int = 0
 var next_event_day: int = 3
@@ -35,13 +76,9 @@ func _on_day_advanced(day: int) -> void:
 
 
 func _choose_event(day: int) -> StringName:
-	var weights := {
-		&"caravan": 26,
-		&"refugees": 22 if Colony.population() < 18 else 10,
-		&"blight_surge": 16 + int(round(World.blight_field.coverage() * 100.0)),
-		&"stormfront": 36 if Climate.weather in [&"storm", &"rain", &"fog"] else 6,
-		&"drought": 38 if Climate.weather in [&"drought", &"heatwave"] else 5,
-	}
+	var weights := {}
+	for id in EVENT_IDS:
+		weights[id] = _event_weight(id)
 	var rng := _rng_for(day, event_serial)
 	var total := 0
 	for id: StringName in EVENT_IDS:
@@ -52,6 +89,37 @@ func _choose_event(day: int) -> StringName:
 		if roll <= 0:
 			return id
 	return &"caravan"
+
+
+func _event_weight(id: StringName) -> int:
+	var family := StringName(EVENT_FAMILY.get(id, id))
+	var weight := 5
+	match family:
+		&"caravan": weight = 10
+		&"refugees": weight = 9 if Colony.population() < 18 else 4
+		&"blight_surge": weight = 5 + int(round(World.blight_field.coverage() * 22.0))
+		&"stormfront": weight = 13 if Climate.weather in [&"storm", &"rain", &"fog", &"snow"] else 2
+		&"drought": weight = 14 if Climate.weather in [&"drought", &"heatwave"] else 2
+	var tags: Array = EVENT_TAGS.get(id, [])
+	if &"route" in tags:
+		weight += mini(Realm.active_routes().size() * 5, 15)
+	if &"weather" in tags and Climate.weather != &"clear":
+		weight += 7
+	if &"faith" in tags:
+		weight += 6 if Divine.faith < Divine.faith_max() * 0.45 else 2
+	if &"blight" in tags:
+		weight += int(round(World.blight_field.coverage() * 35.0))
+	if &"household" in tags:
+		var households := {}
+		for villager in Colony.villagers:
+			if is_instance_valid(villager) and not villager.profile.household_id.is_empty():
+				households[villager.profile.household_id] = true
+		weight += mini(households.size() * 2, 10)
+	if &"region" in tags:
+		var identity: Dictionary = Realm.site(Realm.awake_id).get("economic_identity", {})
+		if not identity.is_empty():
+			weight += 6
+	return maxi(weight, 1)
 
 
 func force_event(id: StringName) -> bool:
@@ -66,9 +134,15 @@ func _create_event(id: StringName) -> void:
 		return
 	event_serial += 1
 	var rng := _rng_for(Sim.day, event_serial)
-	pending = _payload_for(id, rng)
+	var family := StringName(EVENT_FAMILY.get(id, id))
+	pending = _payload_for(family, rng)
 	pending["id"] = id
+	pending["family"] = family
 	pending["serial"] = event_serial
+	if id != family:
+		var prefix := "STORY_EVENT_" + String(id).to_upper()
+		pending["title"] = tr(StringName(prefix + "_TITLE"))
+		pending["body"] = tr(StringName(prefix + "_BODY"))
 	_present_pending()
 
 
@@ -199,7 +273,8 @@ func resolve_event(choice_id: StringName) -> bool:
 		Events.faith_changed.emit(Divine.faith)
 
 	var event_id := StringName(pending.get("id", &""))
-	_apply_choice(event_id, choice_id, pending)
+	var family := StringName(pending.get("family", EVENT_FAMILY.get(event_id, event_id)))
+	_apply_choice(family, choice_id, pending)
 	resolved_count += 1
 	pending.clear()
 	_schedule_next()

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"banish"
+display_name = "POWER_BANISH"
+description = "POWER_BANISH_DESC"
+kind = 11
+faith_cost = 32.0
+cooldown = 18.0
+radius = 5
+amount = 10.0
+damage_type = &"holy"
+required_temple_tier = 1
+burden = 0.12
+color = Color(0.74, 0.64, 1, 1)
+order = 16
+

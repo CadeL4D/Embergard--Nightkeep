@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"armoring"
+display_name = "JOB_ARMORING"
+workplace = &"armory"
+cycle_yield = {}
+item_yield = &"mail_shirt"
+cycle_cost = {&"ingots": 1, &"boards": 1}
+cycle_work = 15.0
+carry_capacity = 12
+priority = 6
+default_quota = 0
+color = Color(0.58, 0.6, 0.68, 1)

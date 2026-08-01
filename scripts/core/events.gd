@@ -42,6 +42,11 @@ signal job_quotas_changed()
 signal building_placed(building: Node)
 signal building_completed(building: Node)
 signal building_destroyed(building: Node)
+signal tower_fired(tower: Node, damage: float, target_pos: Vector2)
+signal production_completed(building: Node, kind: StringName, amount: int)
+signal building_repaired(building: Node, amount: float)
+signal villager_injured(villager: Node, amount: float)
+signal villager_treated(villager: Node)
 ## Workers have started tearing something down. Separate from building_destroyed, which fires
 ## when it is actually gone — the two are a long way apart in time now that salvage is hauled.
 signal building_demolishing(building: Node)
@@ -53,16 +58,19 @@ signal influence_changed()
 signal faith_changed(amount: float)
 signal ember_moved(world_pos: Vector2)
 signal power_cast(power_id: StringName, world_pos: Vector2)
+signal hand_action(action: StringName, world_pos: Vector2)
 ## An ability was taken up or given back, so the power bar and the Faith panel have to rebuild.
 signal powers_changed()
 ## A priest finished a Tome, by writing or by combining. Carries the tier so a stinger can scale.
 signal tome_written(tier: int)
+signal library_changed()
 
 # --- Threat ----------------------------------------------------------------------
 signal wave_incoming(size: int, composition: Dictionary)
 signal wave_cleared(night: int)
 signal monster_spawned(monster: Node)
 signal monster_died(monster: Node)
+signal monster_attacked(monster: Node, target: Node)
 signal breach_detected(world_pos: Vector2)
 
 # --- Meta / UI -------------------------------------------------------------------
@@ -77,4 +85,5 @@ signal notice(text: String, urgency: int)           ## 0 info, 1 warning, 2 alar
 # --- Realm ------------------------------------------------------------------------
 signal realm_changed()
 signal colony_awakened(colony_id: StringName)
+signal trade_route_updated(route_id: int, status: StringName)
 signal realm_victory()

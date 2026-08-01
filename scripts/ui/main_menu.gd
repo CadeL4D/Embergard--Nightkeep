@@ -26,10 +26,15 @@ enum Screen { ROOT, CREATE, OPTIONS, HISTORY, CREDITS }
 @onready var _continue_button: Button = $Center/Root/Rows/ContinueButton
 @onready var _best: Label = $Center/Root/Rows/Best
 
-@onready var _difficulty_rows: VBoxContainer = $Center/Create/Rows/Difficulties
+@onready var _difficulty_rows: GridContainer = $Center/Create/Rows/Difficulties
 @onready var _seed_field: LineEdit = $Center/Create/Rows/SeedRow/SeedField
 @onready var _pick_site: CheckBox = $Center/Create/Rows/PickSite
 @onready var _difficulty_blurb: Label = $Center/Create/Rows/Blurb
+@onready var _doctrine_options: Array[OptionButton] = [
+	$Center/Create/Rows/DoctrineRow/Doctrine1,
+	$Center/Create/Rows/DoctrineRow/Doctrine2,
+	$Center/Create/Rows/DoctrineRow/Doctrine3,
+]
 
 @onready var _settings_panel: SettingsPanel = $Center/Options/Rows/Settings
 @onready var _history_lifetime: Label = $Center/History/Rows/Lifetime
@@ -40,12 +45,14 @@ enum Screen { ROOT, CREATE, OPTIONS, HISTORY, CREDITS }
 ## difficulty id -> its button, so the selection can be shown without rebuilding the list.
 var _difficulty_buttons: Dictionary = {}
 var _chosen: StringName = &""
+var _chosen_doctrines: Array[StringName] = []
 var _panel_tween: Tween
 
 
 func _ready() -> void:
 	modulate.a = 0.0
 	_build_difficulties()
+	_build_doctrines()
 	_build_options()
 	_wire_navigation()
 
@@ -118,6 +125,44 @@ func _on_difficulty_chosen(id: StringName) -> void:
 	_refresh_difficulty_selection()
 
 
+func _build_doctrines() -> void:
+	_chosen_doctrines = Doctrines.sanitize(Meta.equipped_doctrines)
+	while _chosen_doctrines.size() < _doctrine_options.size():
+		_chosen_doctrines.append(&"")
+	for slot in _doctrine_options.size():
+		var option := _doctrine_options[slot]
+		option.clear()
+		option.add_item(tr(&"UI_NONE"))
+		option.set_item_metadata(0, &"")
+		for doctrine in Doctrines.available():
+			option.add_item(doctrine.display_name)
+			option.set_item_metadata(option.item_count - 1, doctrine.id)
+		var desired := _chosen_doctrines[slot] if slot < _chosen_doctrines.size() else &""
+		for item in option.item_count:
+			if StringName(option.get_item_metadata(item)) == desired:
+				option.select(item)
+				break
+		option.item_selected.connect(_on_doctrine_chosen.bind(slot))
+
+
+func _on_doctrine_chosen(item: int, slot: int) -> void:
+	var selected := StringName(_doctrine_options[slot].get_item_metadata(item))
+	while _chosen_doctrines.size() < _doctrine_options.size():
+		_chosen_doctrines.append(&"")
+	if selected != &"":
+		for other in _doctrine_options.size():
+			if other != slot and _chosen_doctrines[other] == selected:
+				_chosen_doctrines[other] = &""
+				_doctrine_options[other].select(0)
+	_chosen_doctrines[slot] = selected
+	var compact: Array[StringName] = []
+	for id in _chosen_doctrines:
+		if id != &"":
+			compact.append(id)
+	Meta.set_equipped_doctrines(compact)
+	_refresh_difficulty_selection()
+
+
 func _refresh_difficulty_selection() -> void:
 	# Fall back if the saved preference names a tier that no longer exists on disk.
 	if not _difficulty_buttons.has(_chosen):
@@ -130,6 +175,13 @@ func _refresh_difficulty_selection() -> void:
 	# committing rather than discovering it on the summary card.
 	_difficulty_blurb.text = L10n.t(&"DIFFICULTY_SHARD_MULT",
 		[tr(def.description), "%.2f" % def.shard_mult]) if def != null else ""
+	if not _chosen_doctrines.is_empty():
+		var names := PackedStringArray()
+		for id in _chosen_doctrines:
+			var doctrine := Doctrines.get_doctrine(id) if id != &"" else null
+			if doctrine != null:
+				names.append(doctrine.display_name)
+		_difficulty_blurb.text += "\n" + ", ".join(names)
 
 
 func _reroll_seed() -> void:
@@ -151,7 +203,8 @@ func _on_begin() -> void:
 	# The only place a difficulty preference is actually expressed, so the only place that
 	# writes it to the profile.
 	Meta.set_last_difficulty(_chosen)
-	NewRunRequest.set_request(_requested_seed(), _chosen, _pick_site.button_pressed)
+	NewRunRequest.set_request(_requested_seed(), _chosen, _pick_site.button_pressed,
+		_chosen_doctrines)
 	get_tree().change_scene_to_file(RUN_SCENE)
 
 
@@ -188,6 +241,9 @@ func _refresh_history() -> void:
 		Meta.achievements.size(), Meta.ACHIEVEMENT_TOTAL,
 		", ".join(achievement_names) if not achievement_names.is_empty() else tr(&"HISTORY_NONE"),
 	])
+	_history_achievements.text += "\n" + L10n.t(&"HISTORY_CHRONICLE_GOALS", [
+		Meta.chronicle_completed.size(), Chronicle.all().size(), Doctrines.available().size(),
+		Doctrines.all().size()])
 	for child in _history_records.get_children():
 		_history_records.remove_child(child)
 		child.queue_free()

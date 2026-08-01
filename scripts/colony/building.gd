@@ -65,6 +65,26 @@ var _scan_timer: float = 0.0
 var _shot_target: Vector2 = Vector2.ZERO
 var _shot_fade: float = 0.0
 
+## Player policies live on the placed building, not the catalog definition.
+var target_policy: StringName = &"nearest"
+var marked_target_id: int = 0
+var repair_priority: int = 1
+var repair_progress: float = 0.0
+var production_paused: bool = false
+var production_worker_limit: int = -1
+var production_priority: int = 1
+## -1 disables maintain-stock behavior; otherwise all outputs pause at this aggregate amount.
+var production_target: int = -1
+var hallowed_remaining: float = 0.0
+var held_by_hand: bool = false
+## Numeric contents of this building's physical store. One resource stack is one
+## dictionary entry; individual units never become scene nodes.
+var inventory: Dictionary = {}
+var item_inventory: Array[Dictionary] = []
+var spoilage_progress: Dictionary = {}
+var input_buffer: Dictionary = {}
+var output_buffer: Dictionary = {}
+
 @onready var _sprite: Sprite2D = $Sprite
 @onready var _progress_back: ColorRect = $Progress/Back
 @onready var _progress_fill: ColorRect = $Progress/Fill
@@ -75,6 +95,7 @@ func setup(building_def: BuildingDef, anchor_cell: int) -> void:
 	anchor = anchor_cell
 	cells = World.grid.footprint_cells(World.grid.coord(anchor_cell), def.footprint)
 	hp = def.max_hp
+	target_policy = def.default_target_policy
 
 
 func _ready() -> void:
@@ -232,6 +253,7 @@ func begin_demolish() -> bool:
 		var amount := int(floorf(float(delivered[kind]) * SALVAGE_FRACTION))
 		if amount > 0:
 			salvage[kind] = amount
+	Colony.evacuate_inventory(self)
 
 	# Everything the building DID stops now, not when the last plank is carried off. A watchtower
 	# under demolition should not still be shooting, and a wall being pulled down should already
@@ -340,12 +362,15 @@ func _apply_effects() -> void:
 
 	if def.path_tier > 0:
 		World.set_path_tier(cells, def.path_tier)
+	if def.bridges_water:
+		World.set_bridge(cells, true)
 
 	if def.light_radius > 0:
 		_light_handle = World.light_field.add_source(centre_cell(), def.light_radius, 220)
 
 	if def.is_stockpile:
 		Colony.add_stockpile(centre_cell())
+		Colony.register_storage(self)
 
 	if def.influence_radius > 0:
 		World.rebuild_influence()
@@ -373,12 +398,15 @@ func _clear_effects() -> void:
 
 	if def.path_tier > 0:
 		World.set_path_tier(cells, 0)
+	if def.bridges_water:
+		World.set_bridge(cells, false)
 
 	if _light_handle != 0:
 		World.light_field.remove_source(_light_handle)
 		_light_handle = 0
 
 	if def.is_stockpile:
+		Colony.unregister_storage(self)
 		Colony.remove_stockpile(centre_cell())
 
 	if def.influence_radius > 0:
@@ -402,6 +430,207 @@ func centre_position() -> Vector2:
 	return World.grid.to_world_index(centre_cell())
 
 
+# --- Physical inventory -----------------------------------------------------------------
+
+func inventory_used() -> int:
+	var total := 0
+	for amount in inventory.values():
+		total += maxi(int(amount), 0)
+	total += item_inventory.size()
+	return total
+
+
+func inventory_free() -> int:
+	return maxi(def.inventory_capacity - inventory_used(), 0)
+
+
+func accepts_resource(kind: StringName) -> bool:
+	if def == null or not def.is_stockpile or def.inventory_capacity <= 0:
+		return false
+	var resource := Resources.get_resource(kind)
+	return def.storage_tags.is_empty() or kind in def.storage_tags \
+		or (resource != null and resource.matches_storage(def.storage_tags))
+
+
+func accepts_item(item_def: ItemDef) -> bool:
+	if item_def == null or def == null or not def.is_stockpile or def.inventory_capacity <= 0:
+		return false
+	if def.storage_tags.is_empty() or &"equipment" in def.storage_tags:
+		return true
+	if item_def.slot in def.storage_tags:
+		return true
+	return item_def.slot == &"consumable" and (&"food" in def.storage_tags \
+		or &"medicine" in def.storage_tags)
+
+
+func inventory_deposit_item(row: Dictionary) -> bool:
+	var item_def := Items.get_item(StringName(row.get("def", &"")))
+	if inventory_free() <= 0 or not accepts_item(item_def):
+		return false
+	item_inventory.append(row.duplicate(true))
+	queue_redraw()
+	return true
+
+
+## Local mutation only. Colony owns aggregate-cache updates and calls these methods.
+func inventory_deposit(kind: StringName, amount: int) -> int:
+	if amount <= 0 or not accepts_resource(kind):
+		return 0
+	var accepted := mini(amount, inventory_free())
+	if accepted > 0:
+		inventory[kind] = int(inventory.get(kind, 0)) + accepted
+		queue_redraw()
+	return accepted
+
+
+## Local mutation only. Returns exactly what left this building.
+func inventory_withdraw(kind: StringName, amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var taken := mini(amount, int(inventory.get(kind, 0)))
+	if taken <= 0:
+		return 0
+	var left := int(inventory.get(kind, 0)) - taken
+	if left > 0:
+		inventory[kind] = left
+	else:
+		inventory.erase(kind)
+	queue_redraw()
+	return taken
+
+
+func _buffer_used(buffer: Dictionary) -> int:
+	var total := 0
+	for amount in buffer.values():
+		total += maxi(int(amount), 0)
+	return total
+
+
+func input_free() -> int:
+	return maxi(def.input_capacity - _buffer_used(input_buffer), 0)
+
+
+func output_free() -> int:
+	return maxi(def.output_capacity - _buffer_used(output_buffer), 0)
+
+
+func next_input_needed(cost: Dictionary) -> StringName:
+	for kind: StringName in cost:
+		if int(input_buffer.get(kind, 0)) < int(cost[kind]):
+			return kind
+	return &""
+
+
+func input_amount_needed(kind: StringName, cost: Dictionary) -> int:
+	return maxi(int(cost.get(kind, 0)) - int(input_buffer.get(kind, 0)), 0)
+
+
+func deposit_input_local(kind: StringName, amount: int) -> int:
+	var accepted := mini(maxi(amount, 0), input_free())
+	if accepted > 0:
+		input_buffer[kind] = int(input_buffer.get(kind, 0)) + accepted
+		queue_redraw()
+	return accepted
+
+
+func withdraw_input_local(kind: StringName, amount: int) -> int:
+	var taken := mini(maxi(amount, 0), int(input_buffer.get(kind, 0)))
+	input_buffer[kind] = int(input_buffer.get(kind, 0)) - taken
+	if int(input_buffer.get(kind, 0)) <= 0:
+		input_buffer.erase(kind)
+	queue_redraw()
+	return taken
+
+
+func deposit_output_local(kind: StringName, amount: int) -> int:
+	var accepted := mini(maxi(amount, 0), output_free())
+	if accepted > 0:
+		output_buffer[kind] = int(output_buffer.get(kind, 0)) + accepted
+		queue_redraw()
+	return accepted
+
+
+func withdraw_output_local(kind: StringName, amount: int) -> int:
+	var taken := mini(maxi(amount, 0), int(output_buffer.get(kind, 0)))
+	output_buffer[kind] = int(output_buffer.get(kind, 0)) - taken
+	if int(output_buffer.get(kind, 0)) <= 0:
+		output_buffer.erase(kind)
+	queue_redraw()
+	return taken
+
+
+# --- Production and repair policies -------------------------------------------------------
+
+func effective_worker_slots() -> int:
+	if production_worker_limit < 0:
+		return def.worker_slots
+	return clampi(production_worker_limit, 0, def.worker_slots)
+
+
+func production_is_available(job: JobDef = null) -> bool:
+	if state != State.COMPLETE or production_paused or effective_worker_slots() <= 0:
+		return false
+	if job != null and not job.cycle_yield.is_empty() and def.output_capacity > 0:
+		var output_needed := 0
+		for amount in job.cycle_yield.values():
+			output_needed += maxi(int(amount), 0)
+		if output_free() < output_needed:
+			return false
+	if production_target < 0 or job == null or job.cycle_yield.is_empty():
+		if job != null and not job.cycle_yield.is_empty() and def.output_capacity > 0:
+			var needed := 0
+			for amount in job.cycle_yield.values():
+				needed += maxi(int(amount), 0)
+			return output_free() >= needed
+		return true
+	for kind: StringName in job.cycle_yield:
+		if Colony.amount_of(kind) < production_target:
+			return true
+	return false
+
+
+func needs_repair() -> bool:
+	return state == State.COMPLETE and hp > 0.0 and hp < def.max_hp - 0.01 \
+		and not def.repair_cost.is_empty() and def.repair_amount > 0.0
+
+
+## Returns true when this worker should release the target: either the building is
+## fully restored or stores cannot fund another declared repair batch.
+func add_repair_work(amount: float) -> bool:
+	if not needs_repair():
+		return true
+	if not Colony.can_afford(def.repair_cost):
+		repair_progress = 0.0
+		return true
+	repair_progress += amount
+	if repair_progress < maxf(def.repair_work, 0.01):
+		return false
+	repair_progress = 0.0
+	if not Colony.spend_near(centre_cell(), def.repair_cost):
+		return true
+	hp = minf(hp + def.repair_amount, def.max_hp)
+	_refresh_damage_bar()
+	Events.building_repaired.emit(self, def.repair_amount)
+	return not needs_repair()
+
+
+func cycle_repair_priority() -> void:
+	repair_priority = repair_priority % 3 + 1
+
+
+func cycle_target_policy() -> void:
+	var policies: Array[StringName] = [
+		&"nearest", &"strongest", &"weakest", &"structure", &"phasing", &"marked",
+	]
+	var index := policies.find(target_policy)
+	target_policy = policies[(maxi(index, 0) + 1) % policies.size()]
+
+
+func set_marked_target(target: Agent) -> void:
+	marked_target_id = target.get_instance_id() if target != null else 0
+	target_policy = &"marked" if marked_target_id != 0 else &"nearest"
+
+
 # --- Defence -----------------------------------------------------------------------------
 
 ## Towers fire on their own. Ticked in _process rather than through the sim
@@ -409,11 +638,20 @@ func centre_position() -> Vector2:
 ## to spread the cost of a hundred agents, and paying its bookkeeping for four
 ## buildings would cost more than it saves.
 func _process(delta: float) -> void:
+	if held_by_hand:
+		return
+	if hallowed_remaining > 0.0 and not Sim.paused:
+		hallowed_remaining = maxf(hallowed_remaining - delta * Sim.time_scale, 0.0)
 	if _shot_fade > 0.0:
 		_shot_fade = maxf(_shot_fade - delta * 5.0, 0.0)
 		queue_redraw()
 
 	if def == null or def.attack_damage <= 0.0 or state != State.COMPLETE:
+		return
+	# Upkeep structures go dormant when the shared Faith buffer is empty. Their
+	# burden still appears in the ledger, so restoring positive income wakes them
+	# automatically without destructive toggles or hidden state.
+	if def.faith_upkeep > 0.0 and Divine.faith <= 0.0:
 		return
 	# Towers reload on raw frame delta rather than sim time, so they have to be told about
 	# the pause explicitly — otherwise a paused colony keeps shooting.
@@ -432,13 +670,15 @@ func _process(delta: float) -> void:
 		return
 	_scan_timer = SCAN_INTERVAL
 
+	# A structure-policy tower shells the Blight economy before creatures. Every
+	# other policy defends the colony first and only sieges when the field is clear.
+	if target_policy == &"structure":
+		var priority_structure := _find_blight_structure()
+		if priority_structure != -1 and _fire_at_structure(priority_structure):
+			return
+
 	var target := _find_enemy()
-	if target != null:
-		_attack_timer = def.attack_cooldown
-		target.take_damage(def.attack_damage, self)
-		_shot_target = target.position - position
-		_shot_fade = 1.0
-		queue_redraw()
+	if target != null and _fire_at_enemy(target):
 		return
 
 	# Nothing alive in range: fall back to shelling the Blight's own works. A structure is preferred
@@ -446,12 +686,7 @@ func _process(delta: float) -> void:
 	# worse — and because it is softer, so an idle tower makes visible progress rather than chipping
 	# forever at a nest's much larger pool.
 	var structure := _find_blight_structure()
-	if structure != -1:
-		_attack_timer = def.attack_cooldown
-		World.damage_blight_structure(structure, def.attack_damage)
-		_shot_target = World.grid.to_world_index(structure) - position
-		_shot_fade = 1.0
-		queue_redraw()
+	if structure != -1 and _fire_at_structure(structure):
 		return
 
 	# Then a nest, if one is close enough.
@@ -465,13 +700,141 @@ func _process(delta: float) -> void:
 	# real strategy, which is the only way clearing a nest is achievable before
 	# warriors exist.
 	var nest := _find_nest()
-	if nest == -1:
+	if nest == -1 or not _has_line_of_fire(nest) or not _consume_ammo():
 		return
-	_attack_timer = def.attack_cooldown
-	World.damage_nest(nest, def.attack_damage)
+	_attack_timer = def.attack_cooldown * Doctrines.modifier(&"tower_reload")
+	World.damage_nest(nest, _shot_damage())
+	Events.tower_fired.emit(self, _shot_damage(), World.grid.to_world_index(nest))
 	_shot_target = World.grid.to_world_index(nest) - position
 	_shot_fade = 1.0
 	queue_redraw()
+
+
+func _fire_at_enemy(target: Agent) -> bool:
+	if not _has_line_of_fire(World.grid.to_cell_index(target.position)):
+		return false
+	if not _consume_ammo():
+		return false
+	_attack_timer = def.attack_cooldown * Doctrines.modifier(&"tower_reload")
+	var damage := _shot_damage()
+	var targets_hit := 0
+	if def.attack_area_radius > 0.0:
+		var radius := def.attack_area_radius * Grid.TILE_SIZE
+		var radius_sq := radius * radius
+		for monster: Agent in Threat.hostiles:
+			if is_instance_valid(monster) and monster.alive \
+					and monster.position.distance_squared_to(target.position) <= radius_sq:
+				monster.take_damage(damage, self, def.attack_type)
+				targets_hit += 1
+				if def.knockback_tiles > 0.0:
+					monster.knockback_from(centre_position(), def.knockback_tiles)
+	else:
+		target.take_damage(damage, self, def.attack_type)
+		targets_hit = 1
+		if def.knockback_tiles > 0.0:
+			target.knockback_from(centre_position(), def.knockback_tiles)
+	_shot_target = target.position - position
+	_shot_fade = 1.0
+	if def.storm_self_damage > 0.0 and Climate.weather == &"storm":
+		take_damage(def.storm_self_damage, &"elemental")
+	Events.tower_fired.emit(self, damage * maxi(targets_hit, 1), target.position)
+	queue_redraw()
+	return true
+
+
+## Persistent divine constructs are the one class of building the Hand may reposition. The
+## footprint is released while held, then atomically stamped at the destination so walls and
+## influence never exist in two places during a mobile gesture.
+func begin_hand_move() -> bool:
+	if def == null or not def.menu_hidden or state != State.COMPLETE or held_by_hand:
+		return false
+	held_by_hand = true
+	_clear_effects()
+	World.release_cells(cells, get_instance_id())
+	return true
+
+
+func can_drop_from_hand(new_anchor: int) -> bool:
+	return held_by_hand and bool(Colony.check_placement(def, new_anchor).get("ok", false))
+
+
+func drop_from_hand(new_anchor: int) -> bool:
+	if not can_drop_from_hand(new_anchor):
+		return false
+	anchor = new_anchor
+	cells = World.grid.footprint_cells(World.grid.coord(anchor), def.footprint)
+	position = Colony._building_origin(def, anchor)
+	World.claim_cells(cells, get_instance_id())
+	held_by_hand = false
+	_apply_effects()
+	Threat.mark_field_dirty()
+	return true
+
+
+func cancel_hand_move(old_anchor: int) -> void:
+	if not held_by_hand:
+		return
+	anchor = old_anchor
+	cells = World.grid.footprint_cells(World.grid.coord(anchor), def.footprint)
+	position = Colony._building_origin(def, anchor)
+	World.claim_cells(cells, get_instance_id())
+	held_by_hand = false
+	_apply_effects()
+	Threat.mark_field_dirty()
+
+
+func _fire_at_structure(cell: int) -> bool:
+	if not _has_line_of_fire(cell):
+		return false
+	if not _consume_ammo():
+		return false
+	_attack_timer = def.attack_cooldown * Doctrines.modifier(&"tower_reload")
+	World.damage_blight_structure(cell, _shot_damage(), def.attack_type)
+	Events.tower_fired.emit(self, _shot_damage(), World.grid.to_world_index(cell))
+	_shot_target = World.grid.to_world_index(cell) - position
+	_shot_fade = 1.0
+	queue_redraw()
+	return true
+
+
+func _consume_ammo() -> bool:
+	if def.ammo_kind.is_empty() or def.ammo_per_shot <= 0:
+		return true
+	return Colony.spend_near(centre_cell(), {def.ammo_kind: def.ammo_per_shot})
+
+
+func _shot_damage() -> float:
+	return def.attack_damage * Doctrines.modifier(&"tower_damage") \
+		* (def.storm_damage_multiplier if Climate.weather == &"storm" else 1.0)
+
+
+func _has_line_of_fire(target_cell: int) -> bool:
+	if not def.requires_line_of_fire or not World.grid.is_valid_index(target_cell):
+		return true
+	var from := World.grid.coord(centre_cell())
+	var to := World.grid.coord(target_cell)
+	var x := from.x
+	var y := from.y
+	var dx := absi(to.x - x)
+	var step_x := 1 if x < to.x else -1
+	var dy := -absi(to.y - y)
+	var step_y := 1 if y < to.y else -1
+	var error := dx + dy
+	while x != to.x or y != to.y:
+		var twice := error * 2
+		if twice >= dy:
+			error += dy
+			x += step_x
+		if twice <= dx:
+			error += dx
+			y += step_y
+		if x == to.x and y == to.y:
+			break
+		var cell := World.grid.index(x, y)
+		var occupant := World.occupancy[cell]
+		if occupant != 0 and occupant != get_instance_id():
+			return false
+	return true
 
 
 ## Nearest Blight structure inside this building's reach, or -1.
@@ -488,7 +851,7 @@ func _find_blight_structure() -> int:
 	var best_dist := reach_sq
 	for cell in World.blight_structures:
 		var d := origin.distance_squared_to(World.grid.to_world_index(cell))
-		if d <= best_dist:
+		if d <= best_dist and _has_line_of_fire(cell):
 			best_dist = d
 			best = cell
 	return best
@@ -509,43 +872,101 @@ func _find_nest() -> int:
 		if not World.is_nest(nest):
 			continue
 		var d := origin.distance_squared_to(World.grid.to_world_index(nest))
-		if d <= best_dist:
+		if d <= best_dist and _has_line_of_fire(nest):
 			best_dist = d
 			best = nest
 	return best
 
 
-func _find_enemy() -> Node:
+func _find_enemy() -> Agent:
 	var reach := def.attack_range * Grid.TILE_SIZE
 	var reach_sq := reach * reach
 	var origin := centre_position()
-	var best: Node = null
+	if target_policy == &"marked" and marked_target_id != 0:
+		var marked := instance_from_id(marked_target_id) as Agent
+		if marked != null and marked.alive \
+				and origin.distance_squared_to(marked.position) <= reach_sq:
+			return marked
+	var best: Agent = null
 	var best_dist := reach_sq
-	for m in Threat.monsters:
+	var best_value := INF if target_policy == &"weakest" else -INF
+	for m: Agent in Threat.hostiles:
 		if not is_instance_valid(m) or not m.alive:
 			continue
 		var d := origin.distance_squared_to(m.position)
-		if d <= best_dist:
-			best_dist = d
-			best = m
+		if d > reach_sq:
+			continue
+		if not _has_line_of_fire(World.grid.to_cell_index(m.position)):
+			continue
+		if not def.target_tags.is_empty():
+			var matches := false
+			for tag: StringName in def.target_tags:
+				if m.has_behavior(tag):
+					matches = true
+					break
+			if not matches:
+				continue
+		match target_policy:
+			&"strongest":
+				if m.max_health > best_value:
+					best_value = m.max_health
+					best = m
+			&"weakest":
+				if m.health < best_value:
+					best_value = m.health
+					best = m
+			&"phasing":
+				if m.has_behavior(&"phasing") and d <= best_dist:
+					best_dist = d
+					best = m
+			_:
+				if d <= best_dist:
+					best_dist = d
+					best = m
+	# A phasing policy remains useful before Shades arrive instead of idling.
+	if best == null and target_policy == &"phasing":
+		var old_policy := target_policy
+		target_policy = &"nearest"
+		best = _find_enemy()
+		target_policy = old_policy
 	return best
 
 
 ## A fading tracer. Without it a tower is silent and the player cannot tell whether
 ## it is working, out of range, or was never built facing anything.
 func _draw() -> void:
-	if _shot_fade <= 0.0:
+	if _shot_fade > 0.0:
+		var origin := centre_position() - position
+		draw_line(origin, _shot_target, Color(1.0, 0.85, 0.5, _shot_fade * 0.9), 1.5, true)
+	if state != State.COMPLETE or def == null:
 		return
-	var origin := centre_position() - position
-	draw_line(origin, _shot_target, Color(1.0, 0.85, 0.5, _shot_fade * 0.9), 1.5, true)
+	var width := float(def.tile_size().x)
+	var y := 4.0
+	if def.inventory_capacity > 0:
+		var fill := clampf(float(inventory_used()) / float(def.inventory_capacity), 0.0, 1.0)
+		draw_rect(Rect2(0, y, width, 2), Color(0.08, 0.07, 0.06, 0.8))
+		draw_rect(Rect2(0, y, width * fill, 2), Color(0.78, 0.62, 0.32, 0.95))
+		y += 3.0
+	if def.input_capacity > 0:
+		var input_fill := clampf(float(_buffer_used(input_buffer)) / float(def.input_capacity), 0.0, 1.0)
+		draw_rect(Rect2(0, y, width, 2), Color(0.08, 0.07, 0.06, 0.8))
+		draw_rect(Rect2(0, y, width * input_fill, 2), Color(0.86, 0.46, 0.24, 0.95))
+		y += 3.0
+	if def.output_capacity > 0:
+		var output_fill := clampf(float(_buffer_used(output_buffer)) / float(def.output_capacity), 0.0, 1.0)
+		draw_rect(Rect2(0, y, width, 2), Color(0.08, 0.07, 0.06, 0.8))
+		draw_rect(Rect2(0, y, width * output_fill, 2), Color(0.34, 0.78, 0.48, 0.95))
 
 
 # --- Damage -----------------------------------------------------------------------------
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, damage_type: StringName = &"crushing") -> void:
 	if state != State.COMPLETE or hp <= 0.0:
 		return
-	hp -= amount
+	var applied := DamageTypes.apply(amount, def.resistances, damage_type)
+	if hallowed_remaining > 0.0:
+		applied *= 0.5 if damage_type == &"blight" else 0.8
+	hp -= applied
 	_flash()
 	if hp <= 0.0:
 		destroy()
@@ -562,6 +983,11 @@ func destroy() -> void:
 		Colony.unreserve(outstanding_cost())
 		for kind: StringName in delivered:
 			Colony.add(kind, int(delivered[kind]))
+	elif not inventory.is_empty() or not item_inventory.is_empty() \
+			or not input_buffer.is_empty() or not output_buffer.is_empty():
+		# Damage may erase the container, never the resources. They become Hearth
+		# overflow until hauliers can find valid capacity again.
+		Colony.evacuate_inventory(self)
 	# Off the roster FIRST, before anything reads it. _clear_effects rebuilds the influence layer
 	# by summing over Colony.buildings, and this building is still COMPLETE at this instant — so
 	# leaving it registered would have it contribute its own disc to the sphere that is supposed to
@@ -590,8 +1016,12 @@ func _flash() -> void:
 	var tween := create_tween()
 	tween.tween_property(_sprite, "modulate", Color.WHITE, 0.25)
 
-	_progress_back.visible = true
-	_progress_fill.visible = true
+	_refresh_damage_bar()
+
+
+func _refresh_damage_bar() -> void:
+	_progress_back.visible = needs_repair()
+	_progress_fill.visible = needs_repair()
 	_progress_fill.size = Vector2(_progress_back.size.x * health_fraction(), 2)
 	_progress_fill.color = Color(0.85, 0.35, 0.3, 0.9)
 

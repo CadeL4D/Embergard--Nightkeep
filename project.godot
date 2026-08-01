@@ -32,7 +32,9 @@ Storyteller="*res://scripts/story/storyteller.gd"
 Meta="*res://scripts/meta/meta.gd"
 Audio="*res://scripts/audio/audio.gd"
 Accessibility="*res://scripts/core/accessibility.gd"
+Diagnostics="*res://scripts/meta/diagnostics.gd"
 Ui="*res://scripts/ui/ui.gd"
+SaveService="*res://scripts/meta/save_service.gd"
 
 [display]
 
@@ -42,6 +44,7 @@ window/size/window_width_override=1600
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=0
 
 [input]
 

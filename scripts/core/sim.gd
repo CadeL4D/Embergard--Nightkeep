@@ -105,7 +105,7 @@ func _step() -> void:
 	var think_dt := TICK_DT * BUCKETS
 	for i in range(agents.size()):
 		var a := agents[i]
-		if a == null or not a.alive:
+		if a == null or not a.alive or a.held_by_hand:
 			continue
 		if a.think_urgent:
 			a.think_urgent = false
@@ -124,7 +124,7 @@ func _step() -> void:
 
 func _advance_phase(delta: float) -> void:
 	phase_elapsed += delta
-	var duration: float = PHASE_DURATION[phase]
+	var duration: float = Difficulties.phase_duration(phase)
 	if phase_elapsed < duration:
 		return
 	phase_elapsed -= duration
@@ -144,17 +144,17 @@ func _advance_phase(delta: float) -> void:
 func set_phase(next: Phase) -> void:
 	phase = next
 	phase_elapsed = 0.0
-	Events.phase_changed.emit(next, PHASE_DURATION[next])
+	Events.phase_changed.emit(next, Difficulties.phase_duration(next))
 
 
 ## 0.0 at the start of the current phase, 1.0 at its end. Drives the sky tint, the
 ## dusk countdown ring, and wave pacing.
 func phase_progress() -> float:
-	return clampf(phase_elapsed / PHASE_DURATION[phase], 0.0, 1.0)
+	return clampf(phase_elapsed / Difficulties.phase_duration(phase), 0.0, 1.0)
 
 
 func seconds_remaining() -> float:
-	return maxf(PHASE_DURATION[phase] - phase_elapsed, 0.0)
+	return maxf(Difficulties.phase_duration(phase) - phase_elapsed, 0.0)
 
 
 ## Real seconds in one full day → dusk → night → dawn cycle.
@@ -165,7 +165,7 @@ func seconds_remaining() -> float:
 func cycle_seconds() -> float:
 	var total := 0.0
 	for p in PHASE_DURATION:
-		total += float(PHASE_DURATION[p])
+		total += Difficulties.phase_duration(p)
 	return total
 
 

@@ -41,8 +41,11 @@ var blight_heart_health: int = BLIGHT_HEART_MAX
 var complete: bool = false
 var macro_texture: ImageTexture
 var corruption_sources: Array[Vector2i] = []
+var routes: Array[TradeRoute] = []
+var selected_doctrines: Array[StringName] = []
 
 var _threat_serial: int = 0
+var _route_serial: int = 0
 var _elevation := FastNoiseLite.new()
 var _moisture := FastNoiseLite.new()
 var _forest := FastNoiseLite.new()
@@ -75,6 +78,9 @@ func start_new(seed_value: int) -> void:
 	blight_heart_health = BLIGHT_HEART_MAX
 	complete = false
 	_threat_serial = 0
+	_route_serial = 0
+	routes.clear()
+	selected_doctrines.clear()
 	corruption_sources.clear()
 	_configure_noise()
 	_configure_continent()
@@ -178,6 +184,7 @@ func _build_regions() -> void:
 				"moisture": sampled["moisture"],
 				"forest": sampled["forest"],
 				"stone": sampled["stone"],
+				"economic_identity": _regional_identity(biome),
 				"food": sampled["food"],
 				"corruption": 0.0,
 				"settleable": settleable,
@@ -726,6 +733,25 @@ func _region_name(x: int, y: int) -> String:
 	return "%s %s" % [adjective, noun]
 
 
+func _regional_identity(biome: StringName) -> Dictionary:
+	match biome:
+		&"coast":
+			return {"specialty": &"food", "demand": &"cut_stone", "local_floor": &"wood"}
+		&"forest":
+			return {"specialty": &"wood", "demand": &"stone", "local_floor": &"food"}
+		&"marsh":
+			return {"specialty": &"herbs", "demand": &"boards", "local_floor": &"food"}
+		&"highland":
+			return {"specialty": &"ore", "demand": &"food", "local_floor": &"wood"}
+		&"badlands":
+			return {"specialty": &"emberglass", "demand": &"rations", "local_floor": &"stone"}
+		&"tundra":
+			return {"specialty": &"stone", "demand": &"rations", "local_floor": &"wood"}
+		&"grassland":
+			return {"specialty": &"food", "demand": &"ore", "local_floor": &"wood"}
+	return {"specialty": &"", "demand": &"", "local_floor": &""}
+
+
 func _region_seed(x: int, y: int) -> int:
 	var mixed := world_seed ^ (x * 73856093) ^ (y * 19349663) ^ 0x45D9F3B
 	return absi(mixed) + 101
@@ -846,7 +872,10 @@ func prepare_settlement(site_id: StringName) -> Dictionary:
 	var source := awake_ledger()
 	for kind: StringName in SETTLEMENT_COST:
 		Colony.spend({kind: int(SETTLEMENT_COST[kind])})
-		source.state["stock"][kind] = Colony.amount_of(kind)
+	# The resource cache and physical building inventories must be captured together. Updating only
+	# `state.stock` would make the spent founding cargo reappear when the source wakes again.
+	capture_awake()
+	source = awake_ledger()
 
 	var settlers: Array = []
 	var source_rows: Array = source.state.get("villagers", [])
@@ -887,47 +916,398 @@ func set_awake(target_id: StringName) -> void:
 	Events.colony_awakened.emit(awake_id)
 
 
-func transfer_resource(target_id: StringName, kind: StringName, amount: int) -> bool:
-	if amount <= 0 or not settled(target_id) or not connected(awake_id, target_id):
-		return false
-	if Colony.available(kind) < amount:
-		return false
-	Colony.spend({kind: amount})
-	var target := colony(target_id)
-	var target_stock: Dictionary = target.state.get("stock", {}).duplicate()
-	target_stock[kind] = int(target_stock.get(kind, 0)) + amount
-	target.state["stock"] = target_stock
-	capture_awake()
+func active_routes() -> Array[TradeRoute]:
+	var out: Array[TradeRoute] = []
+	for route in routes:
+		if route.active():
+			out.append(route)
+	return out
+
+
+func set_doctrines(ids: Array) -> void:
+	selected_doctrines = Doctrines.sanitize(ids)
 	Events.realm_changed.emit()
-	return true
+
+
+func has_route_path(source_id: StringName, target_id: StringName) -> bool:
+	return not _route_path(source_id, target_id).is_empty()
+
+
+func route_forecast(source_id: StringName, target_id: StringName,
+		cargo: Dictionary = {}, escort: int = 0, departure_day: int = -1) -> Dictionary:
+	if source_id == target_id or not settled(source_id) or not settled(target_id):
+		return {"ok": false, "reason": L10n.t(&"REALM_ROUTE_NEEDS_COLONIES")}
+	var path := _route_path(source_id, target_id)
+	if path.is_empty():
+		return {"ok": false, "reason": L10n.t(&"REALM_REASON_NO_ROAD")}
+	var total := 0
+	for raw_kind in cargo:
+		var kind := StringName(raw_kind)
+		if kind not in Colony.KINDS or int(cargo[raw_kind]) < 0:
+			return {"ok": false, "reason": L10n.t(&"REALM_ROUTE_BAD_CARGO")}
+		total += int(cargo[raw_kind])
+	var depart := Sim.day if departure_day < 0 else maxi(departure_day, Sim.day)
+	var travel_weight := 0.0
+	var corruption_sum := 0.0
+	var weather_penalty := 0.0
+	var secured_steps := 0
+	for i in range(1, path.size()):
+		var id: StringName = path[i]
+		var row: Dictionary = site(id)
+		var biome := StringName(row.get("biome", Biomes.DEFAULT_ID))
+		var terrain_penalty := 0.0
+		if biome in [&"marsh", &"tundra"]:
+			terrain_penalty = 0.38
+		elif biome in [&"badlands", &"highland"]:
+			terrain_penalty = 0.24
+		var climate := Climate.daily_snapshot(world_seed, int(row.get("seed", 0)),
+			depart, biome)
+		var weather := StringName(climate.get("weather", &"clear"))
+		var local_weather := 0.0
+		if weather in [&"storm", &"snow"]:
+			local_weather = 0.45
+		elif weather in [&"fog", &"drought", &"heatwave"]:
+			local_weather = 0.18
+		weather_penalty += local_weather
+		travel_weight += 0.72 + terrain_penalty + local_weather
+		var local_corruption := float(row.get("corruption", 0.0))
+		if colonies.has(id):
+			local_corruption = (colonies[id] as ColonyLedger).corruption
+			if not (colonies[id] as ColonyLedger).fallen:
+				secured_steps += 1
+		corruption_sum += local_corruption
+	var edges := maxi(path.size() - 1, 1)
+	var travel_days := maxi(ceili(travel_weight * Doctrines.modifier(&"route_speed")), 1)
+	var risk := 0.025 + float(edges - 1) * 0.035 \
+		+ corruption_sum / float(edges) * 0.36 \
+		+ weather_penalty / float(edges) * 0.10 \
+		- float(secured_steps) * 0.022 - float(maxi(escort, 0)) * 0.075
+	risk = clampf(risk * Doctrines.modifier(&"route_risk"), 0.01, 0.85)
+	var label := &"safe"
+	if risk >= 0.5:
+		label = &"dire"
+	elif risk >= 0.28:
+		label = &"risky"
+	elif risk >= 0.12:
+		label = &"guarded"
+	return {
+		"ok": true,
+		"reason": "",
+		"path": path,
+		"distance": edges,
+		"travel_days": travel_days,
+		"departure_day": depart,
+		"arrival_day": depart + travel_days,
+		"risk": risk,
+		"risk_label": label,
+		"cargo_total": total,
+	}
+
+
+func schedule_route(source_id: StringName, target_id: StringName, cargo: Dictionary = {},
+		settlers: Array[Dictionary] = [], escort: int = 0, cargo_policy: StringName = &"once",
+		daily_amount: int = 0, capacity: int = 40, departure_day: int = -1) -> Dictionary:
+	var forecast := route_forecast(source_id, target_id, cargo, escort, departure_day)
+	if not bool(forecast.get("ok", false)):
+		return forecast
+	var total := int(forecast.get("cargo_total", 0))
+	var effective_capacity := clampi(roundi(float(capacity + maxi(escort, 0) * 10) \
+		* Doctrines.modifier(&"route_capacity")), 1, 100)
+	if total > effective_capacity:
+		return {"ok": false, "reason": L10n.t(&"REALM_ROUTE_CAPACITY", [effective_capacity])}
+	if _dispatch_population(source_id) <= settlers.size():
+		return {"ok": false, "reason": L10n.t(&"REALM_REASON_SETTLERS")}
+	if _dispatch_population(target_id) + settlers.size() > Difficulties.max_villagers():
+		return {"ok": false, "reason": L10n.t(&"REALM_ROUTE_DESTINATION_FULL")}
+	for raw_kind in cargo:
+		var kind := StringName(raw_kind)
+		if _dispatch_available(source_id, kind) < int(cargo[raw_kind]):
+			return {"ok": false, "reason": L10n.t(&"REALM_REASON_RESOURCE",
+				[L10n.resource(kind)])}
+	_route_serial += 1
+	var route := TradeRoute.new()
+	route.route_id = _route_serial
+	route.source_id = source_id
+	route.destination_id = target_id
+	route.path.assign(forecast["path"])
+	route.cargo_policy = cargo_policy if cargo_policy in [&"once", &"maintain"] else &"once"
+	route.cargo = cargo.duplicate(true)
+	route.daily_amount = maxi(daily_amount, 0)
+	route.capacity = effective_capacity
+	route.escort = maxi(escort, 0)
+	route.settlers = settlers.duplicate(true)
+	route.departure_day = int(forecast["departure_day"])
+	route.arrival_day = int(forecast["arrival_day"])
+	route.risk = float(forecast["risk"])
+	route.risk_label = StringName(forecast["risk_label"])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = world_seed ^ (route.route_id * 104729) ^ (route.departure_day * 8191) \
+		^ source_id.hash() ^ (target_id.hash() * 31)
+	route.outcome_roll = rng.randf()
+	route.intercepted = route.outcome_roll < route.risk
+	route.status = &"scheduled"
+	routes.append(route)
+	if route.departure_day <= Sim.day:
+		_depart_route(route, Sim.day)
+	_prune_route_history()
+	Events.realm_changed.emit()
+	Events.trade_route_updated.emit(route.route_id, route.status)
+	return {"ok": route.status != &"failed", "reason": "", "route": route,
+		"forecast": forecast}
+
+
+func cancel_route(route_id: int) -> bool:
+	for route in routes:
+		if route.route_id == route_id and route.status == &"scheduled":
+			route.status = &"cancelled"
+			route.result = &"cancelled"
+			Events.trade_route_updated.emit(route.route_id, route.status)
+			Events.realm_changed.emit()
+			return true
+	return false
+
+
+func transfer_resource(target_id: StringName, kind: StringName, amount: int) -> bool:
+	if amount <= 0:
+		return false
+	return bool(schedule_route(awake_id, target_id, {kind: amount}).get("ok", false))
 
 
 func transfer_migrant(target_id: StringName) -> bool:
-	if Colony.population() <= 1 or not settled(target_id) or not connected(awake_id, target_id):
+	if Colony.population() <= 1:
 		return false
-	capture_awake()
-	var source := awake_ledger()
-	var rows: Array = source.state.get("villagers", [])
-	if rows.is_empty():
+	return bool(schedule_route(awake_id, target_id, {}, [{}]).get("ok", false))
+
+
+func _route_path(source_id: StringName, target_id: StringName) -> Array[StringName]:
+	var empty: Array[StringName] = []
+	if not sites.has(source_id) or not sites.has(target_id):
+		return empty
+	var queue: Array[StringName] = [source_id]
+	var came_from: Dictionary = {source_id: &""}
+	while not queue.is_empty():
+		var current: StringName = queue.pop_front()
+		if current == target_id:
+			break
+		for raw_next in sites[current].get("connections", []):
+			var next := StringName(raw_next)
+			if came_from.has(next) or not bool(sites.get(next, {}).get("settleable", false)):
+				continue
+			came_from[next] = current
+			queue.append(next)
+	if not came_from.has(target_id):
+		return empty
+	var reverse: Array[StringName] = []
+	var cursor := target_id
+	while cursor != &"":
+		reverse.append(cursor)
+		cursor = StringName(came_from.get(cursor, &""))
+	reverse.reverse()
+	return reverse
+
+
+func _dispatch_population(source_id: StringName) -> int:
+	return Colony.population() if source_id == awake_id else \
+		((colonies[source_id] as ColonyLedger).population() if colonies.has(source_id) else 0)
+
+
+func _dispatch_available(source_id: StringName, kind: StringName) -> int:
+	return Colony.available(kind) if source_id == awake_id else \
+		((colonies[source_id] as ColonyLedger).available_resource(kind)
+			if colonies.has(source_id) else 0)
+
+
+func _depart_route(route: TradeRoute, day_number: int) -> bool:
+	if route.status != &"scheduled" or not settled(route.source_id) \
+			or not settled(route.destination_id):
+		if route.status == &"scheduled":
+			route.status = &"failed"
+			route.result = &"colony_unavailable"
 		return false
-	var row: Dictionary = rows.pop_back()
-	source.state["villagers"] = rows
-	var target := colony(target_id)
-	var target_rows: Array = target.state.get("villagers", [])
-	if target.keep_cell != -1:
-		var arrival := World.grid.to_world_index(target.keep_cell)
-		row["x"] = arrival.x
-		row["y"] = arrival.y
-	target_rows.append(row)
-	target.state["villagers"] = target_rows
-	var live = Colony.villagers.back()
-	if is_instance_valid(live):
-		live.alive = false
-		Sim.unregister(live)
-		Colony.villagers.erase(live)
-		live.queue_free()
-	Events.realm_changed.emit()
+	for raw_kind in route.cargo:
+		var kind := StringName(raw_kind)
+		if _dispatch_available(route.source_id, kind) < int(route.cargo[raw_kind]):
+			route.status = &"failed"
+			route.result = &"insufficient_cargo"
+			Events.trade_route_updated.emit(route.route_id, route.status)
+			return false
+	if _dispatch_population(route.source_id) <= route.settlers.size():
+		route.status = &"failed"
+		route.result = &"insufficient_settlers"
+		Events.trade_route_updated.emit(route.route_id, route.status)
+		return false
+
+	if route.source_id == awake_id:
+		if not route.cargo.is_empty() and not Colony.spend(route.cargo):
+			route.status = &"failed"
+			return false
+		capture_awake()
+	else:
+		var source := colony(route.source_id)
+		for raw_kind in route.cargo:
+			var kind := StringName(raw_kind)
+			if source.withdraw_resource(kind, int(route.cargo[raw_kind])) \
+					!= int(route.cargo[raw_kind]):
+				route.status = &"failed"
+				route.result = &"dispatch_invariant"
+				return false
+	var settler_count := route.settlers.size()
+	if settler_count > 0:
+		route.settlers = _take_route_settlers(route.source_id, settler_count)
+		if route.settlers.size() != settler_count:
+			route.status = &"failed"
+			route.result = &"settler_invariant"
+			return false
+	route.cargo_departed = true
+	route.departure_day = day_number
+	route.arrival_day = maxi(route.arrival_day, day_number + 1)
+	route.status = &"in_transit"
+	Events.trade_route_updated.emit(route.route_id, route.status)
 	return true
+
+
+func _take_route_settlers(source_id: StringName, count: int) -> Array[Dictionary]:
+	var source := colony(source_id)
+	if source == null:
+		return []
+	if source_id == awake_id:
+		capture_awake()
+	var rows: Array = source.state.get("villagers", []).duplicate(true)
+	var picked: Array[Dictionary] = []
+	# Adults leave before children, and stable roster order makes the choice save/load invariant.
+	for adult_only in [true, false]:
+		for i in range(rows.size() - 1, -1, -1):
+			if picked.size() >= count:
+				break
+			var row: Dictionary = rows[i]
+			var record: Dictionary = row.get("record", {})
+			var is_adult := int(record.get("age_days", 6)) >= int(record.get("adult_age_days", 6))
+			if adult_only != is_adult:
+				continue
+			picked.append(row)
+			rows.remove_at(i)
+		if picked.size() >= count:
+			break
+	source.state["villagers"] = rows
+	_release_sleeping_partners(rows, picked)
+	if source_id == awake_id:
+		for row in picked:
+			var stable_id := String(row.get("record", {}).get("id", ""))
+			for live in Colony.villagers.duplicate():
+				if is_instance_valid(live) and live.profile.stable_id == stable_id:
+					Colony.release_household_partner(live)
+					live.alive = false
+					Sim.unregister(live)
+					Colony.villagers.erase(live)
+					live.queue_free()
+					break
+	return picked
+
+
+func _release_sleeping_partners(rows: Array, departed: Array[Dictionary]) -> void:
+	var departed_ids := {}
+	for row in departed:
+		departed_ids[String(row.get("record", {}).get("id", ""))] = true
+	for row: Dictionary in rows:
+		var record: Dictionary = row.get("record", {}).duplicate(true)
+		if departed_ids.has(String(record.get("partner", ""))):
+			record["partner"] = ""
+			record["household"] = ""
+			row["record"] = record
+
+
+func _process_routes(day_number: int) -> void:
+	for route in routes.duplicate():
+		if route.status == &"scheduled" and route.departure_day <= day_number:
+			_depart_route(route, day_number)
+		if route.status == &"in_transit" and route.arrival_day <= day_number:
+			_arrive_route(route, day_number)
+	_prune_route_history()
+
+
+func _arrive_route(route: TradeRoute, day_number: int) -> void:
+	var repeat_cargo: Dictionary = route.cargo.duplicate(true)
+	if not settled(route.destination_id):
+		route.lost_cargo = route.cargo.duplicate(true)
+		route.cargo.clear()
+		route.status = &"lost"
+		route.result = &"destination_fallen"
+		Events.trade_route_updated.emit(route.route_id, route.status)
+		return
+	var delivered: Dictionary = route.cargo.duplicate(true)
+	if route.intercepted:
+		for raw_kind in delivered.keys():
+			var amount := int(delivered[raw_kind])
+			var lost := ceili(float(amount) * lerpf(0.25, 0.65,
+				clampf(route.risk, 0.0, 0.85) / 0.85))
+			lost = mini(lost, amount)
+			delivered[raw_kind] = amount - lost
+			route.lost_cargo[raw_kind] = lost
+		for row: Dictionary in route.settlers:
+			row["health"] = maxf(float(row.get("health", 100.0)) - 20.0, 1.0)
+	var target := colony(route.destination_id)
+	for raw_kind in delivered:
+		var amount := int(delivered[raw_kind])
+		if amount <= 0:
+			continue
+		if route.destination_id == awake_id:
+			Colony.add(StringName(raw_kind), amount)
+		else:
+			target.deposit_resource(StringName(raw_kind), amount)
+	_deliver_route_settlers(route, target)
+	if route.destination_id == awake_id:
+		capture_awake()
+	route.cargo.clear()
+	route.settlers.clear()
+	route.status = &"arrived"
+	route.result = &"intercepted" if route.intercepted else &"delivered"
+	Events.trade_route_updated.emit(route.route_id, route.status)
+	if route.destination_id == awake_id or route.source_id == awake_id:
+		Events.notice.emit(L10n.t(
+			&"REALM_ROUTE_ARRIVED_HURT" if route.intercepted else &"REALM_ROUTE_ARRIVED",
+			[target.display_name]), 1 if route.intercepted else 0)
+	if route.cargo_policy == &"maintain" and not repeat_cargo.is_empty():
+		var maintained: Dictionary = {}
+		for raw_kind in repeat_cargo:
+			var amount := int(repeat_cargo[raw_kind])
+			if route.daily_amount > 0:
+				amount = mini(amount, route.daily_amount)
+			maintained[StringName(raw_kind)] = amount
+		schedule_route(route.source_id, route.destination_id, maintained, [], route.escort,
+			&"maintain", route.daily_amount, route.capacity, day_number + 1)
+
+
+func _deliver_route_settlers(route: TradeRoute, target: ColonyLedger) -> void:
+	if route.settlers.is_empty():
+		return
+	var waiting: Array = target.state.get("waiting_settlers", []).duplicate(true)
+	if route.destination_id == awake_id:
+		for row: Dictionary in route.settlers:
+			if not Colony.admit_route_settler(row):
+				waiting.append(row)
+	else:
+		var rows: Array = target.state.get("villagers", []).duplicate(true)
+		for row: Dictionary in route.settlers:
+			if rows.size() >= Difficulties.max_villagers():
+				waiting.append(row)
+				continue
+			if target.keep_cell != -1:
+				var arrival := _ledger_world_position(target.keep_cell)
+				row["x"] = arrival.x
+				row["y"] = arrival.y
+			rows.append(row)
+		target.state["villagers"] = rows
+	target.state["waiting_settlers"] = waiting
+
+
+func _prune_route_history() -> void:
+	if routes.size() <= 64:
+		return
+	for i in range(routes.size() - 1, -1, -1):
+		if routes.size() <= 64:
+			break
+		if not routes[i].active():
+			routes.remove_at(i)
 
 
 func mark_awake_fallen() -> int:
@@ -972,7 +1352,8 @@ func prepare_recovery(site_id: StringName) -> Dictionary:
 	capture_awake()
 	var source := awake_ledger()
 	Colony.spend(RECOVERY_COST)
-	source.state["stock"] = Colony.stock.duplicate(true)
+	capture_awake()
+	source = awake_ledger()
 	var source_rows: Array = source.state.get("villagers", [])
 	var party: Array = []
 	for _i in RECOVERY_SETTLERS:
@@ -1029,6 +1410,7 @@ func _ensure_recovery_hearth(ledger: ColonyLedger) -> void:
 
 
 func _on_day_advanced(day_number: int) -> void:
+	_process_routes(day_number)
 	for id in colonies:
 		if id == awake_id:
 			continue
@@ -1181,7 +1563,7 @@ func to_dict() -> Dictionary:
 	for ledger: ColonyLedger in colonies.values():
 		packed_colonies.append(ledger.to_dict())
 	return {
-		"format": 2,
+		"format": 3,
 		"world_seed": world_seed,
 		"colonies": packed_colonies,
 		"awake_id": String(awake_id),
@@ -1191,6 +1573,9 @@ func to_dict() -> Dictionary:
 		"blight_heart_health": blight_heart_health,
 		"complete": complete,
 		"threat_serial": _threat_serial,
+		"route_serial": _route_serial,
+		"routes": routes.map(func(route: TradeRoute) -> Dictionary: return route.to_dict()),
+		"selected_doctrines": selected_doctrines.map(func(id: StringName) -> String: return String(id)),
 	}
 
 
@@ -1222,6 +1607,14 @@ func load_dict(data: Dictionary) -> bool:
 	blight_heart_health = int(data.get("blight_heart_health", BLIGHT_HEART_MAX))
 	complete = bool(data.get("complete", false))
 	_threat_serial = int(data.get("threat_serial", 0))
+	selected_doctrines = Doctrines.sanitize(data.get("selected_doctrines", []))
+	_route_serial = int(data.get("route_serial", 0))
+	routes.clear()
+	for packed_route: Dictionary in data.get("routes", []):
+		var route := TradeRoute.from_dict(packed_route)
+		if colonies.has(route.source_id) and colonies.has(route.destination_id):
+			routes.append(route)
+			_route_serial = maxi(_route_serial, route.route_id)
 	Events.realm_changed.emit()
 	return colonies.has(awake_id)
 

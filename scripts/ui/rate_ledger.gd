@@ -257,6 +257,13 @@ static func faith() -> Report:
 		# with no `self` to resolve against. Exactly what L10n exists for.
 		r.terms.append(Term.new(
 			L10n.t(&"LEDGER_BURDEN", [L10n.label(def.display_name)]), -def.burden))
+	for building in Colony.buildings:
+		if not is_instance_valid(building) or building.is_site() \
+				or building.def.faith_upkeep <= 0.0:
+			continue
+		r.terms.append(Term.new(
+			L10n.t(&"LEDGER_UPKEEP", [L10n.label(building.def.display_name)]),
+			-building.def.faith_upkeep))
 
 	# A deficit reports its RUNWAY, not its rate. "three minutes until your powers go dark" is
 	# actionable; "-0.31 per second" is arithmetic the player has to do themselves under pressure.

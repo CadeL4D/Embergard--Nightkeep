@@ -18,6 +18,8 @@ extends Node2D
 var alive: bool = true
 var health: float = 40.0
 var think_urgent: bool = false              ## set to be picked up on the next tick
+var held_by_hand: bool = false
+var hurt_visual_remaining: float = 0.0
 
 ## Current path as cell indices, consumed front-to-back. Empty means "not walking".
 var _path: PackedInt32Array = PackedInt32Array()
@@ -48,7 +50,9 @@ func _exit_tree() -> void:
 # --- Per-frame movement -------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	if not alive or not _has_step:
+	if hurt_visual_remaining > 0.0 and not Sim.paused:
+		hurt_visual_remaining = maxf(hurt_visual_remaining - delta, 0.0)
+	if not alive or held_by_hand or not _has_step:
 		return
 	var to_target := _step_target - position
 	var dist := to_target.length()
@@ -79,6 +83,7 @@ func _advance_path() -> void:
 
 func follow_path(path: PackedInt32Array) -> void:
 	_path = path
+	Diagnostics.record_path(path.size())
 	_path_cursor = 0
 	if path.is_empty():
 		_has_step = false
@@ -132,14 +137,28 @@ func distance_sq_to(world_pos: Vector2) -> float:
 
 # --- Damage -------------------------------------------------------------------------
 
-func take_damage(amount: float, source: Node = null) -> void:
+func take_damage(amount: float, source: Node = null, damage_type: StringName = &"crushing") -> void:
 	if not alive:
 		return
-	health -= amount
+	var applied := DamageTypes.apply(amount, damage_resistances(), damage_type)
+	health -= applied
+	hurt_visual_remaining = 0.18
 	think_urgent = true                     # react on the next tick, not in 600ms
-	on_damaged(amount, source)
+	on_damaged(applied, source)
 	if health <= 0.0:
 		die(&"killed")
+
+
+func damage_resistances() -> Dictionary:
+	return {}
+
+
+func has_behavior(_tag: StringName) -> bool:
+	return false
+
+
+func knockback_from(_origin: Vector2, _tiles: float) -> void:
+	pass
 
 
 func die(cause: StringName) -> void:
@@ -168,3 +187,26 @@ func on_damaged(_amount: float, _source: Node) -> void:
 
 func on_death(_cause: StringName) -> void:
 	pass
+
+
+func spawn_death_ghost(sprite: Sprite2D) -> void:
+	if sprite == null or DisplayServer.get_name() == "headless" or Accessibility.reduced_motion:
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var ghost := Sprite2D.new()
+	ghost.texture = sprite.texture
+	ghost.hframes = sprite.hframes
+	ghost.vframes = sprite.vframes
+	ghost.frame = sprite.frame
+	ghost.flip_h = sprite.flip_h
+	ghost.offset = sprite.offset
+	ghost.modulate = sprite.modulate
+	parent.add_child(ghost)
+	ghost.global_transform = sprite.global_transform
+	var tween := ghost.create_tween().set_parallel(true)
+	tween.tween_property(ghost, "rotation", ghost.rotation + 0.75, 0.38)
+	tween.tween_property(ghost, "scale", ghost.scale * Vector2(1.12, 0.72), 0.38)
+	tween.tween_property(ghost, "modulate:a", 0.0, 0.38)
+	tween.chain().tween_callback(ghost.queue_free)

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"repair_hammer"
+display_name = "ITEM_REPAIR_HAMMER"
+slot = &"tool"
+max_durability = 150
+modifiers = {&"repair_speed": 0.25}
+job_tags = Array[StringName]([&"repairing", &"worker"])
+order = 3

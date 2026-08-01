@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/watchtower.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"storm_rod"
+display_name = "BUILDING_STORM_ROD"
+description = "BUILDING_STORM_ROD_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 3
+footprint = Vector2i(2, 2)
+blocks_movement = true
+max_blight = 55
+cost = {
+&"ingots": 7,
+&"emberglass": 4,
+&"tools": 2
+}
+build_work = 40.0
+max_hp = 175.0
+resistances = {&"elemental": -0.2}
+repair_cost = {&"ingots": 1, &"emberglass": 1}
+repair_work = 5.0
+repair_amount = 45.0
+influence_radius = 8
+attack_damage = 14.0
+attack_range = 7.5
+attack_cooldown = 1.15
+attack_type = &"elemental"
+attack_area_radius = 2.5
+storm_damage_multiplier = 2.2
+storm_self_damage = 3.0
+order = 43
+color = Color(0.48, 0.72, 0.95, 1)
+

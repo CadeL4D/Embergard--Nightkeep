@@ -23,7 +23,7 @@ static func all() -> Array[MonsterDef]:
 static func eligible(night: int) -> Array[MonsterDef]:
 	var out: Array[MonsterDef] = []
 	for def: MonsterDef in all():
-		if night >= def.min_night:
+		if not def.is_boss and night >= def.min_night:
 			out.append(def)
 	return out
 

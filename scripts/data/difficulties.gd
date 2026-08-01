@@ -16,19 +16,24 @@ extends RefCounted
 const DIFFICULTY_DIR := "res://content/difficulties"
 
 ## The tier every run defaults to if nothing chooses one.
-const DEFAULT_ID := &"harried"
+const DEFAULT_ID := &"survival"
+const LEGACY_ALIASES := {
+	&"sheltered": &"homestead",
+	&"harried": &"survival",
+	&"forsaken": &"nightmare",
+}
 
 static var _catalog: Dictionary = {}
 static var _ordered: Array[DifficultyDef] = []
 static var _loaded: bool = false
 
 ## The tier the current run is on. Null until a world is created.
-static var current: DifficultyDef = null
+static var current: GameRules = null
 
 
 static func get_difficulty(id: StringName) -> DifficultyDef:
 	_ensure_loaded()
-	return _catalog.get(id)
+	return _catalog.get(LEGACY_ALIASES.get(id, id))
 
 
 ## Every tier in menu order, easiest first.
@@ -41,13 +46,31 @@ static func all() -> Array[DifficultyDef]:
 ## file, so a bad id can never leave a run with no difficulty at all.
 static func select(id: StringName) -> DifficultyDef:
 	_ensure_loaded()
-	var def: DifficultyDef = _catalog.get(id)
+	var def: DifficultyDef = _catalog.get(LEGACY_ALIASES.get(id, id))
 	if def == null:
 		def = _catalog.get(DEFAULT_ID)
 	if def == null and not _ordered.is_empty():
 		def = _ordered[0]
 	current = def
+	return def
+
+
+static func load_rules(data: Dictionary) -> GameRules:
+	if data.is_empty():
+		return select(DEFAULT_ID)
+	var id := StringName(data.get("id", DEFAULT_ID))
+	if id != &"custom":
+		var preset := select(id)
+		if preset != null:
+			return preset
+	current = GameRules.from_dict(data)
 	return current
+
+
+static func rules_dict() -> Dictionary:
+	if current == null:
+		select(DEFAULT_ID)
+	return current.to_dict() if current != null else {}
 
 
 static func current_id() -> StringName:
@@ -75,7 +98,8 @@ static func _ensure_loaded() -> void:
 				push_warning("Difficulties: %s has no id — skipped" % fname)
 				continue
 			_catalog[def.id] = def
-			_ordered.append(def)
+			if def.visible_in_menu:
+				_ordered.append(def)
 	_ordered.sort_custom(func(a: DifficultyDef, b: DifficultyDef) -> bool: return a.order < b.order)
 
 
@@ -83,19 +107,19 @@ static func _ensure_loaded() -> void:
 # All default to the neutral value when no tier is selected, so nothing has to null-check.
 
 static func threat_mult() -> float:
-	return current.threat_mult if current != null else 1.0
+	return (current.threat_mult if current != null else 1.0) * Doctrines.modifier(&"threat")
 
 
 static func blight_mult() -> float:
-	return current.blight_mult if current != null else 1.0
+	return (current.blight_mult if current != null else 1.0) * Doctrines.modifier(&"blight")
 
 
 static func needs_mult() -> float:
-	return current.needs_mult if current != null else 1.0
+	return (current.needs_mult if current != null else 1.0) * Doctrines.modifier(&"needs")
 
 
 static func migration_mult() -> float:
-	return current.migration_mult if current != null else 1.0
+	return (current.migration_mult if current != null else 1.0) * Doctrines.modifier(&"migration")
 
 
 static func shard_mult() -> float:
@@ -103,8 +127,50 @@ static func shard_mult() -> float:
 
 
 static func start_pop_bonus() -> int:
-	return current.start_pop_bonus if current != null else 0
+	return (current.start_pop_bonus if current != null else 0) + Doctrines.bonus(&"start_pop")
 
 
 static func monster_night_shift() -> int:
 	return current.monster_night_shift if current != null else 0
+
+
+static func yield_mult() -> float:
+	return (current.yield_mult if current != null else 1.0) * Doctrines.modifier(&"yield")
+
+
+static func hostile_spawning() -> bool:
+	return current.hostile_spawning if current != null else true
+
+
+static func progression_awards() -> bool:
+	return current.progression_awards if current != null else true
+
+
+static func sandbox_tools() -> bool:
+	return current.sandbox_tools if current != null else false
+
+
+static func phase_duration(phase: int) -> float:
+	if current != null:
+		return current.phase_duration(phase)
+	return [240.0, 60.0, 120.0, 45.0][phase]
+
+
+static func season_length() -> int:
+	return current.season_length if current != null else 5
+
+
+static func max_villagers() -> int:
+	return current.max_villagers if current != null else 64
+
+
+static func max_hostiles() -> int:
+	return current.max_hostiles if current != null else 120
+
+
+static func max_enemy_workers() -> int:
+	return current.max_enemy_workers if current != null else 16
+
+
+static func max_player_buildings() -> int:
+	return current.max_player_buildings if current != null else 160

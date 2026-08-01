@@ -3,6 +3,7 @@ extends Node2D
 ## gives each cast a readable arrival, radius, and lingering identity.
 
 var effects: Array[Dictionary] = []
+var _redraw_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -42,7 +43,11 @@ func _process(delta: float) -> void:
 		if float(effect["age"]) < float(effect["life"]):
 			kept.append(effect)
 	effects = kept
-	queue_redraw()
+	var interval := Accessibility.animation_interval()
+	_redraw_accum += delta
+	if interval <= 0.0 or _redraw_accum >= interval:
+		_redraw_accum = 0.0
+		queue_redraw()
 	if effects.is_empty():
 		set_process(false)
 

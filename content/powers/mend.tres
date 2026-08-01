@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"mend"
+display_name = "POWER_MEND"
+description = "POWER_MEND_DESC"
+kind = 4
+faith_cost = 14.0
+cooldown = 10.0
+radius = 3
+amount = 35.0
+required_temple_tier = 0
+burden = 0.04
+color = Color(0.55, 0.9, 0.68, 1)
+order = 8
+

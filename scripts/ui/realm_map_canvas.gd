@@ -193,6 +193,19 @@ func _draw_overview(alpha: float) -> void:
 			draw_line(_region_center(id), _region_center(other),
 				Color(1.0, 0.76, 0.37, 0.68 * alpha), 2.0)
 
+	for route in Realm.active_routes():
+		if route.status != &"in_transit" \
+				or (route.source_id != Realm.awake_id and route.destination_id != Realm.awake_id):
+			continue
+		for i in range(route.path.size() - 1):
+			draw_dashed_line(_region_center(route.path[i]), _region_center(route.path[i + 1]),
+				Color(0.94, 0.82, 0.53, 0.72 * alpha), 1.0, 3.0)
+		var phase_fraction := Sim.phase_progress() / float(maxi(route.arrival_day - route.departure_day, 1))
+		var caravan_progress := clampf(route.progress(Sim.day) + phase_fraction, 0.0, 1.0)
+		var caravan_point := _route_point(route.path, caravan_progress)
+		draw_circle(caravan_point, 3.2, Color(0.12, 0.08, 0.05, alpha))
+		draw_circle(caravan_point, 2.0, Color(1.0, 0.72, 0.26, alpha))
+
 	var cell_size := rect.size / Vector2(Realm.REGION_WIDTH, Realm.REGION_HEIGHT)
 	for id: StringName in Realm.colonies:
 		var ledger: ColonyLedger = Realm.colonies[id]
@@ -223,3 +236,14 @@ func _draw_overview(alpha: float) -> void:
 		draw_circle(point, 3.5, Color(1.0, 0.86, 0.58, 0.82 * alpha))
 		draw_circle(point, 7.0, Color(1.0, 0.86, 0.58, 0.44 * alpha), false, 1.0)
 	draw_rect(rect, Color(0.68, 0.74, 0.72, 0.48 * alpha), false, 1.0)
+
+
+func _route_point(path: Array[StringName], progress: float) -> Vector2:
+	if path.is_empty():
+		return Vector2.ZERO
+	if path.size() == 1:
+		return _region_center(path[0])
+	var scaled := clampf(progress, 0.0, 1.0) * float(path.size() - 1)
+	var segment := mini(floori(scaled), path.size() - 2)
+	return _region_center(path[segment]).lerp(_region_center(path[segment + 1]),
+		scaled - float(segment))

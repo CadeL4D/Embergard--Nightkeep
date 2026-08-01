@@ -45,6 +45,10 @@ static func locked() -> Array[Entry]:
 		if def.unlock_cost > 0 and not Meta.is_unlocked(def.id):
 			out.append(Entry.new(def.id, def.display_name, def.description,
 				def.unlock_cost, 100 + def.order))
+	for doctrine in Doctrines.all():
+		if not doctrine.starter and not Meta.is_unlocked(doctrine.id):
+			out.append(Entry.new(doctrine.id, doctrine.display_name, doctrine.description,
+				doctrine.shard_cost, 200 + doctrine.order))
 	out.sort_custom(func(a: Entry, b: Entry) -> bool:
 		if a.cost != b.cost:
 			return a.cost < b.cost
@@ -67,6 +71,9 @@ static func total() -> int:
 	for def: PowerDef in Powers.all():
 		if def.unlock_cost > 0:
 			n += 1
+	for doctrine in Doctrines.all():
+		if not doctrine.starter:
+			n += 1
 	return n
 
 
@@ -77,6 +84,9 @@ static func total_cost() -> int:
 		sum += def.unlock_cost
 	for def: PowerDef in Powers.all():
 		sum += def.unlock_cost
+	for doctrine in Doctrines.all():
+		if not doctrine.starter:
+			sum += doctrine.shard_cost
 	return sum
 
 
@@ -90,4 +100,9 @@ static func duplicate_ids() -> PackedStringArray:
 	for def: PowerDef in Powers.all():
 		if seen.has(def.id):
 			clashes.append(String(def.id))
+		seen[def.id] = true
+	for doctrine in Doctrines.all():
+		if seen.has(doctrine.id):
+			clashes.append(String(doctrine.id))
+		seen[doctrine.id] = true
 	return clashes

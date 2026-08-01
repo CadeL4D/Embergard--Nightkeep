@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/watchtower.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"bow_tower"
+display_name = "BUILDING_BOW_TOWER"
+description = "BUILDING_BOW_TOWER_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = true
+max_blight = 65
+cost = {
+&"boards": 10,
+&"stone": 8,
+&"tools": 1
+}
+build_work = 28.0
+max_hp = 170.0
+repair_cost = {&"boards": 2}
+repair_work = 4.0
+repair_amount = 45.0
+light_radius = 4
+influence_radius = 8
+attack_damage = 5.0
+attack_range = 7.0
+attack_cooldown = 0.36
+attack_type = &"piercing"
+ammo_kind = &"arrows"
+ammo_per_shot = 1
+order = 38
+color = Color(0.54, 0.72, 0.52, 1)
+

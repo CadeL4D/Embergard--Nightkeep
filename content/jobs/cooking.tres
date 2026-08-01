@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"cooking"
+display_name = "JOB_COOKING"
+workplace = &"kitchen"
+cycle_yield = {&"rations": 5}
+cycle_cost = {&"food": 3}
+cycle_work = 12.0
+carry_capacity = 10
+priority = 3
+default_quota = 0
+color = Color(0.86, 0.62, 0.34, 1)
+

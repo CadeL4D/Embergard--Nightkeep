@@ -9,7 +9,7 @@ extends Node
 
 const SAVE_PATH := "user://profile.cfg"
 const SECTION := "profile"
-const SCHEMA_VERSION := 3
+const SCHEMA_VERSION := 4
 const HISTORY_LIMIT := 24
 const ACHIEVEMENT_TOTAL := 8
 
@@ -29,6 +29,8 @@ var lifetime_stats: Dictionary = {
 	"events": 0,
 }
 var achievements: Array[StringName] = []
+var chronicle_completed: Array[StringName] = []
+var equipped_doctrines: Array[StringName] = []
 ## The tier the player last chose, so the New World screen opens on it rather than
 ## making them re-pick every session. Profile state, not run state — the run's own
 ## difficulty is saved with the run.
@@ -57,6 +59,8 @@ func load_profile() -> void:
 	run_history.assign(cfg.get_value(SECTION, "run_history", []))
 	lifetime_stats.merge(cfg.get_value(SECTION, "lifetime_stats", {}), true)
 	achievements.assign(cfg.get_value(SECTION, "achievements", []))
+	chronicle_completed.assign(cfg.get_value(SECTION, "chronicle_completed", []))
+	equipped_doctrines = Doctrines.sanitize(cfg.get_value(SECTION, "equipped_doctrines", []))
 
 
 func save_profile() -> void:
@@ -74,6 +78,8 @@ func save_profile() -> void:
 	cfg.set_value(SECTION, "run_history", run_history)
 	cfg.set_value(SECTION, "lifetime_stats", lifetime_stats)
 	cfg.set_value(SECTION, "achievements", achievements)
+	cfg.set_value(SECTION, "chronicle_completed", chronicle_completed)
+	cfg.set_value(SECTION, "equipped_doctrines", equipped_doctrines)
 	cfg.save(SAVE_PATH)
 
 
@@ -122,6 +128,14 @@ func award(amount: int, day_reached: int) -> void:
 	save_profile()
 
 
+func set_equipped_doctrines(ids: Array) -> void:
+	var clean := Doctrines.sanitize(ids)
+	if clean == equipped_doctrines:
+		return
+	equipped_doctrines = clean
+	save_profile()
+
+
 ## Add one immutable result card to history and update lifetime counters/achievements.
 ## The shard payout is recorded here but awarded separately, so existing run-end ordering and
 ## summary animation remain unchanged.
@@ -154,6 +168,16 @@ func record_run(record: Dictionary) -> Array[StringName]:
 	_unlock_achievement(&"weathered", int(clean.get("day", 0)) >= 21, newly_unlocked)
 	_unlock_achievement(&"chronicler", int(clean.get("events", 0)) >= 4, newly_unlocked)
 	clean["new_achievements"] = newly_unlocked
+	var new_goals: Array[StringName] = []
+	if bool(clean.get("progression_awards", true)):
+		for goal: Dictionary in Chronicle.evaluate(lifetime_stats, chronicle_completed):
+			var goal_id := StringName(goal["id"])
+			new_goals.append(goal_id)
+			shards += int(goal.get("shards", 0))
+			var doctrine_id := StringName(goal.get("unlock", &""))
+			if doctrine_id != &"" and doctrine_id not in unlocked:
+				unlocked.append(doctrine_id)
+	clean["new_goals"] = new_goals
 	save_profile()
 	return newly_unlocked
 

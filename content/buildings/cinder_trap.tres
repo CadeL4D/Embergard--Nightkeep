@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/path.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"cinder_trap"
+display_name = "BUILDING_CINDER_TRAP"
+description = "BUILDING_CINDER_TRAP_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 2
+footprint = Vector2i(1, 1)
+blocks_movement = false
+max_blight = 65
+cost = {
+&"boards": 1,
+&"emberglass": 1,
+&"stone": 3
+}
+build_work = 6.0
+max_hp = 45.0
+repair_cost = {
+&"stone": 1
+}
+repair_work = 2.0
+repair_amount = 20.0
+attack_damage = 7.0
+attack_range = 1.35
+attack_cooldown = 0.8
+attack_type = &"fire"
+attack_area_radius = 1.0
+requires_line_of_fire = false
+order = 37
+color = Color(0.92, 0.38, 0.18, 1)
+

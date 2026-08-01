@@ -13,6 +13,17 @@ enum Kind {
 	SMITE,     ## immediate damage to every monster in radius
 	PURIFY,    ## clears blight in radius
 	BUFF,      ## strengthens or steadies the villagers in radius
+	HEAL,
+	RECALL,
+	KINDLE,
+	HARVEST,
+	CONJURE,
+	HALLOW,
+	CONSTRUCT,
+	BANISH,
+	CHARM,
+	WEATHER,
+	LAST_RITE,
 }
 
 @export var id: StringName = &""
@@ -28,6 +39,16 @@ enum Kind {
 @export var amount: float = 30.0
 ## Seconds the effect persists. Zero means instantaneous.
 @export var duration: float = 0.0
+@export var damage_type: StringName = &"holy"
+@export var target_type: StringName = &"ground"
+@export var resource_kind: StringName = &""
+@export var construct_id: StringName = &""
+@export var persistent_entity: bool = false
+@export var dismissible: bool = false
+@export var upkeep: float = 0.0
+@export var terrain_effect: StringName = &""
+@export var weather_id: StringName = &""
+@export var persistent_limit: int = 0
 
 @export_group("Buff")
 ## Mood added outright to every villager in radius. Feeds straight back into Faith generation,

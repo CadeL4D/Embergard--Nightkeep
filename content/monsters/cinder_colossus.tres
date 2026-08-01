@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/brute.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"cinder_colossus"
+display_name = "BOSS_CINDER_COLOSSUS"
+sprite = ExtResource("2_tex")
+max_health = 720.0
+move_speed = 7.0
+damage = 25.0
+attack_cooldown = 2.3
+structure_damage_scale = 5.5
+attack_type = &"fire"
+behavior_tags = Array[StringName]([&"boss", &"siege", &"incendiary"])
+death_burst_damage = 35.0
+death_burst_radius = 3.0
+death_burst_type = &"fire"
+resistances = {&"fire": 0.9, &"crushing": -0.22, &"holy": -0.18}
+faith_on_death = 32.0
+is_boss = true
+presentation_scale = 1.8
+presentation_tint = Color(1.2, 0.7, 0.48, 1)
+boss_reward = 6
+weight = 0.0
+burn_per_second = 0.0
+burn_threshold = 255

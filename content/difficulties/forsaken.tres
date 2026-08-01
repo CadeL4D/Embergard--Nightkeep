@@ -16,3 +16,4 @@ start_pop_bonus = -1
 shard_mult = 2.0
 order = 3
 color = Color(0.88, 0.45, 0.45, 1)
+visible_in_menu = false

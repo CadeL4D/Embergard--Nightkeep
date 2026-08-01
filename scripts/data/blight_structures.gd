@@ -24,7 +24,7 @@ static func all() -> Array[BlightStructureDef]:
 ##
 ## Mirrors the threat director's own composition roll rather than inventing a second way to choose
 ## content, so `min_night` and `weight` mean the same thing here as they do for monsters.
-static func roll(night: int) -> BlightStructureDef:
+static func roll(night: int, rng: RandomNumberGenerator = null) -> BlightStructureDef:
 	var eligible: Array[BlightStructureDef] = []
 	var total := 0.0
 	for def: BlightStructureDef in all():
@@ -33,7 +33,7 @@ static func roll(night: int) -> BlightStructureDef:
 			total += def.weight
 	if eligible.is_empty():
 		return null
-	var pick := randf() * total
+	var pick := (rng.randf() if rng != null else randf()) * total
 	for def: BlightStructureDef in eligible:
 		pick -= def.weight
 		if pick <= 0.0:

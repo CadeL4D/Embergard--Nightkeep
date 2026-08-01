@@ -11,6 +11,28 @@ const SECTION := "accessibility"
 const CONTROLS_SECTION := "controls"
 const TUTORIAL_SECTION := "tutorial"
 
+## Touch dimensions are expressed in screen pixels. UI scenes use half-height
+## controls because the 800x360 canvas is normally displayed at 2x or greater;
+## world picking works directly in screen coordinates and uses the full value.
+const MIN_TOUCH_TARGET_PX := 44.0
+const MIN_UI_TARGET_PX := 22.0
+const GESTURE_SLOP_PX := 12.0
+const TAP_MAX_TIME := 0.35
+const HOLD_DURATIONS: Array[float] = [0.25, 0.35, 0.5, 0.75]
+const SCREEN_SHAKE_LEVELS: Array[float] = [0.0, 0.35, 0.7, 1.0]
+
+enum Handedness { RIGHT, LEFT }
+enum GraphicsMode { BATTERY, BALANCED, QUALITY }
+
+const HANDEDNESS_NAMES: Array[StringName] = [
+	&"OPTIONS_RIGHT_HANDED", &"OPTIONS_LEFT_HANDED",
+]
+const GRAPHICS_NAMES: Array[StringName] = [
+	&"OPTIONS_GRAPHICS_BATTERY",
+	&"OPTIONS_GRAPHICS_BALANCED",
+	&"OPTIONS_GRAPHICS_QUALITY",
+]
+
 const PALETTE_NAMES: Array[StringName] = [
 	&"ACCESS_PALETTE_DEFAULT",
 	&"ACCESS_PALETTE_RED_GREEN",
@@ -42,6 +64,13 @@ var reduced_motion: bool = false
 var haptics: bool = true
 var tutorials_enabled: bool = true
 var tutorial_seen: Array[StringName] = []
+var handedness: Handedness = Handedness.RIGHT
+var graphics_mode: GraphicsMode = GraphicsMode.BALANCED
+var hold_duration: float = 0.35
+var screen_shake_strength: float = 0.7
+var high_visibility_targets: bool = false
+var pause_while_managing: bool = false
+var diagnostics_export_opt_in: bool = false
 
 var _filter: ColorRect
 var _filter_material: ShaderMaterial
@@ -84,11 +113,24 @@ func load_settings() -> void:
 		haptics = bool(cfg.get_value(SECTION, "haptics", true))
 		tutorials_enabled = bool(cfg.get_value(TUTORIAL_SECTION, "enabled", true))
 		tutorial_seen.assign(cfg.get_value(TUTORIAL_SECTION, "seen", []))
+		handedness = clampi(int(cfg.get_value(SECTION, "handedness", Handedness.RIGHT)),
+			Handedness.RIGHT, Handedness.LEFT)
+		graphics_mode = clampi(int(cfg.get_value(SECTION, "graphics_mode",
+			GraphicsMode.BALANCED)), GraphicsMode.BATTERY, GraphicsMode.QUALITY)
+		hold_duration = HOLD_DURATIONS[_nearest_hold_duration(
+			float(cfg.get_value(SECTION, "hold_duration", 0.35)))]
+		screen_shake_strength = SCREEN_SHAKE_LEVELS[_nearest_value(
+			SCREEN_SHAKE_LEVELS, float(cfg.get_value(SECTION, "screen_shake_strength", 0.7)))]
+		high_visibility_targets = bool(cfg.get_value(SECTION, "high_visibility_targets", false))
+		pause_while_managing = bool(cfg.get_value(SECTION, "pause_while_managing", false))
+		diagnostics_export_opt_in = bool(cfg.get_value(
+			SECTION, "diagnostics_export_opt_in", false))
 		for action: StringName in ACTION_DEFAULTS:
 			var keycode := int(cfg.get_value(CONTROLS_SECTION, String(action),
 				int(ACTION_DEFAULTS[action])))
 			_set_action_key(action, keycode)
 	_apply_filter()
+	_apply_graphics_mode()
 	call_deferred("_apply_ui_scale")
 
 
@@ -99,6 +141,13 @@ func save_settings() -> void:
 	cfg.set_value(SECTION, "text_scale", text_scale)
 	cfg.set_value(SECTION, "reduced_motion", reduced_motion)
 	cfg.set_value(SECTION, "haptics", haptics)
+	cfg.set_value(SECTION, "handedness", int(handedness))
+	cfg.set_value(SECTION, "graphics_mode", int(graphics_mode))
+	cfg.set_value(SECTION, "hold_duration", hold_duration)
+	cfg.set_value(SECTION, "screen_shake_strength", screen_shake_strength)
+	cfg.set_value(SECTION, "high_visibility_targets", high_visibility_targets)
+	cfg.set_value(SECTION, "pause_while_managing", pause_while_managing)
+	cfg.set_value(SECTION, "diagnostics_export_opt_in", diagnostics_export_opt_in)
 	cfg.set_value(TUTORIAL_SECTION, "enabled", tutorials_enabled)
 	cfg.set_value(TUTORIAL_SECTION, "seen", tutorial_seen)
 	for action: StringName in ACTION_DEFAULTS:
@@ -128,6 +177,56 @@ func set_haptics(value: bool) -> void:
 	changed.emit(&"haptics")
 
 
+func set_handedness(value: int) -> void:
+	handedness = clampi(value, Handedness.RIGHT, Handedness.LEFT)
+	changed.emit(&"handedness")
+
+
+func set_graphics_mode(value: int) -> void:
+	graphics_mode = clampi(value, GraphicsMode.BATTERY, GraphicsMode.QUALITY)
+	_apply_graphics_mode()
+	changed.emit(&"graphics")
+
+
+func set_hold_duration(value: float) -> void:
+	hold_duration = HOLD_DURATIONS[_nearest_hold_duration(value)]
+	changed.emit(&"hold")
+
+
+func set_screen_shake_strength(value: float) -> void:
+	screen_shake_strength = SCREEN_SHAKE_LEVELS[_nearest_value(SCREEN_SHAKE_LEVELS, value)]
+	changed.emit(&"shake")
+
+
+func set_high_visibility_targets(value: bool) -> void:
+	high_visibility_targets = value
+	changed.emit(&"targets")
+
+
+func set_pause_while_managing(value: bool) -> void:
+	pause_while_managing = value
+	changed.emit(&"management_pause")
+
+
+func set_diagnostics_export_opt_in(value: bool) -> void:
+	diagnostics_export_opt_in = value
+	changed.emit(&"diagnostics")
+
+
+func particle_density() -> float:
+	match graphics_mode:
+		GraphicsMode.BATTERY:
+			return 0.45
+		GraphicsMode.QUALITY:
+			return 1.0
+		_:
+			return 0.72
+
+
+func animation_interval() -> float:
+	return 1.0 / 20.0 if graphics_mode == GraphicsMode.BATTERY else 0.0
+
+
 func set_tutorials_enabled(value: bool) -> void:
 	tutorials_enabled = value
 	changed.emit(&"tutorial")
@@ -151,6 +250,10 @@ func mark_tutorial_seen(id: StringName) -> void:
 
 func motion_duration(seconds: float) -> float:
 	return 0.001 if reduced_motion else seconds
+
+
+func shake_scale() -> float:
+	return 0.0 if reduced_motion else screen_shake_strength
 
 
 func pulse(duration_ms: int = 18, amplitude: float = 0.45) -> void:
@@ -201,11 +304,37 @@ func _nearest_text_scale(value: float) -> int:
 	return best
 
 
+func _nearest_hold_duration(value: float) -> int:
+	var best := 0
+	var distance := INF
+	for i in HOLD_DURATIONS.size():
+		var candidate := absf(HOLD_DURATIONS[i] - value)
+		if candidate < distance:
+			distance = candidate
+			best = i
+	return best
+
+
+func _nearest_value(values: Array[float], value: float) -> int:
+	var best := 0
+	var distance := INF
+	for i in values.size():
+		var candidate := absf(values[i] - value)
+		if candidate < distance:
+			distance = candidate
+			best = i
+	return best
+
+
 func _apply_filter() -> void:
 	if _filter_material == null:
 		return
 	_filter.visible = palette_mode != 0
 	_filter_material.set_shader_parameter("palette_mode", palette_mode)
+
+
+func _apply_graphics_mode() -> void:
+	Engine.max_fps = 30 if graphics_mode == GraphicsMode.BATTERY else 60
 
 
 func _apply_ui_scale() -> void:

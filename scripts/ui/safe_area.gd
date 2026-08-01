@@ -21,19 +21,30 @@ static func apply(target: MarginContainer, pad: int = 8) -> void:
 	if window.x <= 0 or window.y <= 0:
 		return
 
-	var inset_left := maxi(safe.position.x, 0)
-	var inset_top := maxi(safe.position.y, 0)
-	var inset_right := maxi(window.x - safe.end.x, 0)
-	var inset_bottom := maxi(window.y - safe.end.y, 0)
-
 	# Insets are in real screen pixels; the HUD lives in the stretched viewport, so
 	# they have to be converted or they are wrong on every device whose scale factor
 	# is not 1.
 	var view := target.get_tree().root.get_visible_rect().size
+	var margins := calculate_margins(window, safe, view, pad)
+	target.add_theme_constant_override("margin_left", margins.x)
+	target.add_theme_constant_override("margin_top", margins.y)
+	target.add_theme_constant_override("margin_right", margins.z)
+	target.add_theme_constant_override("margin_bottom", margins.w)
+
+
+## Pure geometry form used by the device-layout regression suite.
+static func calculate_margins(window: Vector2i, safe: Rect2i, view: Vector2,
+		pad: int = 8) -> Vector4i:
+	if window.x <= 0 or window.y <= 0:
+		return Vector4i(pad, pad, pad, pad)
+	var inset_left := maxi(safe.position.x, 0)
+	var inset_top := maxi(safe.position.y, 0)
+	var inset_right := maxi(window.x - safe.end.x, 0)
+	var inset_bottom := maxi(window.y - safe.end.y, 0)
 	var sx := view.x / float(window.x)
 	var sy := view.y / float(window.y)
-
-	target.add_theme_constant_override("margin_left", int(inset_left * sx) + pad)
-	target.add_theme_constant_override("margin_top", int(inset_top * sy) + pad)
-	target.add_theme_constant_override("margin_right", int(inset_right * sx) + pad)
-	target.add_theme_constant_override("margin_bottom", int(inset_bottom * sy) + pad)
+	return Vector4i(
+		int(inset_left * sx) + pad,
+		int(inset_top * sy) + pad,
+		int(inset_right * sx) + pad,
+		int(inset_bottom * sy) + pad)

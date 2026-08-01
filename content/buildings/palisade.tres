@@ -20,6 +20,15 @@ cost = {
 }
 build_work = 4.0
 max_hp = 90.0
+resistances = {
+&"piercing": 0.35,
+&"fire": -0.35
+}
+repair_cost = {
+&"wood": 1
+}
+repair_work = 2.5
+repair_amount = 35.0
 light_radius = 0
 is_stockpile = false
 influence_radius = 2

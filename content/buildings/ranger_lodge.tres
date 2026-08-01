@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/hut.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"ranger_lodge"
+display_name = "BUILDING_RANGER_LODGE"
+description = "BUILDING_RANGER_LODGE_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 1
+footprint = Vector2i(2, 2)
+blocks_movement = true
+cost = {&"wood": 15, &"stone": 4}
+build_work = 18.0
+max_hp = 120.0
+repair_cost = {&"wood": 2}
+light_radius = 3
+influence_radius = 8
+sleep_slots = 3
+inventory_capacity = 50
+storage_tags = Array[StringName]([&"food", &"arrows", &"medicine"])
+order = 45
+color = Color(0.42, 0.64, 0.42, 1)
+

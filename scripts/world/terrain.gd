@@ -90,9 +90,12 @@ const MOVE_COST := {
 ## deciding between, which they are not while all three are abundant.
 const FEATURE_YIELD := {
 	Feature.TREE: {&"wood": 7},
-	Feature.STONE: {&"stone": 5},
-	Feature.RUIN_WALL: {&"stone": 6},
-	Feature.BERRIES: {&"food": 5},
+	# Secondary yields make the Phase-1 resource catalog reachable without adding
+	# extra scene nodes or visually ambiguous deposit types. Haulers carry each
+	# stack separately; nothing is created directly in the global cache.
+	Feature.STONE: {&"stone": 5, &"ore": 1},
+	Feature.RUIN_WALL: {&"stone": 6, &"emberglass": 1},
+	Feature.BERRIES: {&"food": 5, &"herbs": 1},
 }
 
 ## Hit points of a Blight nest.

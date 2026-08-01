@@ -92,6 +92,7 @@ const RELINQUISH_COST := 12.0
 
 ## Every Tome the colony owns, installed or shelved.
 var tomes: Array[Tome] = []
+var auto_manage_library: bool = true
 
 ## One written book. Tier and toughness are rolled INDEPENDENTLY on purpose — a rare tier 3 can
 ## still be fragile and a humble tier 1 can outlast everything, and that variance is what stops
@@ -114,6 +115,8 @@ class Tome extends RefCounted:
 	var toughness: float = 1.0
 	var durability: float = 100.0
 	var installed: bool = false
+	## Locked books keep their installed/shelved state and are never consumed by auto-combine.
+	var locked: bool = false
 
 	func def() -> TomeDef:
 		return Tomes.get_tome(archetype)
@@ -154,6 +157,7 @@ func reset() -> void:
 	# has to earn it again by raising a Temple and choosing to carry its Burden.
 	taken_up.clear()
 	tomes.clear()
+	auto_manage_library = true
 	_grant_baseline_powers()
 	_kill_travel()
 
@@ -215,7 +219,7 @@ func step(delta: float) -> void:
 
 ## What the colony generates before Tomes and Burden. The original passive model, untouched.
 func passive_faith_rate() -> float:
-	return FAITH_BASE_RATE * faith_multiplier()
+	return FAITH_BASE_RATE * faith_multiplier() * Doctrines.modifier(&"faith_rate")
 
 
 ## Faith per second from every installed, uncrumbled Tome.
@@ -234,6 +238,14 @@ func total_burden() -> float:
 		var def := Powers.get_power(id)
 		if def != null:
 			total += def.burden
+	return total * Doctrines.modifier(&"burden")
+
+
+func building_upkeep() -> float:
+	var total := 0.0
+	for building in Colony.buildings:
+		if is_instance_valid(building) and not building.is_site():
+			total += building.def.faith_upkeep
 	return total
 
 
@@ -244,7 +256,7 @@ func total_burden() -> float:
 ## Once this is negative the pool is a countdown, which is exactly what the buffer is for. See
 ## RateLedger.faith() for the breakdown that lets the player decide what to shed.
 func net_faith_rate() -> float:
-	return passive_faith_rate() + tome_rate() - total_burden()
+	return passive_faith_rate() + tome_rate() - total_burden() - building_upkeep()
 
 
 ## Seconds until the buffer empties at the current rate, or -1.0 while it is filling.
@@ -355,9 +367,11 @@ func installed_count() -> int:
 ## `priests` shifts the tier odds, which is what makes staffing the Temple a scaling investment
 ## rather than a binary on/off.
 func priest_cycle(priests: int) -> void:
-	if not _try_combine():
+	if not auto_manage_library or not _try_combine():
 		_scribe(priests)
-	_reshelve()
+	if auto_manage_library:
+		_reshelve()
+	Events.library_changed.emit()
 
 
 ## Roll a new Tome. Heavily weighted toward tier 1; more priests raise the tail.
@@ -403,7 +417,8 @@ func _try_combine() -> bool:
 	for tier in [1, 2]:
 		var pool: Array[Tome] = []
 		for tome in tomes:
-			if not tome.installed and tome.tier == tier and tome.durability > 0.0:
+			if not tome.installed and not tome.locked and tome.tier == tier \
+					and tome.durability > 0.0:
 				pool.append(tome)
 		if pool.size() < 3:
 			continue
@@ -433,13 +448,24 @@ func _try_combine() -> bool:
 ## strongest book installed, and among equals the one that will last.
 func _reshelve() -> void:
 	var capacity := tome_capacity()
-	var ranked := tomes.duplicate()
+	var locked_installed: Array[Tome] = []
+	var ranked: Array[Tome] = []
+	for tome in tomes:
+		if tome.locked and tome.installed and tome.durability > 0.0:
+			locked_installed.append(tome)
+		elif not tome.locked:
+			ranked.append(tome)
 	ranked.sort_custom(func(a: Tome, b: Tome) -> bool:
 		if not is_equal_approx(a.rate(), b.rate()):
 			return a.rate() > b.rate()
 		return a.toughness > b.toughness)
 
 	var used := 0
+	for tome in locked_installed:
+		var keep := used < capacity
+		tome.installed = keep
+		if keep:
+			used += 1
 	for tome: Tome in ranked:
 		var keep := used < capacity and tome.durability > 0.0
 		tome.installed = keep
@@ -467,12 +493,144 @@ func _wear_tomes(delta: float) -> void:
 			if tome.durability > 0.0:
 				kept.append(tome)
 		tomes = kept
-		_reshelve()
+		if auto_manage_library:
+			_reshelve()
+		else:
+			_enforce_library_capacity()
+		Events.library_changed.emit()
 
 
 ## Called when a Temple finishes or falls, so the slot count and the installed set stay in step.
 func refresh_library() -> void:
-	_reshelve()
+	if auto_manage_library:
+		_reshelve()
+	else:
+		_enforce_library_capacity()
+	Events.library_changed.emit()
+
+
+func set_library_auto_manage(active: bool) -> void:
+	auto_manage_library = active
+	if active:
+		_reshelve()
+	else:
+		_enforce_library_capacity()
+	Events.library_changed.emit()
+
+
+func install_tome(index: int) -> bool:
+	if index < 0 or index >= tomes.size():
+		return false
+	var tome := tomes[index]
+	if tome.durability <= 0.0:
+		return false
+	if tome.installed:
+		tome.installed = false
+		Events.library_changed.emit()
+		return true
+	if installed_count() >= tome_capacity():
+		return false
+	tome.installed = true
+	Events.library_changed.emit()
+	return true
+
+
+func toggle_tome_lock(index: int) -> bool:
+	if index < 0 or index >= tomes.size():
+		return false
+	tomes[index].locked = not tomes[index].locked
+	Events.library_changed.emit()
+	return true
+
+
+func combine_tome(index: int) -> bool:
+	if index < 0 or index >= tomes.size():
+		return false
+	var chosen := tomes[index]
+	if chosen.installed or chosen.locked or chosen.tier >= 3 or chosen.durability <= 0.0:
+		return false
+	var inputs: Array[Tome] = [chosen]
+	for tome in tomes:
+		if tome == chosen or tome.installed or tome.locked or tome.tier != chosen.tier \
+				or tome.durability <= 0.0:
+			continue
+		inputs.append(tome)
+		if inputs.size() == 3:
+			break
+	if inputs.size() < 3:
+		return false
+	var merged := Tome.new()
+	merged.archetype = chosen.archetype
+	merged.tier = chosen.tier + 1
+	var toughness_sum := 0.0
+	for tome in inputs:
+		toughness_sum += tome.toughness
+		tomes.erase(tome)
+	merged.toughness = toughness_sum / 3.0
+	tomes.append(merged)
+	Events.tome_written.emit(merged.tier)
+	Events.notice.emit(L10n.t(&"NOTICE_TOME_COMBINED", [merged.label()]), 0)
+	if auto_manage_library:
+		_reshelve()
+	Events.library_changed.emit()
+	return true
+
+
+func tome_details(index: int) -> String:
+	if index < 0 or index >= tomes.size():
+		return ""
+	var tome := tomes[index]
+	var def := tome.def()
+	return L10n.t(&"LIBRARY_DETAILS", [tome.label(), int(tome.durability),
+		"%.2f" % tome.rate(), "%.2f" % tome.toughness,
+		tr(def.description) if def != null else ""])
+
+
+func pack_library() -> Array:
+	var out: Array = []
+	for tome in tomes:
+		out.append({
+			"archetype": String(tome.archetype),
+			"tier": tome.tier,
+			"toughness": tome.toughness,
+			"durability": tome.durability,
+			"installed": tome.installed,
+			"locked": tome.locked,
+		})
+	return out
+
+
+func restore_library(rows: Array, auto_manage: bool = true) -> void:
+	tomes.clear()
+	auto_manage_library = auto_manage
+	for row: Dictionary in rows:
+		var tome := Tome.new()
+		tome.archetype = StringName(row.get("archetype", &""))
+		if Tomes.get_tome(tome.archetype) == null:
+			continue
+		tome.tier = clampi(int(row.get("tier", 1)), 1, 3)
+		tome.toughness = clampf(float(row.get("toughness", 1.0)), 0.2, 2.2)
+		tome.durability = clampf(float(row.get("durability", 100.0)), 0.0, 100.0)
+		tome.installed = bool(row.get("installed", false))
+		tome.locked = bool(row.get("locked", false))
+		tomes.append(tome)
+	if auto_manage_library:
+		_reshelve()
+	else:
+		_enforce_library_capacity()
+	Events.library_changed.emit()
+
+
+func _enforce_library_capacity() -> void:
+	var capacity := tome_capacity()
+	var used := 0
+	for tome in tomes:
+		if not tome.installed:
+			continue
+		if used < capacity and tome.durability > 0.0:
+			used += 1
+		else:
+			tome.installed = false
 
 
 ## How fast Faith accrues right now, as a multiple of the base rate. Exposed so the
@@ -625,7 +783,14 @@ func is_within_ember(cell: int) -> bool:
 
 ## Multiplier applied to villager work rate and mood retention inside the aura.
 func work_bonus(cell: int) -> float:
-	return 1.5 if is_within_ember(cell) else 1.0
+	var bonus := 1.5 if is_within_ember(cell) else 1.0
+	for building in Colony.buildings:
+		if not is_instance_valid(building) or building.is_site() or building.held_by_hand \
+				or building.def.work_aura <= 0.0:
+			continue
+		if World.grid.dist_sq(cell, building.centre_cell()) <= 5 * 5:
+			bonus = maxf(bonus, 1.0 + building.def.work_aura)
+	return bonus
 
 
 # --- Faith -------------------------------------------------------------------------
@@ -652,6 +817,8 @@ func cast(def: PowerDef, world_pos: Vector2) -> bool:
 	if centre == -1:
 		return false
 
+	if def.kind == PowerDef.Kind.CONSTRUCT and not _can_place_construct(def, centre):
+		return false
 	if not pay(def.faith_cost):
 		return false
 	_cooldowns[def.id] = def.cooldown
@@ -665,6 +832,29 @@ func cast(def: PowerDef, world_pos: Vector2) -> bool:
 			_cast_purify(def, centre)
 		PowerDef.Kind.BUFF:
 			_cast_buff(def, world_pos)
+		PowerDef.Kind.HEAL:
+			_cast_heal(def, world_pos)
+		PowerDef.Kind.RECALL:
+			_cast_recall(def, world_pos)
+		PowerDef.Kind.KINDLE:
+			_cast_kindle(def, centre, world_pos)
+		PowerDef.Kind.HARVEST:
+			_cast_harvest(def, centre)
+		PowerDef.Kind.CONJURE:
+			Colony.add(def.resource_kind, int(def.amount))
+		PowerDef.Kind.HALLOW:
+			_cast_hallow(def, world_pos)
+		PowerDef.Kind.CONSTRUCT:
+			_cast_construct(def, centre)
+		PowerDef.Kind.BANISH:
+			_cast_banish(def, world_pos)
+		PowerDef.Kind.CHARM:
+			_cast_charm(def, world_pos)
+		PowerDef.Kind.WEATHER:
+			Climate.force_weather(def.weather_id, clampf(def.amount / 100.0, 0.0, 1.0))
+		PowerDef.Kind.LAST_RITE:
+			_cast_heal(def, world_pos)
+			_cast_smite(def, world_pos)
 
 	Events.power_cast.emit(def.id, world_pos)
 	return true
@@ -692,6 +882,111 @@ func _cast_buff(def: PowerDef, world_pos: Vector2) -> void:
 			v.apply_boost(def.speed_boost, def.damage_boost, def.boost_duration)
 
 
+func _cast_heal(def: PowerDef, world_pos: Vector2) -> void:
+	var reach_sq := pow(float(def.radius * Grid.TILE_SIZE), 2.0)
+	for villager in Colony.villagers:
+		if is_instance_valid(villager) and villager.alive \
+				and villager.position.distance_squared_to(world_pos) <= reach_sq:
+			villager.health = minf(villager.health + def.amount, villager.max_health)
+	for building in Colony.buildings:
+		if is_instance_valid(building) and not building.is_site() \
+				and building.centre_position().distance_squared_to(world_pos) <= reach_sq:
+			building.hp = minf(building.hp + def.amount, building.def.max_hp)
+			building._refresh_damage_bar()
+
+
+func _cast_recall(def: PowerDef, world_pos: Vector2) -> void:
+	var reach_sq: float = pow(float(def.radius * Grid.TILE_SIZE), 2.0)
+	var chosen: Villager = null
+	var best: float = reach_sq
+	for villager in Colony.villagers:
+		if not is_instance_valid(villager) or not villager.alive:
+			continue
+		var distance: float = villager.position.distance_squared_to(world_pos)
+		if distance <= best:
+			best = distance
+			chosen = villager
+	if chosen != null:
+		var safe := World.nearest_walkable(World.keep_cell, 5)
+		if safe != -1:
+			chosen.stop()
+			chosen.position = World.grid.to_world_index(safe)
+			chosen.think_urgent = true
+
+
+func _cast_harvest(def: PowerDef, centre: int) -> void:
+	var origin := World.grid.coord(centre)
+	for dy in range(-def.radius, def.radius + 1):
+		for dx in range(-def.radius, def.radius + 1):
+			if dx * dx + dy * dy > def.radius * def.radius:
+				continue
+			var point := origin + Vector2i(dx, dy)
+			if not World.grid.is_valid_v(point):
+				continue
+			var cell := World.grid.index_v(point)
+			var feature := World.feature_at(cell)
+			if not Terrain.is_harvestable(feature):
+				continue
+			for kind: StringName in Terrain.yield_of(feature):
+				Colony.add(kind, int(Terrain.yield_of(feature)[kind]))
+			World.clear_feature(cell)
+
+
+func _cast_hallow(def: PowerDef, world_pos: Vector2) -> void:
+	var reach_sq := pow(float(def.radius * Grid.TILE_SIZE), 2.0)
+	for building in Colony.buildings:
+		if not is_instance_valid(building) or building.is_site() \
+				or building.centre_position().distance_squared_to(world_pos) > reach_sq:
+			continue
+		building.hallowed_remaining = maxf(building.hallowed_remaining, def.duration)
+		building.hp = minf(building.hp + def.amount, building.def.max_hp)
+		building._refresh_damage_bar()
+
+
+func _can_place_construct(def: PowerDef, centre: int) -> bool:
+	var construct := Buildings.get_building(def.construct_id)
+	if construct == null:
+		return false
+	if def.persistent_limit > 0:
+		var count := 0
+		for building in Colony.buildings:
+			if is_instance_valid(building) and building.def.id == def.construct_id:
+				count += 1
+		if count >= def.persistent_limit:
+			return false
+	return bool(Colony.check_placement(construct, centre).get("ok", false))
+
+
+func _cast_construct(def: PowerDef, centre: int) -> void:
+	Colony.place_divine_construct(Buildings.get_building(def.construct_id), centre)
+
+
+func _cast_banish(def: PowerDef, world_pos: Vector2) -> void:
+	var reach_sq := pow(float(def.radius * Grid.TILE_SIZE), 2.0)
+	for hostile: Agent in Threat.hostiles.duplicate():
+		if not is_instance_valid(hostile) or not hostile.alive \
+				or hostile.position.distance_squared_to(world_pos) > reach_sq:
+			continue
+		hostile.take_damage(def.amount, null, def.damage_type)
+		hostile.knockback_from(world_pos, maxf(float(def.radius) * 0.75, 1.0))
+
+
+func _cast_charm(def: PowerDef, world_pos: Vector2) -> void:
+	var reach_sq: float = pow(float(def.radius * Grid.TILE_SIZE), 2.0)
+	var chosen: Monster = null
+	var best: float = reach_sq
+	for monster in Threat.monsters:
+		if not is_instance_valid(monster) or not monster.alive \
+				or monster.has_behavior(&"boss") or monster.has_behavior(&"rooted"):
+			continue
+		var distance: float = monster.position.distance_squared_to(world_pos)
+		if distance <= best:
+			best = distance
+			chosen = monster
+	if chosen != null:
+		chosen.apply_charm(def.duration)
+
+
 func _cast_light(def: PowerDef, centre: int) -> void:
 	var handle := World.light_field.add_source(centre, def.radius, int(def.amount))
 	if def.duration > 0.0:
@@ -700,14 +995,21 @@ func _cast_light(def: PowerDef, centre: int) -> void:
 	Threat.mark_field_dirty()
 
 
+func _cast_kindle(def: PowerDef, centre: int, world_pos: Vector2) -> void:
+	var handle := World.light_field.add_source(centre, def.radius, 210)
+	_temp_lights.append({"handle": handle, "expires": maxf(def.duration, 1.0)})
+	Threat.mark_field_dirty()
+	_cast_smite(def, world_pos)
+
+
 func _cast_smite(def: PowerDef, world_pos: Vector2) -> void:
 	var reach := float(def.radius) * Grid.TILE_SIZE
 	var reach_sq := reach * reach
-	for m in Threat.monsters.duplicate():
+	for m in Threat.hostiles.duplicate():
 		if not is_instance_valid(m) or not m.alive:
 			continue
 		if m.position.distance_squared_to(world_pos) <= reach_sq:
-			m.take_damage(def.amount, null)
+			m.take_damage(def.amount, null, def.damage_type)
 
 	# Nests are corrupted things standing in the blast too. Without this the only way
 	# to hurt a nest would be to wait for it to walk to you, which it never does — and
@@ -720,7 +1022,7 @@ func _cast_smite(def: PowerDef, world_pos: Vector2) -> void:
 	# the dictionary being walked when a structure falls.
 	for cell in World.blight_structures.keys():
 		if World.grid.to_world_index(cell).distance_squared_to(world_pos) <= reach_sq:
-			World.damage_blight_structure(cell, def.amount)
+			World.damage_blight_structure(cell, def.amount, &"holy")
 
 
 ## Fraction of a purify power's strength that lands on a nest as damage.
@@ -748,7 +1050,7 @@ func _cast_purify(def: PowerDef, centre: int) -> void:
 			World.damage_nest(cell, def.amount * PURIFY_NEST_SCALE)
 			# Same treatment for the Blight's buildings, so Consecrate is the tool for clearing a
 			# whole enemy camp in one cast rather than a tower's worth of patience per structure.
-			World.damage_blight_structure(cell, def.amount * PURIFY_NEST_SCALE)
+			World.damage_blight_structure(cell, def.amount * PURIFY_NEST_SCALE, &"holy")
 
 
 func _expire_lights(delta: float) -> void:

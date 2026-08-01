@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/toolsmith.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"smelter"
+display_name = "BUILDING_SMELTER"
+description = "BUILDING_SMELTER_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"cut_stone": 10, &"boards": 6, &"tools": 1}
+build_work = 30.0
+max_hp = 180.0
+resistances = {&"fire": 0.5}
+repair_cost = {&"cut_stone": 1, &"boards": 1}
+light_radius = 2
+influence_radius = 5
+worker_slots = 2
+input_capacity = 40
+output_capacity = 30
+order = 27
+color = Color(0.8, 0.46, 0.28, 1)
+

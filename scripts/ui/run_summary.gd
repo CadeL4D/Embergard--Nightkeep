@@ -64,8 +64,12 @@ func _on_run_ended(ascended: bool, shards: int) -> void:
 	var names := PackedStringArray()
 	for id in new_achievements:
 		names.append(tr(StringName("ACHIEVEMENT_" + String(id).to_upper())))
+	for id in record.get("new_goals", []):
+		var goal := Chronicle.get_goal(StringName(id))
+		if not goal.is_empty():
+			names.append(String(goal["display_name"]))
 	_achievements.visible = not names.is_empty()
-	_achievements.text = L10n.t(&"SUMMARY_ACHIEVEMENTS", [", ".join(names)])
+	_achievements.text = L10n.t(&"SUMMARY_CHRONICLE_ADVANCES", [", ".join(names)])
 
 	_refresh_offer()
 

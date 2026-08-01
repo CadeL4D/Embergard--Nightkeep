@@ -73,6 +73,12 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 10
 text = "PAUSE_SETTINGS"
 
+[node name="Codex" type="Button" parent="Center/Card/Views/Root"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "PAUSE_CODEX"
+
 [node name="MainMenu" type="Button" parent="Center/Card/Views/Root"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
@@ -103,6 +109,49 @@ layout_mode = 2
 script = ExtResource("2_settings")
 
 [node name="Back" type="Button" parent="Center/Card/Views/Settings"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "UI_BACK"
+
+[node name="Codex" type="VBoxContainer" parent="Center/Card/Views"]
+visible = false
+custom_minimum_size = Vector2(560, 250)
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="Label" parent="Center/Card/Views/Codex"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.847059, 0.541176, 1)
+theme_override_font_sizes/font_size = 14
+text = "PAUSE_CODEX"
+horizontal_alignment = 1
+
+[node name="Search" type="LineEdit" parent="Center/Card/Views/Codex"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+placeholder_text = "CODEX_SEARCH"
+
+[node name="Content" type="HBoxContainer" parent="Center/Card/Views/Codex"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="Topics" type="ItemList" parent="Center/Card/Views/Codex/Content"]
+custom_minimum_size = Vector2(180, 170)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Body" type="RichTextLabel" parent="Center/Card/Views/Codex/Content"]
+custom_minimum_size = Vector2(340, 170)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = false
+scroll_active = true
+
+[node name="Back" type="Button" parent="Center/Card/Views/Codex"]
 custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9

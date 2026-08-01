@@ -196,6 +196,57 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
+[node name="LibraryPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
+visible = false
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Header" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 10
+text = "LIBRARY_TITLE"
+
+[node name="Capacity" type="Label" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "0/0"
+
+[node name="Auto" type="CheckButton" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header"]
+custom_minimum_size = Vector2(92, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+button_pressed = true
+text = "LIBRARY_AUTO"
+
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout"]
+custom_minimum_size = Vector2(500, 178)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Details" type="Label" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout"]
+custom_minimum_size = Vector2(500, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.76, 0.82, 1)
+theme_override_font_sizes/font_size = 8
+text = "LIBRARY_INSPECT_HINT"
+autowrap_mode = 2
+
 [node name="SelectionCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
 custom_minimum_size = Vector2(220, 0)
@@ -221,6 +272,12 @@ text = "idle"
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
 text = "food 80  rest 80  mood 70"
+
+[node name="EquipmentPolicy" type="Button" parent="SafeArea/Layout/BottomRow/SelectionCard/Rows"]
+custom_minimum_size = Vector2(112, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "EQUIP_BEST"
 
 [node name="JobPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
@@ -381,7 +438,7 @@ text = "CONTROL_CLEANSE"
 
 [node name="BuildingCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
-custom_minimum_size = Vector2(220, 0)
+custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
@@ -431,6 +488,52 @@ custom_minimum_size = Vector2(74, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
 text = "STORAGE_PRIORITY"
+
+[node name="CombatPolicies" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TargetPolicy" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/CombatPolicies"]
+custom_minimum_size = Vector2(130, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "TARGET_POLICY"
+
+[node name="RepairPriority" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/CombatPolicies"]
+custom_minimum_size = Vector2(108, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "REPAIR_PRIORITY"
+
+[node name="ProductionPolicies" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ProductionPause" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies"]
+custom_minimum_size = Vector2(70, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "PRODUCTION_PAUSE"
+
+[node name="WorkerLimit" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies"]
+custom_minimum_size = Vector2(70, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "WORKER_LIMIT"
+
+[node name="ProductionPriority" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies"]
+custom_minimum_size = Vector2(70, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "PRODUCTION_PRIORITY"
+
+[node name="MaintainTarget" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/ProductionPolicies"]
+custom_minimum_size = Vector2(82, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "PRODUCTION_MAINTAIN"
 
 [node name="BuildPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
@@ -515,6 +618,22 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 10
 toggle_mode = true
 text = "UI_BUILD"
+
+[node name="HandButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+custom_minimum_size = Vector2(70, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
+theme_override_font_sizes/font_size = 9
+toggle_mode = true
+text = "UI_HAND"
+
+[node name="LibraryButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+custom_minimum_size = Vector2(72, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.811765, 0.745098, 1, 1)
+theme_override_font_sizes/font_size = 9
+toggle_mode = true
+text = "UI_LIBRARY"
 
 [node name="ControlButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 custom_minimum_size = Vector2(70, 22)

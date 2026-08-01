@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/brute.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"plaguebearer"
+display_name = "MONSTER_PLAGUEBEARER"
+sprite = ExtResource("2_tex")
+max_health = 78.0
+move_speed = 10.0
+damage = 7.0
+attack_cooldown = 2.0
+structure_damage_scale = 0.9
+attack_type = &"blight"
+behavior_tags = Array[StringName]([&"infection"])
+statuses_inflicted = Array[StringName]([&"infected"])
+status_duration = 32.0
+resistances = {&"blight": 0.7, &"holy": -0.4, &"fire": -0.2}
+faith_on_death = 4.2
+threat_cost = 4.0
+min_night = 8
+weight = 0.48
+burn_per_second = 2.0
+burn_threshold = 190

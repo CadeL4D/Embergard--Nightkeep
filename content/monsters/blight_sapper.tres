@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/burrower.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"blight_sapper"
+display_name = "MONSTER_BLIGHT_SAPPER"
+sprite = ExtResource("2_tex")
+max_health = 30.0
+move_speed = 15.0
+damage = 6.0
+attack_cooldown = 1.6
+structure_damage_scale = 1.8
+attack_type = &"crushing"
+behavior_tags = Array[StringName]([&"tunneling", &"incendiary"])
+tunnels = true
+death_burst_damage = 20.0
+death_burst_radius = 2.1
+death_burst_type = &"fire"
+resistances = {&"piercing": 0.3, &"crushing": -0.2}
+faith_on_death = 3.4
+threat_cost = 3.6
+min_night = 10
+weight = 0.4
+burn_per_second = 3.0
+burn_threshold = 180

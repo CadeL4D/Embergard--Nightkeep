@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="DifficultyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/difficulty_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"survival"
+display_name = "DIFFICULTY_SURVIVAL"
+description = "DIFFICULTY_SURVIVAL_DESC"
+order = 1
+color = Color(0.85, 0.82, 0.72, 1)

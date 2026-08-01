@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"kindle"
+display_name = "POWER_KINDLE"
+description = "POWER_KINDLE_DESC"
+kind = 6
+faith_cost = 18.0
+cooldown = 12.0
+radius = 3
+amount = 12.0
+duration = 30.0
+damage_type = &"fire"
+required_temple_tier = 0
+burden = 0.06
+color = Color(1, 0.5, 0.22, 1)
+order = 10
+

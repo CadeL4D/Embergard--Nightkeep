@@ -15,6 +15,7 @@ extends Node
 ##   blight    PackedByteArray  0-255 intensity
 ##   move_cost PackedByteArray  1-254, 255 = impassable (derived; never saved)
 ##   gate      PackedByteArray  1 where a gate stands (derived; never saved)
+##   bridge    PackedByteArray  1 where shallow water is traversable (derived)
 ##   path_tier PackedByteArray  0 = bare ground, 1+ = road of that tier (derived)
 ##   influence PackedByteArray  0-255 buildable sphere strength (derived)
 
@@ -68,6 +69,7 @@ var move_cost: PackedByteArray = PackedByteArray()
 ## Not saved — restored for free, because loading a run calls Building.complete()
 ## on every finished structure and that is where the stamp happens.
 var gate: PackedByteArray = PackedByteArray()
+var bridge: PackedByteArray = PackedByteArray()
 
 ## Road surface per cell. Feeds rebuild_move_cost, so villagers prefer a road exactly in
 ## proportion to how much time it saves them — which is precisely "prefer paths but do not walk
@@ -170,6 +172,8 @@ func generate(new_seed: int, keep_override: int = -1, region_profile: Dictionary
 	blight.resize(grid.cell_count)
 	gate = PackedByteArray()
 	gate.resize(grid.cell_count)
+	bridge = PackedByteArray()
+	bridge.resize(grid.cell_count)
 	path_tier = PackedByteArray()
 	path_tier.resize(grid.cell_count)
 	influence = PackedByteArray()
@@ -263,10 +267,11 @@ func rebuild_move_cost() -> void:
 			continue
 		var t := terrain[i]
 		var f := feature[i]
-		if not Terrain.is_walkable(t, f):
+		var bridged := bridge[i] != 0 and t == Terrain.Type.WATER
+		if not bridged and not Terrain.is_walkable(t, f):
 			move_cost[i] = 255
 			continue
-		var c := Terrain.move_cost(t)
+		var c := 10 if bridged else Terrain.move_cost(t)
 		# Blighted ground drags on villagers. Monsters ignore this (they read their
 		# own flow field, built with a different cost function).
 		c += (blight[i] * 6) / 255
@@ -297,6 +302,16 @@ func set_path_tier(cells: PackedInt32Array, tier: int) -> void:
 			path_tier[i] = tier
 	cost_dirty = true
 	# Roads change how the horde wants to come in too — see FlowField._cell_cost.
+	if Threat:
+		Threat.mark_field_dirty()
+
+
+func set_bridge(cells: PackedInt32Array, present: bool) -> void:
+	var value := 1 if present else 0
+	for i in cells:
+		if grid.is_valid_index(i):
+			bridge[i] = value
+	cost_dirty = true
 	if Threat:
 		Threat.mark_field_dirty()
 
@@ -338,7 +353,7 @@ func rebuild_influence() -> void:
 	influence.fill(0)
 
 	for b in Colony.buildings:
-		if not is_instance_valid(b) or b.is_site():
+		if not is_instance_valid(b) or b.is_site() or b.held_by_hand:
 			continue
 		# Typed local: `b` is a plain Node, so `b.def` is a Variant and every field read off it
 		# would go unchecked, including the int handed to _stamp_influence.
@@ -604,7 +619,7 @@ func add_blight_structure(cell: int, def: BlightStructureDef) -> bool:
 	if feature[cell] != Terrain.Feature.NONE:
 		return false
 
-	blight_structures[cell] = {"kind": def.id, "hp": def.max_hp}
+	blight_structures[cell] = {"kind": def.id, "hp": def.max_hp, "cooldown": 0.0}
 	# Negative id so it can never collide with a Building's instance id, and so anything reading
 	# occupancy to find a building gets nothing rather than a wrong answer.
 	occupancy[cell] = -cell - 1
@@ -633,11 +648,14 @@ func blight_structure_def(cell: int) -> BlightStructureDef:
 ##
 ## Deliberately the same signature and semantics as damage_nest, so every existing attacker — towers,
 ## Wrath, Ward, Consecrate — can be pointed at these with one extra call rather than a new code path.
-func damage_blight_structure(cell: int, amount: float) -> bool:
+func damage_blight_structure(cell: int, amount: float,
+		damage_type: StringName = &"crushing") -> bool:
 	if amount <= 0.0 or not blight_structures.has(cell):
 		return false
 	var entry: Dictionary = blight_structures[cell]
-	var remaining: float = float(entry["hp"]) - amount
+	var def := blight_structure_def(cell)
+	var applied := DamageTypes.apply(amount, def.resistances if def != null else {}, damage_type)
+	var remaining: float = float(entry["hp"]) - applied
 	if remaining > 0.0:
 		entry["hp"] = remaining
 		return false

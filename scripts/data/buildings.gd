@@ -32,6 +32,8 @@ static func all() -> Array[BuildingDef]:
 static func in_menu() -> Array[BuildingDef]:
 	var out: Array[BuildingDef] = []
 	for def: BuildingDef in all():
+		if def.menu_hidden:
+			continue
 		if def.center_tier > 0 and def.upgrades_from.is_empty():
 			continue
 		if not def.upgrades_from.is_empty():

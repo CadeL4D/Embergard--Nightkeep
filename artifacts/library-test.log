@@ -1,0 +1,36 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+Locale: 726 keys, languages en, using en
+   ok   the expanded launch catalog loads
+   ok   the expanded job catalog loads
+   ok   all fourteen Phase-1 resources are registered
+   ok   Watchtower is available on the first run
+   ok   Shrine is available on the first run
+   ok   the complete twenty-miracle roster loads
+   ok   typed resistance reduces incoming damage
+   ok   typed vulnerability increases incoming damage
+   ok   explicit Hand mode lifts a villager without colliding with move orders
+   ok   the Hand previews a held state then spends distance-scaled Faith on drop
+   ok   an ammunition tower can be raised
+   ok   a loaded tower can take one shot
+   ok   tower fire conserves and consumes declared ammunition
+   ok   tower target policy cycles at runtime
+   ok   repair work spends its declared material and restores health
+   ok   a policy-controlled workshop can be raised
+   ok   workshop worker limits are enforced
+   ok   maintain-stock policy pauses completed output
+   ok   maintain-stock policy resumes below target
+   ok   a persistent Labor Effigy can be called onto valid ground
+   ok   persistent constructs reserve ongoing Faith through building upkeep
+   ok   the touch library can manually install and lock a Tome
+   ok   the touch library can combine three chosen unlocked shelved Tomes
+   ok   manual library mode and Tome state survive serialization
+   ok   the Hand can lift a persistent friendly construct
+   ok   construct relocation previews validity and atomically moves its footprint
+   ok   the generated map contains shallow water for a bridge check
+   ok   a bridge can be placed over shallow water
+   ok   a completed bridge opens the water cell to paths
+   ok   removing a bridge closes the water cell again
+
+=== Phase 1 systems test ===
+all Phase-1 defence and economy checks passed

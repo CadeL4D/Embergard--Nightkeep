@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1_job_def"]
+
+[resource]
+script = ExtResource("1_job_def")
+id = &"medicine_making"
+display_name = "JOB_MEDICINE_MAKING"
+workplace = &"apothecary"
+cycle_yield = {&"medicine": 2}
+cycle_cost = {&"herbs": 3, &"food": 1}
+cycle_work = 16.0
+carry_capacity = 6
+priority = 4
+default_quota = 0
+color = Color(0.48, 0.76, 0.58, 1)
+

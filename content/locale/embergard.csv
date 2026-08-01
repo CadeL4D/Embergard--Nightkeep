@@ -1,6 +1,8 @@
 keys,en
 UI_CONTINUE,Continue
 UI_NEW_WORLD,New World
+UI_DOCTRINES,Doctrines (choose up to three)
+UI_NONE,None
 UI_OPTIONS,Options
 UI_CREDITS,Credits
 UI_QUIT,Quit
@@ -185,6 +187,18 @@ DIFFICULTY_BESIEGED,Besieged
 DIFFICULTY_BESIEGED_DESC,The Blight comes faster than you can clear it. Every wall has to earn its wood.
 DIFFICULTY_FORSAKEN,Forsaken
 DIFFICULTY_FORSAKEN_DESC,"One survivor short, everything arriving early, and nothing forgiven. Most runs end in the first week."
+DIFFICULTY_HOMESTEAD,Homestead
+DIFFICULTY_HOMESTEAD_DESC,Low pressure and generous yields for learning the colony and recovering from mistakes.
+DIFFICULTY_SURVIVAL,Survival
+DIFFICULTY_SURVIVAL_DESC,The intended balance. Build a real economy and make every wall earn its place.
+DIFFICULTY_NIGHTMARE,Nightmare
+DIFFICULTY_NIGHTMARE_DESC,The Blight develops early and punishes weak logistics. Recovery is possible but costly.
+DIFFICULTY_PEACEFUL,Peaceful
+DIFFICULTY_PEACEFUL_DESC,No hostile spawning. Economy seasons weather and colony life remain active.
+DIFFICULTY_SANDBOX,Sandbox
+DIFFICULTY_SANDBOX_DESC,Experiment with realm tools without progression awards.
+DIFFICULTY_CUSTOM,Custom
+DIFFICULTY_CUSTOM_DESC,Use the Survival defaults now; configurable timing and multipliers remain bounded by mobile-safe caps.
 DIFFICULTY_SHARD_MULT,{0}\n\nshards ×{1}
 STATE_IDLE,idle
 STATE_SEEKING,seeking
@@ -206,6 +220,7 @@ STATE_DESCRIBE,{0} ({1}){2}
 COST_FREE,free
 COST_ENTRY,{0} {1}
 PLACE_OFF_MAP,off the map
+PLACE_BUILDING_CAP,mobile-safe limit reached ({0} buildings)
 PLACE_BLOCKED,blocked ground
 PLACE_OCCUPIED,already built here
 PLACE_NEED,need {0}
@@ -318,6 +333,17 @@ REALM_SLEEPING,Ledger active — time still passes
 REALM_SITE_SUMMARY,"Founding caravan\n{0} wood  •  {1} stone  •  {2} food\n{3} settlers leave the awake colony."
 REALM_FALLEN_SUMMARY,"Nothing answers here. The road remains, but this ward gives no protection."
 REALM_COLONY_SUMMARY,"{0} survivors  •  {1} buildings  •  mood {2}\nfood {3}  •  wood {4}  •  stone {5}\ncorruption {6}%  •  defense {7}%\nintercepted pressure {8}"
+REALM_ECONOMIC_IDENTITY,specialty {0}  •  demand {1}
+REALM_INCOMING_ROUTES,{0} caravan(s) en route  •  next arrival day {1}
+REALM_ROUTE_FORECAST,arrival day {0}  •  {1} risk ({2}%)
+REALM_RISK_SAFE,safe
+REALM_RISK_GUARDED,guarded
+REALM_RISK_RISKY,risky
+REALM_RISK_DIRE,dire
+REALM_ROUTE_NEEDS_COLONIES,A route needs two standing colonies.
+REALM_ROUTE_BAD_CARGO,That cargo cannot travel this route.
+REALM_ROUTE_CAPACITY,This caravan can carry {0} units.
+REALM_ROUTE_DESTINATION_FULL,The destination has no room for another settler.
 REALM_FOUND,Found colony
 REALM_BEGIN_HERE,Begin settlement here
 REALM_BACK_TO_WORLD,Back to world
@@ -342,8 +368,10 @@ REALM_REASON_ASSAULT_RESOURCE,The assault lacks {0}.
 REALM_REASON_CARAVAN,The caravan cannot leave.
 REALM_NOTICE_AWAKE,Awake at {0}.
 REALM_NOTICE_FOUNDED,{0} is founded. Its ward now faces the Blight.
-REALM_NOTICE_SENT,{0} {1} sent to {2}.
+REALM_NOTICE_SENT,A caravan departed with {0} {1} for {2}.
 REALM_NOTICE_MIGRANT,A settler departed for {0}.
+REALM_ROUTE_ARRIVED,A caravan reached {0}.
+REALM_ROUTE_ARRIVED_HURT,A battered caravan reached {0}; some cargo was lost.
 REALM_NOTICE_OUTPOST_FALLEN,{0} has fallen. The First Hearth still endures. {1}
 REALM_NOTICE_HEART_CRACKS,The Blight Heart cracks. {0} strength remains.
 REALM_NOTICE_VICTORY,The ring holds. The Blight Heart is broken.
@@ -362,6 +390,12 @@ ACCESS_PALETTE_BLUE_YELLOW,Blue-yellow safe
 ACCESS_PALETTE_HIGH_CONTRAST,High contrast
 ACCESS_TEXT_SIZE,Text size
 ACCESS_REDUCED_MOTION,Reduce camera and menu motion
+ACCESS_SCREEN_SHAKE,Screen shake
+ACCESS_HIGH_VISIBILITY_TARGETS,High-visibility target outlines
+ACCESS_PAUSE_WHILE_MANAGING,Pause while managing
+ACCESS_DIAGNOSTICS_OPT_IN,Allow manual diagnostic export
+ACCESS_EXPORT_DIAGNOSTICS,Export local diagnostics
+ACCESS_DIAGNOSTICS_EXPORTED,Diagnostics exported to app storage
 ACCESS_HAPTICS,Haptic feedback on supported devices
 ACCESS_TUTORIALS,Show contextual guidance
 ACCESS_RESET_TUTORIALS,Reset guidance cards
@@ -398,6 +432,7 @@ TUTORIAL_BLIGHT_TITLE,Corruption grows locally
 TUTORIAL_BLIGHT_BODY,Several small Blight pockets can threaten a settled map. Uninhabited regions stay dormant. Ward sources locally before their settlements and night pressure mature.
 HISTORY_LIFETIME,{0} runs • {1} days endured • {2} monsters defeated • {3} buildings raised
 HISTORY_ACHIEVEMENTS,Achievements {0}/{1}: {2}
+HISTORY_CHRONICLE_GOALS,Chronicle goals {0}/{1}  •  doctrines {2}/{3}
 HISTORY_NONE,None yet
 HISTORY_EMPTY,"No worlds have ended yet. Your completed and fallen runs will be recorded here."
 HISTORY_RUN_TITLE,Day {0} • {1} • {2}
@@ -410,6 +445,7 @@ HISTORY_COPY_HELP,Copy this world seed to the clipboard
 HISTORY_COPIED,Seed copied
 SUMMARY_COPY_SEED,Copy world seed {0}
 SUMMARY_ACHIEVEMENTS,New achievements: {0}
+SUMMARY_CHRONICLE_ADVANCES,New Chronicle advances: {0}
 ACHIEVEMENT_FIRST_NIGHT,First Light
 ACHIEVEMENT_BUILDER,Raised in Fire
 ACHIEVEMENT_PURIFIER,Root and Branch
@@ -497,6 +533,56 @@ STORY_DROUGHT_RATION,Ration water
 STORY_DROUGHT_RATION_DETAIL,Reduce thirst at the cost of farm output and morale.
 STORY_DROUGHT_ENDURE,Trust the clouds
 STORY_DROUGHT_ENDURE_DETAIL,Keep all supplies and bear the full drought.
+STORY_EVENT_LOST_CARAVAN_TITLE,Lanterns off the road
+STORY_EVENT_LOST_CARAVAN_BODY,A caravan overdue by two nights has been seen circling the same corrupted ridge.
+STORY_EVENT_EMBERGLASS_PEDDLER_TITLE,The glasswright's cart
+STORY_EVENT_EMBERGLASS_PEDDLER_BODY,A lone peddler offers emberglass charms and asks what the Hearth can spare.
+STORY_EVENT_ROAD_WARDENS_TITLE,Wardens at the milepost
+STORY_EVENT_ROAD_WARDENS_BODY,Armed roadkeepers offer to mark safer crossings between the colonies.
+STORY_EVENT_BROKEN_WHEEL_TITLE,A wheel in the rain
+STORY_EVENT_BROKEN_WHEEL_BODY,A supply wagon has broken an axle where the road enters the marsh.
+STORY_EVENT_HARVEST_FAIR_TITLE,Baskets at the gate
+STORY_EVENT_HARVEST_FAIR_BODY,Nearby steads gather with their region's best harvest and an appetite for trade.
+STORY_EVENT_SEPARATED_FAMILY_TITLE,A name across the fire
+STORY_EVENT_SEPARATED_FAMILY_BODY,New arrivals recognize a family name carved into the Hearth memorial.
+STORY_EVENT_ORPHANED_BAND_TITLE,Children beneath ash-cloaks
+STORY_EVENT_ORPHANED_BAND_BODY,A small band reaches the palisade without the adults who began their journey.
+STORY_EVENT_RETURNING_SCOUTS_TITLE,Footsteps from the old road
+STORY_EVENT_RETURNING_SCOUTS_BODY,Scouts thought lost return with torn maps and news of a passable route.
+STORY_EVENT_HEALERS_PILGRIMAGE_TITLE,White herbs and quiet bells
+STORY_EVENT_HEALERS_PILGRIMAGE_BODY,Travelling healers ask shelter while they tend wounds gathered on the road.
+STORY_EVENT_OATHBOUND_RANGERS_TITLE,An oath against the dark
+STORY_EVENT_OATHBOUND_RANGERS_BODY,Rangers from a fallen ward offer their bows if the colony accepts their burden.
+STORY_EVENT_CREEPING_ROOTS_TITLE,Roots under the granary
+STORY_EVENT_CREEPING_ROOTS_BODY,Black roots press through the floorboards toward the colony's winter food.
+STORY_EVENT_SILENT_TOTEM_TITLE,The totem without birds
+STORY_EVENT_SILENT_TOTEM_BODY,A new Blight totem stands beyond the lamps and the surrounding woods have gone silent.
+STORY_EVENT_INFECTED_WELL_TITLE,A violet skin on the water
+STORY_EVENT_INFECTED_WELL_BODY,The nearest water carries a faint Blight sheen that was absent at dawn.
+STORY_EVENT_HOLLOW_CHANT_TITLE,Voices below the soil
+STORY_EVENT_HOLLOW_CHANT_BODY,A chant rises from empty ground whenever the Ember burns low.
+STORY_EVENT_BESIEGED_OUTPOST_TITLE,Smoke on the supply road
+STORY_EVENT_BESIEGED_OUTPOST_BODY,A neighboring ward signals that enemy builders have closed around its road.
+STORY_EVENT_LIGHTNING_HARVEST_TITLE,Fire from the storm
+STORY_EVENT_LIGHTNING_HARVEST_BODY,Lightning strikes emberglass deposits and leaves them singing with dangerous power.
+STORY_EVENT_FLOODED_STOREHOUSE_TITLE,Water under the doors
+STORY_EVENT_FLOODED_STOREHOUSE_BODY,Rising runoff reaches a storehouse and workers argue over what to save first.
+STORY_EVENT_FOGBOUND_PATROL_TITLE,Bells in the fog
+STORY_EVENT_FOGBOUND_PATROL_BODY,A route patrol rings its return bell from somewhere beyond the visible road.
+STORY_EVENT_HAIL_ON_ROOFS_TITLE,Stones from a white sky
+STORY_EVENT_HAIL_ON_ROOFS_BODY,Hail batters workshops while the region's exposed crop bends under its weight.
+STORY_EVENT_ASHFALL_TITLE,Ash at noon
+STORY_EVENT_ASHFALL_BODY,Blight ash rides the stormfront and turns daylight the color of old iron.
+STORY_EVENT_FAILED_HARVEST_TITLE,Empty sheaves
+STORY_EVENT_FAILED_HARVEST_BODY,The region's expected harvest comes in light and several households face empty shelves.
+STORY_EVENT_DRY_CISTERN_TITLE,Stone above a dry echo
+STORY_EVENT_DRY_CISTERN_BODY,The deepest cistern answers the bucket with dust instead of water.
+STORY_EVENT_HERB_BLOOM_TITLE,Bitter flowers after heat
+STORY_EVENT_HERB_BLOOM_BODY,Rare medicinal flowers open where the drought pulled water from the marsh.
+STORY_EVENT_RATION_DISPUTE_TITLE,The last sealed jar
+STORY_EVENT_RATION_DISPUTE_BODY,Two households claim the same ration mark as tempers rise with the heat.
+STORY_EVENT_EMBERWIND_TITLE,A wind that drinks flame
+STORY_EVENT_EMBERWIND_BODY,A hot Blight wind bends every lamp away from the corrupted frontier.
 UI_CONTROL,Control
 CONTROL_HINT,Paint safe boundaries or issue a settlement-wide order.
 CONTROL_PAINT_HINT,Drag across the world to paint. Tap the active tool again when finished.
@@ -545,6 +631,24 @@ UI_MENU,Game menu
 PAUSE_TITLE,Nightkeep paused
 PAUSE_RESUME,Return to the colony
 PAUSE_SETTINGS,Settings
+PAUSE_CODEX,Field Guide
+CODEX_SEARCH,Search the Field Guide
+CODEX_NO_RESULTS,No matching guidance.
+CODEX_OVERLAY_LINK,Relevant overlay: {0}
+CODEX_DOCTRINES_TITLE,Doctrine choices
+CODEX_DOCTRINES_BODY,Choose up to three doctrines when creating a realm. Each changes a benefit and a cost; none is required to use a core system.
+CODEX_DAMAGE_TITLE,Damage and counters
+CODEX_DAMAGE_BODY,Piercing answers light swarms; crushing breaks armor and structures; fire controls groups; holy burns Shades and Blight; elemental damage changes with weather. Inspect a forecast before committing ammunition.
+CODEX_MODES_TITLE,Realm modes
+CODEX_MODES_BODY,Homestead is forgiving; Survival is the intended balance; Besieged accelerates enemy development; Nightmare restricts recovery; Peaceful removes hostile spawning; Sandbox removes progression awards; Custom stays inside the same mobile-safe caps.
+TUTORIAL_STORAGE_TITLE,Every item has a place
+TUTORIAL_STORAGE_BODY,Resources live in reachable buildings and workshop buffers. A full or isolated store can stop work even when the colony total looks healthy; use the storage and logistics overlays to find the gap.
+TUTORIAL_REPAIR_TITLE,Damage survives the night
+TUTORIAL_REPAIR_BODY,Assign Repairers and keep the declared materials reachable. Priority and repair coverage decide which wall is restored first; untreated damage remains tomorrow.
+TUTORIAL_HAND_TITLE,Use the Hand deliberately
+TUTORIAL_HAND_BODY,Enter Hand mode before lifting. Tap an object then a valid destination; weight and reserved constructs show their Faith cost before confirmation.
+TUTORIAL_ROUTES_TITLE,Caravans take time
+TUTORIAL_ROUTES_BODY,Cargo leaves its source at departure and remains in transit for one or more days. Weather Blight escorts and warded settlements shape the visible risk forecast; no off-screen courier is simulated.
 PAUSE_SAVE_MENU,Save and return to main menu
 PAUSE_SAVE_NOTE,Your active colony and Realm will be saved before leaving.
 SUMMARY_NO_SURVIVORS,Game over · no survivors
@@ -557,3 +661,223 @@ GATHER_RADIUS,Radius {0}
 GATHER_BRUSH_HINT,Paint resources to gather
 GATHER_BRUSH_STATUS,{0} · {1} marked
 GATHER_AREA_TOOLTIP,Choose where {0} may gather
+OPTIONS_GAMEPLAY,Gameplay
+OPTIONS_GRAPHICS,Graphics
+OPTIONS_GRAPHICS_BATTERY,Battery · 30 FPS
+OPTIONS_GRAPHICS_BALANCED,Balanced · 60 FPS
+OPTIONS_GRAPHICS_QUALITY,Quality · 60 FPS
+OPTIONS_GRAPHICS_NOTE,Graphics change presentation only. Simulation rules and outcomes stay identical.
+OPTIONS_HANDEDNESS,Button layout
+OPTIONS_RIGHT_HANDED,Right-handed
+OPTIONS_LEFT_HANDED,Left-handed
+OPTIONS_HOLD_DURATION,Hold duration
+SAVE_RECOVERED,The newest autosave was damaged. Nightkeep recovered the previous valid checkpoint.
+RESOURCE_ORE,ore
+RESOURCE_EMBERGLASS,emberglass
+RESOURCE_HERBS,herbs
+RESOURCE_INGOTS,ingots
+RESOURCE_RATIONS,rations
+RESOURCE_MEDICINE,medicine
+RESOURCE_ARROWS,arrows
+RESOURCE_BOLTS,bolts
+BUILDING_STONE_WALL,Stone Wall
+BUILDING_STONE_WALL_DESC,Dressed stone resists arrows and flame but still yields to crushing siege attacks.
+BUILDING_EMBER_RAMPART,Ember Rampart
+BUILDING_EMBER_RAMPART_DESC,A consecrated final wall that resists Blight and lights the ground around it.
+BUILDING_REINFORCED_GATE,Reinforced Gate
+BUILDING_REINFORCED_GATE_DESC,An iron-bound gate that keeps the funnel open for villagers and costly for the horde.
+BUILDING_SPIKE_BARRICADE,Spike Barricade
+BUILDING_SPIKE_BARRICADE_DESC,Cheap close defence that punishes swarms but burns easily and cannot hold a line alone.
+BUILDING_CINDER_TRAP,Cinder Trap
+BUILDING_CINDER_TRAP_DESC,A low fire trap that scorches clustered attackers. Strong against crowds and vulnerable to attrition.
+BUILDING_BOW_TOWER,Bow Tower
+BUILDING_BOW_TOWER_DESC,Rapid anti-swarm fire with excellent reach. Every shot consumes one arrow.
+BUILDING_BALLISTA,Ballista
+BUILDING_BALLISTA_DESC,Slow piercing bolts built to break armor and priority targets at long range.
+BUILDING_CATAPULT,Catapult
+BUILDING_CATAPULT_DESC,Stone ammunition lands in a wide crushing blast and can prioritize Blight structures.
+BUILDING_EMBER_BEACON,Ember Beacon
+BUILDING_EMBER_BEACON_DESC,A holy light that hunts phasing creatures and Blight works while reserving a steady flow of Faith.
+BUILDING_BANISH_SPIRE,Banish Spire
+BUILDING_BANISH_SPIRE_DESC,A Faith-fed control tower that throws attackers back from gates and damaged walls.
+BUILDING_STORM_ROD,Storm Rod
+BUILDING_STORM_ROD_DESC,Chains elemental force through clustered enemies. Storms greatly empower it and damage the rod in return.
+BUILDING_BRIDGE,Bridge
+BUILDING_BRIDGE_DESC,Paint a walkable timber crossing over shallow water. Deep water remains impassable.
+BUILDING_MAINTENANCE_YARD,Maintenance Yard
+BUILDING_MAINTENANCE_YARD_DESC,Unlocks dedicated Repairers who restore damaged structures with declared materials.
+BUILDING_AMMO_STORE,Ammo Store
+BUILDING_AMMO_STORE_DESC,A forward drop point intended for arrows and bolts so defensive supply lines stay short.
+BUILDING_GRANARY,Granary
+BUILDING_GRANARY_DESC,A high-capacity food store prepared for raw food herbs and preserved rations.
+BUILDING_WAREHOUSE,Warehouse
+BUILDING_WAREHOUSE_DESC,A large general store for a developed settlement and its production chains.
+BUILDING_BARRACKS,Barracks
+BUILDING_BARRACKS_DESC,Fortified beds keep defenders close to the wall and recover them between attacks.
+BUILDING_RANGER_LODGE,Ranger Lodge
+BUILDING_RANGER_LODGE_DESC,A forward lodge with beds light and stores for patrol supplies.
+BUILDING_KITCHEN,Kitchen
+BUILDING_KITCHEN_DESC,Cooks raw food into compact nourishing rations under a maintain-stock policy.
+BUILDING_APOTHECARY,Apothecary
+BUILDING_APOTHECARY_DESC,Combines herbs and food into medicine for the clinic system.
+BUILDING_BOWYER,Bowyer
+BUILDING_BOWYER_DESC,Turns boards into bundles of arrows for rapid-fire towers.
+BUILDING_SMELTER,Smelter
+BUILDING_SMELTER_DESC,Burns wood with mined ore to produce durable metal ingots.
+BUILDING_FORGE,Forge
+BUILDING_FORGE_DESC,An alternate tool chain using boards and ingots instead of cut stone.
+BUILDING_ARMORY,Armory
+BUILDING_ARMORY_DESC,Manufactures heavy ballista bolts now and will outfit defenders as equipment comes online.
+BUILDING_BOTTLER,Bottler
+BUILDING_BOTTLER_DESC,A protected water point prepared to fill reusable waterskins when equipment comes online.
+JOB_REPAIRING,Repairing
+JOB_COOKING,Cooking
+JOB_MEDICINE_MAKING,Medicine making
+JOB_FLETCHING,Fletching
+JOB_SMELTING,Smelting
+JOB_FORGING,Forging
+JOB_ARMORING,Armoring
+JOB_RANGER,Ranger
+JOB_BOTTLING,Bottling
+JOB_LUMBERER,Lumberer
+JOB_MINER,Miner
+JOB_MEDIC,Medic
+BUILDING_LUMBER_LODGE,Lumber Lodge
+BUILDING_LUMBER_LODGE_DESC,Employs lumberers who harvest designated trees within its local catchment.
+BUILDING_MINING_CAMP,Mining Camp
+BUILDING_MINING_CAMP_DESC,Employs miners who extract designated stone and ore within its local catchment.
+BUILDING_CLINIC,Clinic
+BUILDING_CLINIC_DESC,Medics spend medicine to heal wounds infection poison and Blight sickness.
+BLD_STORAGE," · storage {0}/{1}"
+BLD_INPUTS," · inputs {0}/{1}"
+BLD_OUTPUTS," · output {0}/{1}"
+SELECT_IDENTITY,"{0} · day {1} · {2}"
+SELECT_CHILD,Child
+SELECT_EQUIPMENT," · gear: {0}"
+ITEM_STONE_AXE,Stone Axe
+ITEM_IRON_AXE,Iron Axe
+ITEM_PICKAXE,Pickaxe
+ITEM_REPAIR_HAMMER,Repair Hammer
+ITEM_HARVEST_SICKLE,Harvest Sickle
+ITEM_WOOD_CLUB,Wood Club
+ITEM_IRON_SWORD,Iron Sword
+ITEM_ASH_SPEAR,Ash Spear
+ITEM_SHORTBOW,Shortbow
+ITEM_LONGBOW,Longbow
+ITEM_FIELD_CROSSBOW,Field Crossbow
+ITEM_FORGE_MACE,Forge Mace
+ITEM_PADDED_COAT,Padded Coat
+ITEM_LEATHER_ARMOR,Leather Armor
+ITEM_MAIL_SHIRT,Mail Shirt
+ITEM_EMBERPLATE,Emberplate
+ITEM_WOOD_SHIELD,Wood Shield
+ITEM_IRON_SHIELD,Iron Shield
+ITEM_BLIGHT_WARD,Blight Ward
+ITEM_WATERSKIN,Waterskin
+ITEM_BANDAGE,Bandage
+ITEM_MEDICINE_VIAL,Medicine Vial
+ITEM_ANTIDOTE,Antidote
+ITEM_EMBER_TONIC,Ember Tonic
+EQUIP_BEST,Gear: best available
+EQUIP_PRESERVE,Gear: preserve durability
+EQUIP_NONE,Gear: none
+TARGET_POLICY,target: {0}
+TARGET_NEAREST,nearest
+TARGET_STRONGEST,strongest
+TARGET_WEAKEST,weakest
+TARGET_STRUCTURE,structures
+TARGET_PHASING,phasing
+TARGET_MARKED,marked
+REPAIR_PRIORITY,repair P{0}
+PRODUCTION_PAUSE,pause
+PRODUCTION_RESUME,resume
+WORKER_LIMIT,workers {0}/{1}
+PRODUCTION_PRIORITY,work P{0}
+PRODUCTION_MAINTAIN,keep {0}
+PRODUCTION_MAINTAIN_OFF,keep: off
+BLD_AMMO," · {0} {1}"
+BLD_FAITH_UPKEEP," · {0}/s Faith"
+LEDGER_UPKEEP,{0} upkeep
+BLIGHT_GRAVEYARD,blight graveyard
+BLIGHT_GRAVEYARD_DESC,A spawning ground that houses another worker and adds bodies to every night.
+BLIGHT_DEFENSE_TOWER,blight thorn tower
+BLIGHT_DEFENSE_TOWER_DESC,A rooted ranged organ that attacks villagers who push into the enemy camp.
+BLIGHT_ROAD_NODE,blight road node
+BLIGHT_ROAD_NODE_DESC,A pulsing junction that supports another worker and hastens nearby creatures.
+BLIGHT_SIEGE_WORKSHOP,blight siege workshop
+BLIGHT_SIEGE_WORKSHOP_DESC,A heavy growth that feeds wall-breakers and sharply raises nightly pressure.
+BLIGHT_CORRUPTION_WELL,corruption well
+BLIGHT_CORRUPTION_WELL_DESC,A durable economic heart that supports two workers and intensifies the surrounding Blight.
+UI_HAND,Hand
+HAND_PICK,Hand: choose
+HAND_HOLDING,Hand: held · {0}+ Faith
+HAND_INVALID_TARGET,The Hand can lift one villager or a light unrooted enemy.
+HAND_INVALID_DROP,The Hand needs open walkable ground.
+HAND_NEED_FAITH,The Hand needs at least {0} Faith for that move.
+HAND_PREVIEW,Hand: {0} Faith · {1}
+HAND_VALID,release to place
+HAND_BLOCKED,blocked
+BUILDING_LABOR_EFFIGY,Labor Effigy
+BUILDING_LABOR_EFFIGY_DESC,A dismissible divine construct that accelerates nearby work while its Faith upkeep is sustained.
+BUILDING_ASH_SENTINEL,Ash Sentinel
+BUILDING_ASH_SENTINEL_DESC,A dismissible holy tower called directly from the Ember and sustained by Faith.
+POWER_MEND,Mend
+POWER_MEND_DESC,Restores health to villagers and completed structures in a small area.
+POWER_RECALL,Recall
+POWER_RECALL_DESC,Returns the nearest villager under the target to safe ground beside the Hearth.
+POWER_KINDLE,Kindle
+POWER_KINDLE_DESC,Ignites a temporary light and scorches corrupted creatures standing at its center.
+POWER_HARVEST,Harvest
+POWER_HARVEST_DESC,Instantly gathers natural resources in the target area into colony stores.
+POWER_CONJURE_MATERIAL,Conjure Material
+POWER_CONJURE_MATERIAL_DESC,Creates a small emergency stack of stone when terrain or routes have cut the colony off.
+POWER_HALLOW_WALL,Hallow Wall
+POWER_HALLOW_WALL_DESC,Repairs nearby structures and temporarily halves Blight damage against them.
+POWER_LABOR_EFFIGY,Labor Effigy
+POWER_LABOR_EFFIGY_DESC,Calls a persistent work aura. Up to eight may stand and each continuously consumes Faith.
+POWER_ASH_SENTINEL,Ash Sentinel
+POWER_ASH_SENTINEL_DESC,Calls a persistent holy defender. Up to eight may stand and each continuously consumes Faith.
+POWER_BANISH,Banish
+POWER_BANISH_DESC,Damages and throws every light enemy away from the chosen center.
+POWER_CHARM,Charm
+POWER_CHARM_DESC,Temporarily removes one non-boss creature from the hostile force and sends it back toward camp.
+POWER_STORMCALL,Stormcall
+POWER_STORMCALL_DESC,Forces a severe storm that empowers Storm Rods while worsening travel and corruption risk.
+POWER_LAST_RITE,Last Rite
+POWER_LAST_RITE_DESC,A costly final intervention that heals allies and burns corrupted enemies across a broad area.
+MONSTER_HUSK,Husk
+MONSTER_CINDERLING,Cinderling
+MONSTER_VEILWALKER,Veilwalker
+MONSTER_PLAGUEBEARER,Plaguebearer
+MONSTER_BLIGHT_MENDER,Blight Mender
+MONSTER_RAMMER,Rammer
+MONSTER_NEEDBACK,Needleback
+MONSTER_BLIGHT_SAPPER,Blight Sapper
+MONSTER_GLOOMWING,Gloomwing
+MONSTER_ROT_LEECH,Rot Leech
+MONSTER_SIEGE_SPORE,Siege Spore
+BOSS_MIRE_MATRON,Mire Matron
+BOSS_CINDER_COLOSSUS,Cinder Colossus
+BOSS_FROST_WIDOW,Frost Widow
+BOSS_HEART_WARDEN,Heart Warden
+NOTICE_EMPOWERED_NIGHT,An empowered Blight wave is coming. Its creatures are larger and worth more Faith.
+NOTICE_BOSS_RISES,{0} rises to defend the Blight.
+NOTICE_BOSS_FALLS,{0} falls. The colony recovers {1} emberglass.
+UI_LIBRARY,Library
+LIBRARY_TITLE,Tome Library
+LIBRARY_AUTO,Auto-manage
+LIBRARY_CAPACITY,Installed {0}/{1}
+LIBRARY_EMPTY,No Tomes yet. Assign priests at a Shrine to write the first one.
+LIBRARY_ROW,{0} · {1}% · +{2}/s
+LIBRARY_INSPECT,Info
+LIBRARY_INSTALL,Install
+LIBRARY_REMOVE,Shelve
+LIBRARY_LOCK,Lock
+LIBRARY_UNLOCK,Unlock
+LIBRARY_COMBINE,Merge
+LIBRARY_INSPECT_HINT,Tap Info to compare durability, Faith rate, toughness, and tradeoffs.
+LIBRARY_DETAILS,"{0} · durability {1}% · Faith +{2}/s · toughness {3}\n{4}"
+LIBRARY_NO_SLOT,No free Tome slot. Shelve another book or expand the Temple.
+LIBRARY_COMBINE_NEEDS,Merge needs three unlocked shelved Tomes of the same tier.
+UI_DISMISS,Dismiss
+UI_DISMISS_CONFIRM,Sure? Dismiss

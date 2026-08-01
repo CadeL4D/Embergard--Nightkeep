@@ -67,6 +67,9 @@ extends Resource
 ## Desktop may paint this one-cell structure along a mouse drag. Data, not an id check:
 ## walls and roads opt in while gates, towers and ordinary buildings remain one deliberate click.
 @export var drag_placeable: bool = false
+## Allows this one-cell structure to be placed over shallow water and makes that
+## cell walkable once complete. Deep water stays outside the mobile launch scope.
+@export var bridges_water: bool = false
 
 @export_group("Construction")
 ## Resource cost, e.g. { &"wood": 20, &"stone": 10 }.
@@ -74,6 +77,13 @@ extends Resource
 ## Villager-seconds of work to raise it once the site is prepared.
 @export var build_work: float = 20.0
 @export var max_hp: float = 100.0
+## Fractional resistance by DamageTypes id. Positive values reduce damage;
+## negative values are vulnerabilities shared with monsters and status effects.
+@export var resistances: Dictionary = {}
+## One completed repair cycle consumes this cost and restores `repair_amount` HP.
+@export var repair_cost: Dictionary = {&"wood": 1}
+@export var repair_work: float = 5.0
+@export var repair_amount: float = 30.0
 
 ## The building this one replaces, upgraded IN PLACE. Empty means it is placed fresh.
 ##
@@ -104,6 +114,16 @@ extends Resource
 ## Extra Faith the colony can hold while this stands. The Temple's reason to exist beyond
 ## unlocking powers — see Divine.faith_max().
 @export var faith_capacity: float = 0.0
+## Standing Faith burden while this completed structure remains active.
+@export var faith_upkeep: float = 0.0
+## Phase-3 physical inventory metadata. Phase 1 still uses the aggregate cache,
+## but content declares its eventual capacity and accepted categories now.
+@export var inventory_capacity: int = 0
+@export var storage_tags: Array[StringName] = []
+@export var input_capacity: int = 0
+@export var output_capacity: int = 0
+## Multiplier on ResourceDef spoilage. Granaries reduce loss but never eliminate it.
+@export_range(0.0, 2.0) var spoilage_multiplier: float = 1.0
 
 ## Tiles this building pushes the buildable sphere outward (0 means it does not).
 ##
@@ -145,6 +165,18 @@ func workplace_key() -> StringName:
 ## picked apart by something they cannot answer.
 @export var attack_range: float = 6.0
 @export var attack_cooldown: float = 0.9
+@export var attack_type: StringName = &"piercing"
+## Radius in tiles around the chosen target. Zero is a single-target impact.
+@export var attack_area_radius: float = 0.0
+@export var knockback_tiles: float = 0.0
+@export var ammo_kind: StringName = &""
+@export var ammo_per_shot: int = 0
+@export var default_target_policy: StringName = &"nearest"
+@export var target_tags: Array[StringName] = []
+@export var requires_line_of_fire: bool = true
+## Storm Rod-style weather interaction. Other towers leave both neutral.
+@export var storm_damage_multiplier: float = 1.0
+@export var storm_self_damage: float = 0.0
 
 @export_group("Board")
 @export var order: int = 0
@@ -153,6 +185,8 @@ func workplace_key() -> StringName:
 ## This is how the meta loop adds OPTIONS rather than raw power — a new building
 ## changes what a run can become, where a flat stat bonus just makes it easier.
 @export var unlock_cost: int = 0
+@export var menu_hidden: bool = false
+@export var work_aura: float = 0.0
 
 
 func cost_text() -> String:

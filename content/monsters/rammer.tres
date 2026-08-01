@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/brute.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"rammer"
+display_name = "MONSTER_RAMMER"
+sprite = ExtResource("2_tex")
+max_health = 165.0
+move_speed = 8.0
+damage = 18.0
+attack_cooldown = 2.4
+structure_damage_scale = 5.0
+attack_type = &"crushing"
+behavior_tags = Array[StringName]([&"siege", &"armored"])
+resistances = {&"piercing": 0.55, &"crushing": -0.3, &"fire": 0.15}
+faith_on_death = 7.0
+threat_cost = 7.0
+min_night = 11
+weight = 0.3
+burn_per_second = 1.0
+burn_threshold = 205

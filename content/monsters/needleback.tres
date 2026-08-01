@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/spitter.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"needleback"
+display_name = "MONSTER_NEEDBACK"
+sprite = ExtResource("2_tex")
+max_health = 58.0
+move_speed = 14.0
+damage = 9.0
+attack_range = 6.0
+attack_cooldown = 1.4
+structure_damage_scale = 0.2
+attack_type = &"piercing"
+behavior_tags = Array[StringName]([&"ranged", &"armored"])
+resistances = {&"piercing": 0.35, &"crushing": -0.2}
+faith_on_death = 4.0
+threat_cost = 4.5
+min_night = 9
+weight = 0.45
+burn_per_second = 4.0
+burn_threshold = 170

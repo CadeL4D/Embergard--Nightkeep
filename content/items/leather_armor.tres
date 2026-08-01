@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"leather_armor"
+display_name = "ITEM_LEATHER_ARMOR"
+slot = &"armor"
+max_durability = 140
+resistances = {&"piercing": 0.14, &"crushing": 0.08}
+order = 21

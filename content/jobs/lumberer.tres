@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"lumberer"
+display_name = "JOB_LUMBERER"
+target_features = Array[int]([1])
+workplace = &"lumber_lodge"
+catchment_radius = 18
+work_rate = 1.12
+carry_capacity = 14
+equipment_tags = Array[StringName]([&"woodcutting"])
+priority = 0
+default_quota = 0
+color = Color(0.4, 0.62, 0.32, 1)

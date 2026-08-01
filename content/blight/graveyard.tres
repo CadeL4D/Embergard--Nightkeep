@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BlightStructureDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blight_structure_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/blight/hovel.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"graveyard"
+display_name = "BLIGHT_GRAVEYARD"
+description = "BLIGHT_GRAVEYARD_DESC"
+sprite = ExtResource("2_tex")
+max_hp = 75.0
+height_tiles = 1
+min_night = 2
+weight = 2.0
+mass_cost = 9
+worker_capacity = 1
+repairs_workers = true
+economy_role = &"spawner"
+threat_bonus = 3.0
+resistances = {&"blight": 0.8, &"holy": -0.3}
+color = Color(0.48, 0.12, 0.3, 1)
+order = 3
+

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"iron_shield"
+display_name = "ITEM_IRON_SHIELD"
+slot = &"offhand"
+max_durability = 230
+resistances = {&"piercing": 0.22, &"crushing": 0.12}
+job_tags = Array[StringName]([&"warrior"])
+order = 25

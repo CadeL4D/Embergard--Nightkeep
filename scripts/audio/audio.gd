@@ -41,6 +41,10 @@ var _fifth_phase: float = 0.0
 var _melody_phase: float = 0.0
 var _night_blend: float = 0.0
 var _target_night_blend: float = 0.0
+var _blight_blend: float = 0.0
+var _target_blight_blend: float = 0.0
+var _blight_phase: float = 0.0
+var _mood_sample_accum: float = 0.0
 var _resource_amounts: Dictionary = {}
 var _last_resource_sound_ms: int = 0
 
@@ -193,6 +197,43 @@ func _wire_events() -> void:
 	Events.power_cast.connect(func(_id: StringName, _pos: Vector2) -> void:
 		play_sfx(&"power_cast", 0.04)
 	)
+	Events.hand_action.connect(func(action: StringName, _pos: Vector2) -> void:
+		play_sfx(&"hand_lift" if action == &"lift" else &"hand_drop", 0.025)
+	)
+	Events.tower_fired.connect(func(_tower: Node, _damage: float, _pos: Vector2) -> void:
+		play_sfx(&"tower_fire", 0.11)
+	)
+	Events.monster_attacked.connect(func(_monster: Node, _target: Node) -> void:
+		play_sfx(&"monster_attack", 0.13)
+	)
+	Events.production_completed.connect(func(_building: Node, _kind: StringName,
+			_amount: int) -> void: play_sfx(&"production", 0.06))
+	Events.building_repaired.connect(func(_building: Node, _amount: float) -> void:
+		play_sfx(&"repair", 0.08)
+	)
+	Events.villager_injured.connect(func(_villager: Node, _amount: float) -> void:
+		play_sfx(&"injury", 0.1)
+	)
+	Events.villager_treated.connect(func(_villager: Node) -> void:
+		play_sfx(&"heal", 0.035)
+	)
+	Events.trade_route_updated.connect(func(_route_id: int, status: StringName) -> void:
+		if status == &"in_transit":
+			play_sfx(&"route_depart", 0.025)
+		elif status == &"arrived":
+			play_sfx(&"route_arrive", 0.025)
+		elif status == &"lost":
+			play_sfx(&"route_lost", 0.025)
+	)
+	Events.climate_changed.connect(func(_season: StringName, weather: StringName,
+			severity: float) -> void:
+		if weather == &"storm" and severity >= 0.35:
+			play_sfx(&"weather_storm", 0.02)
+	)
+	Events.monster_spawned.connect(func(monster: Node) -> void:
+		if monster is Monster and monster.def != null and monster.def.is_boss:
+			play_sfx(&"boss", 0.015)
+	)
 	Events.wave_incoming.connect(func(_size: int, _composition: Dictionary) -> void:
 		play_sfx(&"wave", 0.025)
 	)
@@ -241,6 +282,13 @@ func _on_resource_changed(kind: StringName, amount: int) -> void:
 
 func _process(delta: float) -> void:
 	_night_blend = move_toward(_night_blend, _target_night_blend, delta * 0.22)
+	_blight_blend = move_toward(_blight_blend, _target_blight_blend, delta * 0.12)
+	_mood_sample_accum += delta
+	if _mood_sample_accum >= 0.75:
+		_mood_sample_accum = 0.0
+		_target_blight_blend = clampf(
+			World.blight_field.coverage() * 1.7 if World.blight_field != null else 0.0,
+			0.0, 1.0)
 	if _music_playback == null:
 		return
 	var frames := mini(_music_playback.get_frames_available(), 4096)
@@ -263,10 +311,14 @@ func _music_frame() -> Vector2:
 	var semitone := lerpf(float(day_scale[index]), float(night_scale[index]), _night_blend)
 	var melody_hz := root * 2.0 * pow(2.0, semitone / 12.0)
 	_melody_phase = fmod(_melody_phase + TAU * melody_hz * dt, TAU)
+	_blight_phase = fmod(_blight_phase + TAU * root * 0.503 * dt, TAU)
 	var local := fmod(_music_time, 1.45)
 	var envelope := exp(-local * 2.4) * (0.45 if step % 3 != 1 else 0.0)
 	var drone := sin(_drone_phase) * 0.045 + sin(_fifth_phase) * 0.024
 	var melody := sin(_melody_phase) * envelope * 0.026
 	var breath := sin(_music_time * TAU / 12.0) * 0.006
-	var sample := drone + melody + breath
+	# A slow detuned layer makes Blight territory audible before the player opens an overlay.
+	var corruption := (sin(_blight_phase) * 0.018 \
+		+ sin(_blight_phase * 1.059) * 0.012) * _blight_blend
+	var sample := drone + melody + breath + corruption
 	return Vector2(sample, sample * 0.96)

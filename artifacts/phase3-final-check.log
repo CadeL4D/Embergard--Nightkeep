@@ -1,0 +1,36 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+Locale: 772 keys, languages en, using en
+   ok   all resource behavior is data-driven
+   ok   the launch item catalog contains twenty-four records
+   ok   the living-colony job catalog reaches the launch minimum
+   ok   the launch building catalog reaches forty-eight structures
+   ok   field workplaces employ harvesters inside a declared catchment
+   ok   ItemRecord round-trips durability and stable identity
+   ok   villagers receive deterministic unique identities and names
+   ok   eligible adults form persistent households
+   ok   specialized physical stores can be raised
+   ok   resources enter specific building inventories with capacity
+   ok   Granaries reduce spoilage without eliminating it
+   ok   destroyed storage evacuates contents instead of deleting them
+   ok   workshop inputs are hauled into a committed local buffer
+   ok   a production cycle consumes its local inputs exactly once
+   ok   workshop output exists locally before a villager hauls it to storage
+   ok   aggregate stock is only a cache of physical inventories
+   ok   crafted items are lightweight stored records
+   ok   best-available job policy withdraws suitable equipment from a real store
+   ok   none policy returns equipment without destroying it
+   ok   birth creates a child that matures after six days
+   ok   children cannot be assigned to work
+   ok   a staffed Clinic spends medicine to treat infection and wounds
+   ok   schema 8 captures physical stores and villager records
+   ok   schema 8 checkpoint commits the Phase-3 state
+   ok   schema 8 physical colony restores
+   ok   save/load conserves every stored resource
+   ok   save/load preserves committed workshop inputs
+   ok   save/load conserves stored items
+   ok   save/load preserves stable villager identities
+   ok   legacy global stock migrates deterministically with overflow and no loss
+
+=== Phase 3 systems test ===
+all physical-inventory and living-villager checks passed

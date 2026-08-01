@@ -57,6 +57,8 @@ func _snapshot_profile() -> void:
 		"run_history": Meta.run_history.duplicate(true),
 		"lifetime_stats": Meta.lifetime_stats.duplicate(true),
 		"achievements": Meta.achievements.duplicate(),
+		"chronicle_completed": Meta.chronicle_completed.duplicate(),
+		"equipped_doctrines": Meta.equipped_doctrines.duplicate(),
 	}
 
 
@@ -70,6 +72,8 @@ func _restore_profile() -> void:
 	Meta.run_history.assign(_profile_snapshot["run_history"])
 	Meta.lifetime_stats = _profile_snapshot["lifetime_stats"].duplicate(true)
 	Meta.achievements.assign(_profile_snapshot["achievements"])
+	Meta.chronicle_completed.assign(_profile_snapshot["chronicle_completed"])
+	Meta.equipped_doctrines.assign(_profile_snapshot["equipped_doctrines"])
 	Meta.save_profile()
 
 

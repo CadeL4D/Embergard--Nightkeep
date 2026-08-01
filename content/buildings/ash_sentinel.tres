@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/watchtower.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"divine_ash_sentinel"
+display_name = "BUILDING_ASH_SENTINEL"
+description = "BUILDING_ASH_SENTINEL_DESC"
+sprite = ExtResource("2_tex")
+category = &"divine"
+tier = 1
+footprint = Vector2i(2, 2)
+blocks_movement = true
+max_blight = 70
+cost = {}
+build_work = 0.0
+max_hp = 125.0
+resistances = {&"fire": 0.8, &"blight": 0.25}
+repair_cost = {}
+light_radius = 5
+faith_upkeep = 1.4
+influence_radius = 5
+attack_damage = 10.0
+attack_range = 5.5
+attack_cooldown = 0.9
+attack_type = &"holy"
+requires_line_of_fire = false
+order = 91
+color = Color(1, 0.58, 0.28, 1)
+menu_hidden = true

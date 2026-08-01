@@ -1,0 +1,1464 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+Locale: 728 keys, languages en, using en
+=== Embergard smoke test ===
+difficulty: harried
+
+-- seed 1 --
+   ok   the Ward power exists
+   ok   Ward is a PURIFY power, so _cast_purify is finally reachable
+   ok   the Gate building exists
+   ok   all four difficulty tiers load (got 4)
+   ok   the test tier is the neutral one, so the numbers below are the real ones
+   ok   a gate blocks monsters without blocking villagers
+   ok   every nest starts alive
+   ok   a live nest has hit points
+   ok   half damage does not destroy a nest
+   ok   a wounded nest is still standing
+   ok   enough damage destroys a nest
+   ok   a destroyed nest is gone from the map
+   ok   a destroyed nest drops its hit points
+   ok   the threat director sees one fewer nest to spawn from
+   ok   the ground a nest stood on opens up
+   ok   the map has berries on it (133)
+   ok   berry thickets stay compact rather than taking over the map (133)
+   ok   stone is distributed beyond the guaranteed quarry (424 cells)
+   ok   the keep pad is dry land
+   ok   a chosen keep site is used
+   ok   the same seed and site regenerate an identical map
+   ok   the meta layer has enough to buy to outlast a few runs (9 items)
+   ok   buying everything takes many runs (1115 shards)
+   FAIL no id is shared between a building and a power (Meta.unlocked is one flat list)
+   ok   powers are shard-purchasable too (5)
+   ok   the map is at least 112 wide, or the nest ring falls in open water (112)
+   ok   nests are far enough out to give the player warning (30 tiles)
+   ok   the nest ring sits inside the coastline (30 vs ~35)
+   ok   resource clumps have solid interiors to draw as a mass (670 cells)
+   ok   feature 1 mask 0 variant 0 is inside the atlas
+   ok   feature 1 mask 1 variant 0 is inside the atlas
+   ok   feature 1 mask 2 variant 0 is inside the atlas
+   ok   feature 1 mask 3 variant 0 is inside the atlas
+   ok   feature 1 mask 4 variant 0 is inside the atlas
+   ok   feature 1 mask 5 variant 0 is inside the atlas
+   ok   feature 1 mask 6 variant 0 is inside the atlas
+   ok   feature 1 mask 7 variant 0 is inside the atlas
+   ok   feature 1 mask 8 variant 0 is inside the atlas
+   ok   feature 1 mask 9 variant 0 is inside the atlas
+   ok   feature 1 mask 10 variant 0 is inside the atlas
+   ok   feature 1 mask 11 variant 0 is inside the atlas
+   ok   feature 1 mask 12 variant 0 is inside the atlas
+   ok   feature 1 mask 13 variant 0 is inside the atlas
+   ok   feature 1 mask 14 variant 0 is inside the atlas
+   ok   feature 1 mask 15 variant 0 is inside the atlas
+   ok   feature 1 mask 0 variant 1 is inside the atlas
+   ok   feature 1 mask 1 variant 1 is inside the atlas
+   ok   feature 1 mask 2 variant 1 is inside the atlas
+   ok   feature 1 mask 3 variant 1 is inside the atlas
+   ok   feature 1 mask 4 variant 1 is inside the atlas
+   ok   feature 1 mask 5 variant 1 is inside the atlas
+   ok   feature 1 mask 6 variant 1 is inside the atlas
+   ok   feature 1 mask 7 variant 1 is inside the atlas
+   ok   feature 1 mask 8 variant 1 is inside the atlas
+   ok   feature 1 mask 9 variant 1 is inside the atlas
+   ok   feature 1 mask 10 variant 1 is inside the atlas
+   ok   feature 1 mask 11 variant 1 is inside the atlas
+   ok   feature 1 mask 12 variant 1 is inside the atlas
+   ok   feature 1 mask 13 variant 1 is inside the atlas
+   ok   feature 1 mask 14 variant 1 is inside the atlas
+   ok   feature 1 mask 15 variant 1 is inside the atlas
+   ok   feature 1 mask 0 variant 2 is inside the atlas
+   ok   feature 1 mask 1 variant 2 is inside the atlas
+   ok   feature 1 mask 2 variant 2 is inside the atlas
+   ok   feature 1 mask 3 variant 2 is inside the atlas
+   ok   feature 1 mask 4 variant 2 is inside the atlas
+   ok   feature 1 mask 5 variant 2 is inside the atlas
+   ok   feature 1 mask 6 variant 2 is inside the atlas
+   ok   feature 1 mask 7 variant 2 is inside the atlas
+   ok   feature 1 mask 8 variant 2 is inside the atlas
+   ok   feature 1 mask 9 variant 2 is inside the atlas
+   ok   feature 1 mask 10 variant 2 is inside the atlas
+   ok   feature 1 mask 11 variant 2 is inside the atlas
+   ok   feature 1 mask 12 variant 2 is inside the atlas
+   ok   feature 1 mask 13 variant 2 is inside the atlas
+   ok   feature 1 mask 14 variant 2 is inside the atlas
+   ok   feature 1 mask 15 variant 2 is inside the atlas
+   ok   feature 1 mask 0 variant 3 is inside the atlas
+   ok   feature 1 mask 1 variant 3 is inside the atlas
+   ok   feature 1 mask 2 variant 3 is inside the atlas
+   ok   feature 1 mask 3 variant 3 is inside the atlas
+   ok   feature 1 mask 4 variant 3 is inside the atlas
+   ok   feature 1 mask 5 variant 3 is inside the atlas
+   ok   feature 1 mask 6 variant 3 is inside the atlas
+   ok   feature 1 mask 7 variant 3 is inside the atlas
+   ok   feature 1 mask 8 variant 3 is inside the atlas
+   ok   feature 1 mask 9 variant 3 is inside the atlas
+   ok   feature 1 mask 10 variant 3 is inside the atlas
+   ok   feature 1 mask 11 variant 3 is inside the atlas
+   ok   feature 1 mask 12 variant 3 is inside the atlas
+   ok   feature 1 mask 13 variant 3 is inside the atlas
+   ok   feature 1 mask 14 variant 3 is inside the atlas
+   ok   feature 1 mask 15 variant 3 is inside the atlas
+   ok   feature 1 mask 0 variant 4 is inside the atlas
+   ok   feature 1 mask 1 variant 4 is inside the atlas
+   ok   feature 1 mask 2 variant 4 is inside the atlas
+   ok   feature 1 mask 3 variant 4 is inside the atlas
+   ok   feature 1 mask 4 variant 4 is inside the atlas
+   ok   feature 1 mask 5 variant 4 is inside the atlas
+   ok   feature 1 mask 6 variant 4 is inside the atlas
+   ok   feature 1 mask 7 variant 4 is inside the atlas
+   ok   feature 1 mask 8 variant 4 is inside the atlas
+   ok   feature 1 mask 9 variant 4 is inside the atlas
+   ok   feature 1 mask 10 variant 4 is inside the atlas
+   ok   feature 1 mask 11 variant 4 is inside the atlas
+   ok   feature 1 mask 12 variant 4 is inside the atlas
+   ok   feature 1 mask 13 variant 4 is inside the atlas
+   ok   feature 1 mask 14 variant 4 is inside the atlas
+   ok   feature 1 mask 15 variant 4 is inside the atlas
+   ok   feature 1 mask 0 variant 5 is inside the atlas
+   ok   feature 1 mask 1 variant 5 is inside the atlas
+   ok   feature 1 mask 2 variant 5 is inside the atlas
+   ok   feature 1 mask 3 variant 5 is inside the atlas
+   ok   feature 1 mask 4 variant 5 is inside the atlas
+   ok   feature 1 mask 5 variant 5 is inside the atlas
+   ok   feature 1 mask 6 variant 5 is inside the atlas
+   ok   feature 1 mask 7 variant 5 is inside the atlas
+   ok   feature 1 mask 8 variant 5 is inside the atlas
+   ok   feature 1 mask 9 variant 5 is inside the atlas
+   ok   feature 1 mask 10 variant 5 is inside the atlas
+   ok   feature 1 mask 11 variant 5 is inside the atlas
+   ok   feature 1 mask 12 variant 5 is inside the atlas
+   ok   feature 1 mask 13 variant 5 is inside the atlas
+   ok   feature 1 mask 14 variant 5 is inside the atlas
+   ok   feature 1 mask 15 variant 5 is inside the atlas
+   ok   feature 1 mask 0 variant 6 is inside the atlas
+   ok   feature 1 mask 1 variant 6 is inside the atlas
+   ok   feature 1 mask 2 variant 6 is inside the atlas
+   ok   feature 1 mask 3 variant 6 is inside the atlas
+   ok   feature 1 mask 4 variant 6 is inside the atlas
+   ok   feature 1 mask 5 variant 6 is inside the atlas
+   ok   feature 1 mask 6 variant 6 is inside the atlas
+   ok   feature 1 mask 7 variant 6 is inside the atlas
+   ok   feature 1 mask 8 variant 6 is inside the atlas
+   ok   feature 1 mask 9 variant 6 is inside the atlas
+   ok   feature 1 mask 10 variant 6 is inside the atlas
+   ok   feature 1 mask 11 variant 6 is inside the atlas
+   ok   feature 1 mask 12 variant 6 is inside the atlas
+   ok   feature 1 mask 13 variant 6 is inside the atlas
+   ok   feature 1 mask 14 variant 6 is inside the atlas
+   ok   feature 1 mask 15 variant 6 is inside the atlas
+   ok   feature 1 mask 0 variant 7 is inside the atlas
+   ok   feature 1 mask 1 variant 7 is inside the atlas
+   ok   feature 1 mask 2 variant 7 is inside the atlas
+   ok   feature 1 mask 3 variant 7 is inside the atlas
+   ok   feature 1 mask 4 variant 7 is inside the atlas
+   ok   feature 1 mask 5 variant 7 is inside the atlas
+   ok   feature 1 mask 6 variant 7 is inside the atlas
+   ok   feature 1 mask 7 variant 7 is inside the atlas
+   ok   feature 1 mask 8 variant 7 is inside the atlas
+   ok   feature 1 mask 9 variant 7 is inside the atlas
+   ok   feature 1 mask 10 variant 7 is inside the atlas
+   ok   feature 1 mask 11 variant 7 is inside the atlas
+   ok   feature 1 mask 12 variant 7 is inside the atlas
+   ok   feature 1 mask 13 variant 7 is inside the atlas
+   ok   feature 1 mask 14 variant 7 is inside the atlas
+   ok   feature 1 mask 15 variant 7 is inside the atlas
+   ok   feature 1 has all connection masks and variants (128)
+   ok   feature 2 mask 0 variant 0 is inside the atlas
+   ok   feature 2 mask 1 variant 0 is inside the atlas
+   ok   feature 2 mask 2 variant 0 is inside the atlas
+   ok   feature 2 mask 3 variant 0 is inside the atlas
+   ok   feature 2 mask 4 variant 0 is inside the atlas
+   ok   feature 2 mask 5 variant 0 is inside the atlas
+   ok   feature 2 mask 6 variant 0 is inside the atlas
+   ok   feature 2 mask 7 variant 0 is inside the atlas
+   ok   feature 2 mask 8 variant 0 is inside the atlas
+   ok   feature 2 mask 9 variant 0 is inside the atlas
+   ok   feature 2 mask 10 variant 0 is inside the atlas
+   ok   feature 2 mask 11 variant 0 is inside the atlas
+   ok   feature 2 mask 12 variant 0 is inside the atlas
+   ok   feature 2 mask 13 variant 0 is inside the atlas
+   ok   feature 2 mask 14 variant 0 is inside the atlas
+   ok   feature 2 mask 15 variant 0 is inside the atlas
+   ok   feature 2 mask 0 variant 1 is inside the atlas
+   ok   feature 2 mask 1 variant 1 is inside the atlas
+   ok   feature 2 mask 2 variant 1 is inside the atlas
+   ok   feature 2 mask 3 variant 1 is inside the atlas
+   ok   feature 2 mask 4 variant 1 is inside the atlas
+   ok   feature 2 mask 5 variant 1 is inside the atlas
+   ok   feature 2 mask 6 variant 1 is inside the atlas
+   ok   feature 2 mask 7 variant 1 is inside the atlas
+   ok   feature 2 mask 8 variant 1 is inside the atlas
+   ok   feature 2 mask 9 variant 1 is inside the atlas
+   ok   feature 2 mask 10 variant 1 is inside the atlas
+   ok   feature 2 mask 11 variant 1 is inside the atlas
+   ok   feature 2 mask 12 variant 1 is inside the atlas
+   ok   feature 2 mask 13 variant 1 is inside the atlas
+   ok   feature 2 mask 14 variant 1 is inside the atlas
+   ok   feature 2 mask 15 variant 1 is inside the atlas
+   ok   feature 2 mask 0 variant 2 is inside the atlas
+   ok   feature 2 mask 1 variant 2 is inside the atlas
+   ok   feature 2 mask 2 variant 2 is inside the atlas
+   ok   feature 2 mask 3 variant 2 is inside the atlas
+   ok   feature 2 mask 4 variant 2 is inside the atlas
+   ok   feature 2 mask 5 variant 2 is inside the atlas
+   ok   feature 2 mask 6 variant 2 is inside the atlas
+   ok   feature 2 mask 7 variant 2 is inside the atlas
+   ok   feature 2 mask 8 variant 2 is inside the atlas
+   ok   feature 2 mask 9 variant 2 is inside the atlas
+   ok   feature 2 mask 10 variant 2 is inside the atlas
+   ok   feature 2 mask 11 variant 2 is inside the atlas
+   ok   feature 2 mask 12 variant 2 is inside the atlas
+   ok   feature 2 mask 13 variant 2 is inside the atlas
+   ok   feature 2 mask 14 variant 2 is inside the atlas
+   ok   feature 2 mask 15 variant 2 is inside the atlas
+   ok   feature 2 mask 0 variant 3 is inside the atlas
+   ok   feature 2 mask 1 variant 3 is inside the atlas
+   ok   feature 2 mask 2 variant 3 is inside the atlas
+   ok   feature 2 mask 3 variant 3 is inside the atlas
+   ok   feature 2 mask 4 variant 3 is inside the atlas
+   ok   feature 2 mask 5 variant 3 is inside the atlas
+   ok   feature 2 mask 6 variant 3 is inside the atlas
+   ok   feature 2 mask 7 variant 3 is inside the atlas
+   ok   feature 2 mask 8 variant 3 is inside the atlas
+   ok   feature 2 mask 9 variant 3 is inside the atlas
+   ok   feature 2 mask 10 variant 3 is inside the atlas
+   ok   feature 2 mask 11 variant 3 is inside the atlas
+   ok   feature 2 mask 12 variant 3 is inside the atlas
+   ok   feature 2 mask 13 variant 3 is inside the atlas
+   ok   feature 2 mask 14 variant 3 is inside the atlas
+   ok   feature 2 mask 15 variant 3 is inside the atlas
+   ok   feature 2 mask 0 variant 4 is inside the atlas
+   ok   feature 2 mask 1 variant 4 is inside the atlas
+   ok   feature 2 mask 2 variant 4 is inside the atlas
+   ok   feature 2 mask 3 variant 4 is inside the atlas
+   ok   feature 2 mask 4 variant 4 is inside the atlas
+   ok   feature 2 mask 5 variant 4 is inside the atlas
+   ok   feature 2 mask 6 variant 4 is inside the atlas
+   ok   feature 2 mask 7 variant 4 is inside the atlas
+   ok   feature 2 mask 8 variant 4 is inside the atlas
+   ok   feature 2 mask 9 variant 4 is inside the atlas
+   ok   feature 2 mask 10 variant 4 is inside the atlas
+   ok   feature 2 mask 11 variant 4 is inside the atlas
+   ok   feature 2 mask 12 variant 4 is inside the atlas
+   ok   feature 2 mask 13 variant 4 is inside the atlas
+   ok   feature 2 mask 14 variant 4 is inside the atlas
+   ok   feature 2 mask 15 variant 4 is inside the atlas
+   ok   feature 2 mask 0 variant 5 is inside the atlas
+   ok   feature 2 mask 1 variant 5 is inside the atlas
+   ok   feature 2 mask 2 variant 5 is inside the atlas
+   ok   feature 2 mask 3 variant 5 is inside the atlas
+   ok   feature 2 mask 4 variant 5 is inside the atlas
+   ok   feature 2 mask 5 variant 5 is inside the atlas
+   ok   feature 2 mask 6 variant 5 is inside the atlas
+   ok   feature 2 mask 7 variant 5 is inside the atlas
+   ok   feature 2 mask 8 variant 5 is inside the atlas
+   ok   feature 2 mask 9 variant 5 is inside the atlas
+   ok   feature 2 mask 10 variant 5 is inside the atlas
+   ok   feature 2 mask 11 variant 5 is inside the atlas
+   ok   feature 2 mask 12 variant 5 is inside the atlas
+   ok   feature 2 mask 13 variant 5 is inside the atlas
+   ok   feature 2 mask 14 variant 5 is inside the atlas
+   ok   feature 2 mask 15 variant 5 is inside the atlas
+   ok   feature 2 mask 0 variant 6 is inside the atlas
+   ok   feature 2 mask 1 variant 6 is inside the atlas
+   ok   feature 2 mask 2 variant 6 is inside the atlas
+   ok   feature 2 mask 3 variant 6 is inside the atlas
+   ok   feature 2 mask 4 variant 6 is inside the atlas
+   ok   feature 2 mask 5 variant 6 is inside the atlas
+   ok   feature 2 mask 6 variant 6 is inside the atlas
+   ok   feature 2 mask 7 variant 6 is inside the atlas
+   ok   feature 2 mask 8 variant 6 is inside the atlas
+   ok   feature 2 mask 9 variant 6 is inside the atlas
+   ok   feature 2 mask 10 variant 6 is inside the atlas
+   ok   feature 2 mask 11 variant 6 is inside the atlas
+   ok   feature 2 mask 12 variant 6 is inside the atlas
+   ok   feature 2 mask 13 variant 6 is inside the atlas
+   ok   feature 2 mask 14 variant 6 is inside the atlas
+   ok   feature 2 mask 15 variant 6 is inside the atlas
+   ok   feature 2 mask 0 variant 7 is inside the atlas
+   ok   feature 2 mask 1 variant 7 is inside the atlas
+   ok   feature 2 mask 2 variant 7 is inside the atlas
+   ok   feature 2 mask 3 variant 7 is inside the atlas
+   ok   feature 2 mask 4 variant 7 is inside the atlas
+   ok   feature 2 mask 5 variant 7 is inside the atlas
+   ok   feature 2 mask 6 variant 7 is inside the atlas
+   ok   feature 2 mask 7 variant 7 is inside the atlas
+   ok   feature 2 mask 8 variant 7 is inside the atlas
+   ok   feature 2 mask 9 variant 7 is inside the atlas
+   ok   feature 2 mask 10 variant 7 is inside the atlas
+   ok   feature 2 mask 11 variant 7 is inside the atlas
+   ok   feature 2 mask 12 variant 7 is inside the atlas
+   ok   feature 2 mask 13 variant 7 is inside the atlas
+   ok   feature 2 mask 14 variant 7 is inside the atlas
+   ok   feature 2 mask 15 variant 7 is inside the atlas
+   ok   feature 2 has all connection masks and variants (128)
+   ok   the Blight has structures to raise (8 kinds)
+   ok   nothing is buildable on night 1
+   ok   something is buildable by night 9
+   ok   a Blight structure is raised
+   ok   and the world knows it is there
+   ok   a Blight structure blocks the ground
+   ok   it makes the night worse (0.0 -> 1.0)
+   ok   a glancing blow does not level it
+   ok   enough damage levels it
+   ok   and it is gone
+   ok   the ground it stood on opens up immediately
+   ok   and it stops paying into the night the moment it falls
+   ok   keep site was chosen
+   ok   keep site is on the map
+   ok   keep site is walkable
+   ok   all 4 nests placed (got 4)
+   ok   keep has a buildable clearing (120/121 open)
+   ok   nest is a safe distance away (35 tiles)
+   ok   nest is a safe distance away (31 tiles)
+   ok   nest is a safe distance away (25 tiles)
+   ok   nest is a safe distance away (29 tiles)
+   ok   the clock advanced
+   ok   a full day cycle completed (reached day 2)
+   ok   blight frontier is alive
+   ok   blight is advancing (0.183% by day 2, from 0.032% seeded)
+   ok   blight has not swallowed the map by day 2 (0.2%)
+   ok   blight is a slow siege (0.18% by day 2)
+   ok   ember lights the keep
+   day 2  phase 0  tick 6000  blight 0.18%  frontier 16
+
+-- seed 7 --
+   ok   the Ward power exists
+   ok   Ward is a PURIFY power, so _cast_purify is finally reachable
+   ok   the Gate building exists
+   ok   all four difficulty tiers load (got 4)
+   ok   the test tier is the neutral one, so the numbers below are the real ones
+   ok   a gate blocks monsters without blocking villagers
+   ok   every nest starts alive
+   ok   a live nest has hit points
+   ok   half damage does not destroy a nest
+   ok   a wounded nest is still standing
+   ok   enough damage destroys a nest
+   ok   a destroyed nest is gone from the map
+   ok   a destroyed nest drops its hit points
+   ok   the threat director sees one fewer nest to spawn from
+   ok   the ground a nest stood on opens up
+   ok   the map has berries on it (105)
+   ok   berry thickets stay compact rather than taking over the map (105)
+   ok   stone is distributed beyond the guaranteed quarry (264 cells)
+   ok   the keep pad is dry land
+   ok   a chosen keep site is used
+   ok   the same seed and site regenerate an identical map
+   ok   the meta layer has enough to buy to outlast a few runs (9 items)
+   ok   buying everything takes many runs (1115 shards)
+   FAIL no id is shared between a building and a power (Meta.unlocked is one flat list)
+   ok   powers are shard-purchasable too (5)
+   ok   the map is at least 112 wide, or the nest ring falls in open water (112)
+   ok   nests are far enough out to give the player warning (30 tiles)
+   ok   the nest ring sits inside the coastline (30 vs ~35)
+   ok   resource clumps have solid interiors to draw as a mass (691 cells)
+   ok   feature 1 mask 0 variant 0 is inside the atlas
+   ok   feature 1 mask 1 variant 0 is inside the atlas
+   ok   feature 1 mask 2 variant 0 is inside the atlas
+   ok   feature 1 mask 3 variant 0 is inside the atlas
+   ok   feature 1 mask 4 variant 0 is inside the atlas
+   ok   feature 1 mask 5 variant 0 is inside the atlas
+   ok   feature 1 mask 6 variant 0 is inside the atlas
+   ok   feature 1 mask 7 variant 0 is inside the atlas
+   ok   feature 1 mask 8 variant 0 is inside the atlas
+   ok   feature 1 mask 9 variant 0 is inside the atlas
+   ok   feature 1 mask 10 variant 0 is inside the atlas
+   ok   feature 1 mask 11 variant 0 is inside the atlas
+   ok   feature 1 mask 12 variant 0 is inside the atlas
+   ok   feature 1 mask 13 variant 0 is inside the atlas
+   ok   feature 1 mask 14 variant 0 is inside the atlas
+   ok   feature 1 mask 15 variant 0 is inside the atlas
+   ok   feature 1 mask 0 variant 1 is inside the atlas
+   ok   feature 1 mask 1 variant 1 is inside the atlas
+   ok   feature 1 mask 2 variant 1 is inside the atlas
+   ok   feature 1 mask 3 variant 1 is inside the atlas
+   ok   feature 1 mask 4 variant 1 is inside the atlas
+   ok   feature 1 mask 5 variant 1 is inside the atlas
+   ok   feature 1 mask 6 variant 1 is inside the atlas
+   ok   feature 1 mask 7 variant 1 is inside the atlas
+   ok   feature 1 mask 8 variant 1 is inside the atlas
+   ok   feature 1 mask 9 variant 1 is inside the atlas
+   ok   feature 1 mask 10 variant 1 is inside the atlas
+   ok   feature 1 mask 11 variant 1 is inside the atlas
+   ok   feature 1 mask 12 variant 1 is inside the atlas
+   ok   feature 1 mask 13 variant 1 is inside the atlas
+   ok   feature 1 mask 14 variant 1 is inside the atlas
+   ok   feature 1 mask 15 variant 1 is inside the atlas
+   ok   feature 1 mask 0 variant 2 is inside the atlas
+   ok   feature 1 mask 1 variant 2 is inside the atlas
+   ok   feature 1 mask 2 variant 2 is inside the atlas
+   ok   feature 1 mask 3 variant 2 is inside the atlas
+   ok   feature 1 mask 4 variant 2 is inside the atlas
+   ok   feature 1 mask 5 variant 2 is inside the atlas
+   ok   feature 1 mask 6 variant 2 is inside the atlas
+   ok   feature 1 mask 7 variant 2 is inside the atlas
+   ok   feature 1 mask 8 variant 2 is inside the atlas
+   ok   feature 1 mask 9 variant 2 is inside the atlas
+   ok   feature 1 mask 10 variant 2 is inside the atlas
+   ok   feature 1 mask 11 variant 2 is inside the atlas
+   ok   feature 1 mask 12 variant 2 is inside the atlas
+   ok   feature 1 mask 13 variant 2 is inside the atlas
+   ok   feature 1 mask 14 variant 2 is inside the atlas
+   ok   feature 1 mask 15 variant 2 is inside the atlas
+   ok   feature 1 mask 0 variant 3 is inside the atlas
+   ok   feature 1 mask 1 variant 3 is inside the atlas
+   ok   feature 1 mask 2 variant 3 is inside the atlas
+   ok   feature 1 mask 3 variant 3 is inside the atlas
+   ok   feature 1 mask 4 variant 3 is inside the atlas
+   ok   feature 1 mask 5 variant 3 is inside the atlas
+   ok   feature 1 mask 6 variant 3 is inside the atlas
+   ok   feature 1 mask 7 variant 3 is inside the atlas
+   ok   feature 1 mask 8 variant 3 is inside the atlas
+   ok   feature 1 mask 9 variant 3 is inside the atlas
+   ok   feature 1 mask 10 variant 3 is inside the atlas
+   ok   feature 1 mask 11 variant 3 is inside the atlas
+   ok   feature 1 mask 12 variant 3 is inside the atlas
+   ok   feature 1 mask 13 variant 3 is inside the atlas
+   ok   feature 1 mask 14 variant 3 is inside the atlas
+   ok   feature 1 mask 15 variant 3 is inside the atlas
+   ok   feature 1 mask 0 variant 4 is inside the atlas
+   ok   feature 1 mask 1 variant 4 is inside the atlas
+   ok   feature 1 mask 2 variant 4 is inside the atlas
+   ok   feature 1 mask 3 variant 4 is inside the atlas
+   ok   feature 1 mask 4 variant 4 is inside the atlas
+   ok   feature 1 mask 5 variant 4 is inside the atlas
+   ok   feature 1 mask 6 variant 4 is inside the atlas
+   ok   feature 1 mask 7 variant 4 is inside the atlas
+   ok   feature 1 mask 8 variant 4 is inside the atlas
+   ok   feature 1 mask 9 variant 4 is inside the atlas
+   ok   feature 1 mask 10 variant 4 is inside the atlas
+   ok   feature 1 mask 11 variant 4 is inside the atlas
+   ok   feature 1 mask 12 variant 4 is inside the atlas
+   ok   feature 1 mask 13 variant 4 is inside the atlas
+   ok   feature 1 mask 14 variant 4 is inside the atlas
+   ok   feature 1 mask 15 variant 4 is inside the atlas
+   ok   feature 1 mask 0 variant 5 is inside the atlas
+   ok   feature 1 mask 1 variant 5 is inside the atlas
+   ok   feature 1 mask 2 variant 5 is inside the atlas
+   ok   feature 1 mask 3 variant 5 is inside the atlas
+   ok   feature 1 mask 4 variant 5 is inside the atlas
+   ok   feature 1 mask 5 variant 5 is inside the atlas
+   ok   feature 1 mask 6 variant 5 is inside the atlas
+   ok   feature 1 mask 7 variant 5 is inside the atlas
+   ok   feature 1 mask 8 variant 5 is inside the atlas
+   ok   feature 1 mask 9 variant 5 is inside the atlas
+   ok   feature 1 mask 10 variant 5 is inside the atlas
+   ok   feature 1 mask 11 variant 5 is inside the atlas
+   ok   feature 1 mask 12 variant 5 is inside the atlas
+   ok   feature 1 mask 13 variant 5 is inside the atlas
+   ok   feature 1 mask 14 variant 5 is inside the atlas
+   ok   feature 1 mask 15 variant 5 is inside the atlas
+   ok   feature 1 mask 0 variant 6 is inside the atlas
+   ok   feature 1 mask 1 variant 6 is inside the atlas
+   ok   feature 1 mask 2 variant 6 is inside the atlas
+   ok   feature 1 mask 3 variant 6 is inside the atlas
+   ok   feature 1 mask 4 variant 6 is inside the atlas
+   ok   feature 1 mask 5 variant 6 is inside the atlas
+   ok   feature 1 mask 6 variant 6 is inside the atlas
+   ok   feature 1 mask 7 variant 6 is inside the atlas
+   ok   feature 1 mask 8 variant 6 is inside the atlas
+   ok   feature 1 mask 9 variant 6 is inside the atlas
+   ok   feature 1 mask 10 variant 6 is inside the atlas
+   ok   feature 1 mask 11 variant 6 is inside the atlas
+   ok   feature 1 mask 12 variant 6 is inside the atlas
+   ok   feature 1 mask 13 variant 6 is inside the atlas
+   ok   feature 1 mask 14 variant 6 is inside the atlas
+   ok   feature 1 mask 15 variant 6 is inside the atlas
+   ok   feature 1 mask 0 variant 7 is inside the atlas
+   ok   feature 1 mask 1 variant 7 is inside the atlas
+   ok   feature 1 mask 2 variant 7 is inside the atlas
+   ok   feature 1 mask 3 variant 7 is inside the atlas
+   ok   feature 1 mask 4 variant 7 is inside the atlas
+   ok   feature 1 mask 5 variant 7 is inside the atlas
+   ok   feature 1 mask 6 variant 7 is inside the atlas
+   ok   feature 1 mask 7 variant 7 is inside the atlas
+   ok   feature 1 mask 8 variant 7 is inside the atlas
+   ok   feature 1 mask 9 variant 7 is inside the atlas
+   ok   feature 1 mask 10 variant 7 is inside the atlas
+   ok   feature 1 mask 11 variant 7 is inside the atlas
+   ok   feature 1 mask 12 variant 7 is inside the atlas
+   ok   feature 1 mask 13 variant 7 is inside the atlas
+   ok   feature 1 mask 14 variant 7 is inside the atlas
+   ok   feature 1 mask 15 variant 7 is inside the atlas
+   ok   feature 1 has all connection masks and variants (128)
+   ok   feature 2 mask 0 variant 0 is inside the atlas
+   ok   feature 2 mask 1 variant 0 is inside the atlas
+   ok   feature 2 mask 2 variant 0 is inside the atlas
+   ok   feature 2 mask 3 variant 0 is inside the atlas
+   ok   feature 2 mask 4 variant 0 is inside the atlas
+   ok   feature 2 mask 5 variant 0 is inside the atlas
+   ok   feature 2 mask 6 variant 0 is inside the atlas
+   ok   feature 2 mask 7 variant 0 is inside the atlas
+   ok   feature 2 mask 8 variant 0 is inside the atlas
+   ok   feature 2 mask 9 variant 0 is inside the atlas
+   ok   feature 2 mask 10 variant 0 is inside the atlas
+   ok   feature 2 mask 11 variant 0 is inside the atlas
+   ok   feature 2 mask 12 variant 0 is inside the atlas
+   ok   feature 2 mask 13 variant 0 is inside the atlas
+   ok   feature 2 mask 14 variant 0 is inside the atlas
+   ok   feature 2 mask 15 variant 0 is inside the atlas
+   ok   feature 2 mask 0 variant 1 is inside the atlas
+   ok   feature 2 mask 1 variant 1 is inside the atlas
+   ok   feature 2 mask 2 variant 1 is inside the atlas
+   ok   feature 2 mask 3 variant 1 is inside the atlas
+   ok   feature 2 mask 4 variant 1 is inside the atlas
+   ok   feature 2 mask 5 variant 1 is inside the atlas
+   ok   feature 2 mask 6 variant 1 is inside the atlas
+   ok   feature 2 mask 7 variant 1 is inside the atlas
+   ok   feature 2 mask 8 variant 1 is inside the atlas
+   ok   feature 2 mask 9 variant 1 is inside the atlas
+   ok   feature 2 mask 10 variant 1 is inside the atlas
+   ok   feature 2 mask 11 variant 1 is inside the atlas
+   ok   feature 2 mask 12 variant 1 is inside the atlas
+   ok   feature 2 mask 13 variant 1 is inside the atlas
+   ok   feature 2 mask 14 variant 1 is inside the atlas
+   ok   feature 2 mask 15 variant 1 is inside the atlas
+   ok   feature 2 mask 0 variant 2 is inside the atlas
+   ok   feature 2 mask 1 variant 2 is inside the atlas
+   ok   feature 2 mask 2 variant 2 is inside the atlas
+   ok   feature 2 mask 3 variant 2 is inside the atlas
+   ok   feature 2 mask 4 variant 2 is inside the atlas
+   ok   feature 2 mask 5 variant 2 is inside the atlas
+   ok   feature 2 mask 6 variant 2 is inside the atlas
+   ok   feature 2 mask 7 variant 2 is inside the atlas
+   ok   feature 2 mask 8 variant 2 is inside the atlas
+   ok   feature 2 mask 9 variant 2 is inside the atlas
+   ok   feature 2 mask 10 variant 2 is inside the atlas
+   ok   feature 2 mask 11 variant 2 is inside the atlas
+   ok   feature 2 mask 12 variant 2 is inside the atlas
+   ok   feature 2 mask 13 variant 2 is inside the atlas
+   ok   feature 2 mask 14 variant 2 is inside the atlas
+   ok   feature 2 mask 15 variant 2 is inside the atlas
+   ok   feature 2 mask 0 variant 3 is inside the atlas
+   ok   feature 2 mask 1 variant 3 is inside the atlas
+   ok   feature 2 mask 2 variant 3 is inside the atlas
+   ok   feature 2 mask 3 variant 3 is inside the atlas
+   ok   feature 2 mask 4 variant 3 is inside the atlas
+   ok   feature 2 mask 5 variant 3 is inside the atlas
+   ok   feature 2 mask 6 variant 3 is inside the atlas
+   ok   feature 2 mask 7 variant 3 is inside the atlas
+   ok   feature 2 mask 8 variant 3 is inside the atlas
+   ok   feature 2 mask 9 variant 3 is inside the atlas
+   ok   feature 2 mask 10 variant 3 is inside the atlas
+   ok   feature 2 mask 11 variant 3 is inside the atlas
+   ok   feature 2 mask 12 variant 3 is inside the atlas
+   ok   feature 2 mask 13 variant 3 is inside the atlas
+   ok   feature 2 mask 14 variant 3 is inside the atlas
+   ok   feature 2 mask 15 variant 3 is inside the atlas
+   ok   feature 2 mask 0 variant 4 is inside the atlas
+   ok   feature 2 mask 1 variant 4 is inside the atlas
+   ok   feature 2 mask 2 variant 4 is inside the atlas
+   ok   feature 2 mask 3 variant 4 is inside the atlas
+   ok   feature 2 mask 4 variant 4 is inside the atlas
+   ok   feature 2 mask 5 variant 4 is inside the atlas
+   ok   feature 2 mask 6 variant 4 is inside the atlas
+   ok   feature 2 mask 7 variant 4 is inside the atlas
+   ok   feature 2 mask 8 variant 4 is inside the atlas
+   ok   feature 2 mask 9 variant 4 is inside the atlas
+   ok   feature 2 mask 10 variant 4 is inside the atlas
+   ok   feature 2 mask 11 variant 4 is inside the atlas
+   ok   feature 2 mask 12 variant 4 is inside the atlas
+   ok   feature 2 mask 13 variant 4 is inside the atlas
+   ok   feature 2 mask 14 variant 4 is inside the atlas
+   ok   feature 2 mask 15 variant 4 is inside the atlas
+   ok   feature 2 mask 0 variant 5 is inside the atlas
+   ok   feature 2 mask 1 variant 5 is inside the atlas
+   ok   feature 2 mask 2 variant 5 is inside the atlas
+   ok   feature 2 mask 3 variant 5 is inside the atlas
+   ok   feature 2 mask 4 variant 5 is inside the atlas
+   ok   feature 2 mask 5 variant 5 is inside the atlas
+   ok   feature 2 mask 6 variant 5 is inside the atlas
+   ok   feature 2 mask 7 variant 5 is inside the atlas
+   ok   feature 2 mask 8 variant 5 is inside the atlas
+   ok   feature 2 mask 9 variant 5 is inside the atlas
+   ok   feature 2 mask 10 variant 5 is inside the atlas
+   ok   feature 2 mask 11 variant 5 is inside the atlas
+   ok   feature 2 mask 12 variant 5 is inside the atlas
+   ok   feature 2 mask 13 variant 5 is inside the atlas
+   ok   feature 2 mask 14 variant 5 is inside the atlas
+   ok   feature 2 mask 15 variant 5 is inside the atlas
+   ok   feature 2 mask 0 variant 6 is inside the atlas
+   ok   feature 2 mask 1 variant 6 is inside the atlas
+   ok   feature 2 mask 2 variant 6 is inside the atlas
+   ok   feature 2 mask 3 variant 6 is inside the atlas
+   ok   feature 2 mask 4 variant 6 is inside the atlas
+   ok   feature 2 mask 5 variant 6 is inside the atlas
+   ok   feature 2 mask 6 variant 6 is inside the atlas
+   ok   feature 2 mask 7 variant 6 is inside the atlas
+   ok   feature 2 mask 8 variant 6 is inside the atlas
+   ok   feature 2 mask 9 variant 6 is inside the atlas
+   ok   feature 2 mask 10 variant 6 is inside the atlas
+   ok   feature 2 mask 11 variant 6 is inside the atlas
+   ok   feature 2 mask 12 variant 6 is inside the atlas
+   ok   feature 2 mask 13 variant 6 is inside the atlas
+   ok   feature 2 mask 14 variant 6 is inside the atlas
+   ok   feature 2 mask 15 variant 6 is inside the atlas
+   ok   feature 2 mask 0 variant 7 is inside the atlas
+   ok   feature 2 mask 1 variant 7 is inside the atlas
+   ok   feature 2 mask 2 variant 7 is inside the atlas
+   ok   feature 2 mask 3 variant 7 is inside the atlas
+   ok   feature 2 mask 4 variant 7 is inside the atlas
+   ok   feature 2 mask 5 variant 7 is inside the atlas
+   ok   feature 2 mask 6 variant 7 is inside the atlas
+   ok   feature 2 mask 7 variant 7 is inside the atlas
+   ok   feature 2 mask 8 variant 7 is inside the atlas
+   ok   feature 2 mask 9 variant 7 is inside the atlas
+   ok   feature 2 mask 10 variant 7 is inside the atlas
+   ok   feature 2 mask 11 variant 7 is inside the atlas
+   ok   feature 2 mask 12 variant 7 is inside the atlas
+   ok   feature 2 mask 13 variant 7 is inside the atlas
+   ok   feature 2 mask 14 variant 7 is inside the atlas
+   ok   feature 2 mask 15 variant 7 is inside the atlas
+   ok   feature 2 has all connection masks and variants (128)
+   ok   the Blight has structures to raise (8 kinds)
+   ok   nothing is buildable on night 1
+   ok   something is buildable by night 9
+   ok   a Blight structure is raised
+   ok   and the world knows it is there
+   ok   a Blight structure blocks the ground
+   ok   it makes the night worse (0.0 -> 3.0)
+   ok   a glancing blow does not level it
+   ok   enough damage levels it
+   ok   and it is gone
+   ok   the ground it stood on opens up immediately
+   ok   and it stops paying into the night the moment it falls
+   ok   keep site was chosen
+   ok   keep site is on the map
+   ok   keep site is walkable
+   ok   all 4 nests placed (got 4)
+   ok   keep has a buildable clearing (119/121 open)
+   ok   nest is a safe distance away (26 tiles)
+   ok   nest is a safe distance away (31 tiles)
+   ok   nest is a safe distance away (31 tiles)
+   ok   nest is a safe distance away (36 tiles)
+   ok   the clock advanced
+   ok   a full day cycle completed (reached day 2)
+   ok   blight frontier is alive
+   ok   blight is advancing (0.207% by day 2, from 0.032% seeded)
+   ok   blight has not swallowed the map by day 2 (0.2%)
+   ok   blight is a slow siege (0.21% by day 2)
+   ok   ember lights the keep
+   day 2  phase 0  tick 6000  blight 0.21%  frontier 15
+
+-- seed 424242 --
+   ok   the Ward power exists
+   ok   Ward is a PURIFY power, so _cast_purify is finally reachable
+   ok   the Gate building exists
+   ok   all four difficulty tiers load (got 4)
+   ok   the test tier is the neutral one, so the numbers below are the real ones
+   ok   a gate blocks monsters without blocking villagers
+   ok   every nest starts alive
+   ok   a live nest has hit points
+   ok   half damage does not destroy a nest
+   ok   a wounded nest is still standing
+   ok   enough damage destroys a nest
+   ok   a destroyed nest is gone from the map
+   ok   a destroyed nest drops its hit points
+   ok   the threat director sees one fewer nest to spawn from
+   ok   the ground a nest stood on opens up
+   ok   the map has berries on it (80)
+   ok   berry thickets stay compact rather than taking over the map (80)
+   ok   stone is distributed beyond the guaranteed quarry (582 cells)
+   ok   the keep pad is dry land
+   ok   a chosen keep site is used
+   ok   the same seed and site regenerate an identical map
+   ok   the meta layer has enough to buy to outlast a few runs (9 items)
+   ok   buying everything takes many runs (1115 shards)
+   FAIL no id is shared between a building and a power (Meta.unlocked is one flat list)
+   ok   powers are shard-purchasable too (5)
+   ok   the map is at least 112 wide, or the nest ring falls in open water (112)
+   ok   nests are far enough out to give the player warning (30 tiles)
+   ok   the nest ring sits inside the coastline (30 vs ~35)
+   ok   resource clumps have solid interiors to draw as a mass (929 cells)
+   ok   feature 1 mask 0 variant 0 is inside the atlas
+   ok   feature 1 mask 1 variant 0 is inside the atlas
+   ok   feature 1 mask 2 variant 0 is inside the atlas
+   ok   feature 1 mask 3 variant 0 is inside the atlas
+   ok   feature 1 mask 4 variant 0 is inside the atlas
+   ok   feature 1 mask 5 variant 0 is inside the atlas
+   ok   feature 1 mask 6 variant 0 is inside the atlas
+   ok   feature 1 mask 7 variant 0 is inside the atlas
+   ok   feature 1 mask 8 variant 0 is inside the atlas
+   ok   feature 1 mask 9 variant 0 is inside the atlas
+   ok   feature 1 mask 10 variant 0 is inside the atlas
+   ok   feature 1 mask 11 variant 0 is inside the atlas
+   ok   feature 1 mask 12 variant 0 is inside the atlas
+   ok   feature 1 mask 13 variant 0 is inside the atlas
+   ok   feature 1 mask 14 variant 0 is inside the atlas
+   ok   feature 1 mask 15 variant 0 is inside the atlas
+   ok   feature 1 mask 0 variant 1 is inside the atlas
+   ok   feature 1 mask 1 variant 1 is inside the atlas
+   ok   feature 1 mask 2 variant 1 is inside the atlas
+   ok   feature 1 mask 3 variant 1 is inside the atlas
+   ok   feature 1 mask 4 variant 1 is inside the atlas
+   ok   feature 1 mask 5 variant 1 is inside the atlas
+   ok   feature 1 mask 6 variant 1 is inside the atlas
+   ok   feature 1 mask 7 variant 1 is inside the atlas
+   ok   feature 1 mask 8 variant 1 is inside the atlas
+   ok   feature 1 mask 9 variant 1 is inside the atlas
+   ok   feature 1 mask 10 variant 1 is inside the atlas
+   ok   feature 1 mask 11 variant 1 is inside the atlas
+   ok   feature 1 mask 12 variant 1 is inside the atlas
+   ok   feature 1 mask 13 variant 1 is inside the atlas
+   ok   feature 1 mask 14 variant 1 is inside the atlas
+   ok   feature 1 mask 15 variant 1 is inside the atlas
+   ok   feature 1 mask 0 variant 2 is inside the atlas
+   ok   feature 1 mask 1 variant 2 is inside the atlas
+   ok   feature 1 mask 2 variant 2 is inside the atlas
+   ok   feature 1 mask 3 variant 2 is inside the atlas
+   ok   feature 1 mask 4 variant 2 is inside the atlas
+   ok   feature 1 mask 5 variant 2 is inside the atlas
+   ok   feature 1 mask 6 variant 2 is inside the atlas
+   ok   feature 1 mask 7 variant 2 is inside the atlas
+   ok   feature 1 mask 8 variant 2 is inside the atlas
+   ok   feature 1 mask 9 variant 2 is inside the atlas
+   ok   feature 1 mask 10 variant 2 is inside the atlas
+   ok   feature 1 mask 11 variant 2 is inside the atlas
+   ok   feature 1 mask 12 variant 2 is inside the atlas
+   ok   feature 1 mask 13 variant 2 is inside the atlas
+   ok   feature 1 mask 14 variant 2 is inside the atlas
+   ok   feature 1 mask 15 variant 2 is inside the atlas
+   ok   feature 1 mask 0 variant 3 is inside the atlas
+   ok   feature 1 mask 1 variant 3 is inside the atlas
+   ok   feature 1 mask 2 variant 3 is inside the atlas
+   ok   feature 1 mask 3 variant 3 is inside the atlas
+   ok   feature 1 mask 4 variant 3 is inside the atlas
+   ok   feature 1 mask 5 variant 3 is inside the atlas
+   ok   feature 1 mask 6 variant 3 is inside the atlas
+   ok   feature 1 mask 7 variant 3 is inside the atlas
+   ok   feature 1 mask 8 variant 3 is inside the atlas
+   ok   feature 1 mask 9 variant 3 is inside the atlas
+   ok   feature 1 mask 10 variant 3 is inside the atlas
+   ok   feature 1 mask 11 variant 3 is inside the atlas
+   ok   feature 1 mask 12 variant 3 is inside the atlas
+   ok   feature 1 mask 13 variant 3 is inside the atlas
+   ok   feature 1 mask 14 variant 3 is inside the atlas
+   ok   feature 1 mask 15 variant 3 is inside the atlas
+   ok   feature 1 mask 0 variant 4 is inside the atlas
+   ok   feature 1 mask 1 variant 4 is inside the atlas
+   ok   feature 1 mask 2 variant 4 is inside the atlas
+   ok   feature 1 mask 3 variant 4 is inside the atlas
+   ok   feature 1 mask 4 variant 4 is inside the atlas
+   ok   feature 1 mask 5 variant 4 is inside the atlas
+   ok   feature 1 mask 6 variant 4 is inside the atlas
+   ok   feature 1 mask 7 variant 4 is inside the atlas
+   ok   feature 1 mask 8 variant 4 is inside the atlas
+   ok   feature 1 mask 9 variant 4 is inside the atlas
+   ok   feature 1 mask 10 variant 4 is inside the atlas
+   ok   feature 1 mask 11 variant 4 is inside the atlas
+   ok   feature 1 mask 12 variant 4 is inside the atlas
+   ok   feature 1 mask 13 variant 4 is inside the atlas
+   ok   feature 1 mask 14 variant 4 is inside the atlas
+   ok   feature 1 mask 15 variant 4 is inside the atlas
+   ok   feature 1 mask 0 variant 5 is inside the atlas
+   ok   feature 1 mask 1 variant 5 is inside the atlas
+   ok   feature 1 mask 2 variant 5 is inside the atlas
+   ok   feature 1 mask 3 variant 5 is inside the atlas
+   ok   feature 1 mask 4 variant 5 is inside the atlas
+   ok   feature 1 mask 5 variant 5 is inside the atlas
+   ok   feature 1 mask 6 variant 5 is inside the atlas
+   ok   feature 1 mask 7 variant 5 is inside the atlas
+   ok   feature 1 mask 8 variant 5 is inside the atlas
+   ok   feature 1 mask 9 variant 5 is inside the atlas
+   ok   feature 1 mask 10 variant 5 is inside the atlas
+   ok   feature 1 mask 11 variant 5 is inside the atlas
+   ok   feature 1 mask 12 variant 5 is inside the atlas
+   ok   feature 1 mask 13 variant 5 is inside the atlas
+   ok   feature 1 mask 14 variant 5 is inside the atlas
+   ok   feature 1 mask 15 variant 5 is inside the atlas
+   ok   feature 1 mask 0 variant 6 is inside the atlas
+   ok   feature 1 mask 1 variant 6 is inside the atlas
+   ok   feature 1 mask 2 variant 6 is inside the atlas
+   ok   feature 1 mask 3 variant 6 is inside the atlas
+   ok   feature 1 mask 4 variant 6 is inside the atlas
+   ok   feature 1 mask 5 variant 6 is inside the atlas
+   ok   feature 1 mask 6 variant 6 is inside the atlas
+   ok   feature 1 mask 7 variant 6 is inside the atlas
+   ok   feature 1 mask 8 variant 6 is inside the atlas
+   ok   feature 1 mask 9 variant 6 is inside the atlas
+   ok   feature 1 mask 10 variant 6 is inside the atlas
+   ok   feature 1 mask 11 variant 6 is inside the atlas
+   ok   feature 1 mask 12 variant 6 is inside the atlas
+   ok   feature 1 mask 13 variant 6 is inside the atlas
+   ok   feature 1 mask 14 variant 6 is inside the atlas
+   ok   feature 1 mask 15 variant 6 is inside the atlas
+   ok   feature 1 mask 0 variant 7 is inside the atlas
+   ok   feature 1 mask 1 variant 7 is inside the atlas
+   ok   feature 1 mask 2 variant 7 is inside the atlas
+   ok   feature 1 mask 3 variant 7 is inside the atlas
+   ok   feature 1 mask 4 variant 7 is inside the atlas
+   ok   feature 1 mask 5 variant 7 is inside the atlas
+   ok   feature 1 mask 6 variant 7 is inside the atlas
+   ok   feature 1 mask 7 variant 7 is inside the atlas
+   ok   feature 1 mask 8 variant 7 is inside the atlas
+   ok   feature 1 mask 9 variant 7 is inside the atlas
+   ok   feature 1 mask 10 variant 7 is inside the atlas
+   ok   feature 1 mask 11 variant 7 is inside the atlas
+   ok   feature 1 mask 12 variant 7 is inside the atlas
+   ok   feature 1 mask 13 variant 7 is inside the atlas
+   ok   feature 1 mask 14 variant 7 is inside the atlas
+   ok   feature 1 mask 15 variant 7 is inside the atlas
+   ok   feature 1 has all connection masks and variants (128)
+   ok   feature 2 mask 0 variant 0 is inside the atlas
+   ok   feature 2 mask 1 variant 0 is inside the atlas
+   ok   feature 2 mask 2 variant 0 is inside the atlas
+   ok   feature 2 mask 3 variant 0 is inside the atlas
+   ok   feature 2 mask 4 variant 0 is inside the atlas
+   ok   feature 2 mask 5 variant 0 is inside the atlas
+   ok   feature 2 mask 6 variant 0 is inside the atlas
+   ok   feature 2 mask 7 variant 0 is inside the atlas
+   ok   feature 2 mask 8 variant 0 is inside the atlas
+   ok   feature 2 mask 9 variant 0 is inside the atlas
+   ok   feature 2 mask 10 variant 0 is inside the atlas
+   ok   feature 2 mask 11 variant 0 is inside the atlas
+   ok   feature 2 mask 12 variant 0 is inside the atlas
+   ok   feature 2 mask 13 variant 0 is inside the atlas
+   ok   feature 2 mask 14 variant 0 is inside the atlas
+   ok   feature 2 mask 15 variant 0 is inside the atlas
+   ok   feature 2 mask 0 variant 1 is inside the atlas
+   ok   feature 2 mask 1 variant 1 is inside the atlas
+   ok   feature 2 mask 2 variant 1 is inside the atlas
+   ok   feature 2 mask 3 variant 1 is inside the atlas
+   ok   feature 2 mask 4 variant 1 is inside the atlas
+   ok   feature 2 mask 5 variant 1 is inside the atlas
+   ok   feature 2 mask 6 variant 1 is inside the atlas
+   ok   feature 2 mask 7 variant 1 is inside the atlas
+   ok   feature 2 mask 8 variant 1 is inside the atlas
+   ok   feature 2 mask 9 variant 1 is inside the atlas
+   ok   feature 2 mask 10 variant 1 is inside the atlas
+   ok   feature 2 mask 11 variant 1 is inside the atlas
+   ok   feature 2 mask 12 variant 1 is inside the atlas
+   ok   feature 2 mask 13 variant 1 is inside the atlas
+   ok   feature 2 mask 14 variant 1 is inside the atlas
+   ok   feature 2 mask 15 variant 1 is inside the atlas
+   ok   feature 2 mask 0 variant 2 is inside the atlas
+   ok   feature 2 mask 1 variant 2 is inside the atlas
+   ok   feature 2 mask 2 variant 2 is inside the atlas
+   ok   feature 2 mask 3 variant 2 is inside the atlas
+   ok   feature 2 mask 4 variant 2 is inside the atlas
+   ok   feature 2 mask 5 variant 2 is inside the atlas
+   ok   feature 2 mask 6 variant 2 is inside the atlas
+   ok   feature 2 mask 7 variant 2 is inside the atlas
+   ok   feature 2 mask 8 variant 2 is inside the atlas
+   ok   feature 2 mask 9 variant 2 is inside the atlas
+   ok   feature 2 mask 10 variant 2 is inside the atlas
+   ok   feature 2 mask 11 variant 2 is inside the atlas
+   ok   feature 2 mask 12 variant 2 is inside the atlas
+   ok   feature 2 mask 13 variant 2 is inside the atlas
+   ok   feature 2 mask 14 variant 2 is inside the atlas
+   ok   feature 2 mask 15 variant 2 is inside the atlas
+   ok   feature 2 mask 0 variant 3 is inside the atlas
+   ok   feature 2 mask 1 variant 3 is inside the atlas
+   ok   feature 2 mask 2 variant 3 is inside the atlas
+   ok   feature 2 mask 3 variant 3 is inside the atlas
+   ok   feature 2 mask 4 variant 3 is inside the atlas
+   ok   feature 2 mask 5 variant 3 is inside the atlas
+   ok   feature 2 mask 6 variant 3 is inside the atlas
+   ok   feature 2 mask 7 variant 3 is inside the atlas
+   ok   feature 2 mask 8 variant 3 is inside the atlas
+   ok   feature 2 mask 9 variant 3 is inside the atlas
+   ok   feature 2 mask 10 variant 3 is inside the atlas
+   ok   feature 2 mask 11 variant 3 is inside the atlas
+   ok   feature 2 mask 12 variant 3 is inside the atlas
+   ok   feature 2 mask 13 variant 3 is inside the atlas
+   ok   feature 2 mask 14 variant 3 is inside the atlas
+   ok   feature 2 mask 15 variant 3 is inside the atlas
+   ok   feature 2 mask 0 variant 4 is inside the atlas
+   ok   feature 2 mask 1 variant 4 is inside the atlas
+   ok   feature 2 mask 2 variant 4 is inside the atlas
+   ok   feature 2 mask 3 variant 4 is inside the atlas
+   ok   feature 2 mask 4 variant 4 is inside the atlas
+   ok   feature 2 mask 5 variant 4 is inside the atlas
+   ok   feature 2 mask 6 variant 4 is inside the atlas
+   ok   feature 2 mask 7 variant 4 is inside the atlas
+   ok   feature 2 mask 8 variant 4 is inside the atlas
+   ok   feature 2 mask 9 variant 4 is inside the atlas
+   ok   feature 2 mask 10 variant 4 is inside the atlas
+   ok   feature 2 mask 11 variant 4 is inside the atlas
+   ok   feature 2 mask 12 variant 4 is inside the atlas
+   ok   feature 2 mask 13 variant 4 is inside the atlas
+   ok   feature 2 mask 14 variant 4 is inside the atlas
+   ok   feature 2 mask 15 variant 4 is inside the atlas
+   ok   feature 2 mask 0 variant 5 is inside the atlas
+   ok   feature 2 mask 1 variant 5 is inside the atlas
+   ok   feature 2 mask 2 variant 5 is inside the atlas
+   ok   feature 2 mask 3 variant 5 is inside the atlas
+   ok   feature 2 mask 4 variant 5 is inside the atlas
+   ok   feature 2 mask 5 variant 5 is inside the atlas
+   ok   feature 2 mask 6 variant 5 is inside the atlas
+   ok   feature 2 mask 7 variant 5 is inside the atlas
+   ok   feature 2 mask 8 variant 5 is inside the atlas
+   ok   feature 2 mask 9 variant 5 is inside the atlas
+   ok   feature 2 mask 10 variant 5 is inside the atlas
+   ok   feature 2 mask 11 variant 5 is inside the atlas
+   ok   feature 2 mask 12 variant 5 is inside the atlas
+   ok   feature 2 mask 13 variant 5 is inside the atlas
+   ok   feature 2 mask 14 variant 5 is inside the atlas
+   ok   feature 2 mask 15 variant 5 is inside the atlas
+   ok   feature 2 mask 0 variant 6 is inside the atlas
+   ok   feature 2 mask 1 variant 6 is inside the atlas
+   ok   feature 2 mask 2 variant 6 is inside the atlas
+   ok   feature 2 mask 3 variant 6 is inside the atlas
+   ok   feature 2 mask 4 variant 6 is inside the atlas
+   ok   feature 2 mask 5 variant 6 is inside the atlas
+   ok   feature 2 mask 6 variant 6 is inside the atlas
+   ok   feature 2 mask 7 variant 6 is inside the atlas
+   ok   feature 2 mask 8 variant 6 is inside the atlas
+   ok   feature 2 mask 9 variant 6 is inside the atlas
+   ok   feature 2 mask 10 variant 6 is inside the atlas
+   ok   feature 2 mask 11 variant 6 is inside the atlas
+   ok   feature 2 mask 12 variant 6 is inside the atlas
+   ok   feature 2 mask 13 variant 6 is inside the atlas
+   ok   feature 2 mask 14 variant 6 is inside the atlas
+   ok   feature 2 mask 15 variant 6 is inside the atlas
+   ok   feature 2 mask 0 variant 7 is inside the atlas
+   ok   feature 2 mask 1 variant 7 is inside the atlas
+   ok   feature 2 mask 2 variant 7 is inside the atlas
+   ok   feature 2 mask 3 variant 7 is inside the atlas
+   ok   feature 2 mask 4 variant 7 is inside the atlas
+   ok   feature 2 mask 5 variant 7 is inside the atlas
+   ok   feature 2 mask 6 variant 7 is inside the atlas
+   ok   feature 2 mask 7 variant 7 is inside the atlas
+   ok   feature 2 mask 8 variant 7 is inside the atlas
+   ok   feature 2 mask 9 variant 7 is inside the atlas
+   ok   feature 2 mask 10 variant 7 is inside the atlas
+   ok   feature 2 mask 11 variant 7 is inside the atlas
+   ok   feature 2 mask 12 variant 7 is inside the atlas
+   ok   feature 2 mask 13 variant 7 is inside the atlas
+   ok   feature 2 mask 14 variant 7 is inside the atlas
+   ok   feature 2 mask 15 variant 7 is inside the atlas
+   ok   feature 2 has all connection masks and variants (128)
+   ok   the Blight has structures to raise (8 kinds)
+   ok   nothing is buildable on night 1
+   ok   something is buildable by night 9
+   ok   a Blight structure is raised
+   ok   and the world knows it is there
+   ok   a Blight structure blocks the ground
+   ok   it makes the night worse (0.0 -> 1.5)
+   ok   a glancing blow does not level it
+   ok   enough damage levels it
+   ok   and it is gone
+   ok   the ground it stood on opens up immediately
+   ok   and it stops paying into the night the moment it falls
+   ok   keep site was chosen
+   ok   keep site is on the map
+   ok   keep site is walkable
+   ok   all 4 nests placed (got 4)
+   ok   keep has a buildable clearing (119/121 open)
+   ok   nest is a safe distance away (35 tiles)
+   ok   nest is a safe distance away (35 tiles)
+   ok   nest is a safe distance away (25 tiles)
+   ok   nest is a safe distance away (29 tiles)
+   ok   the clock advanced
+   ok   a full day cycle completed (reached day 2)
+   ok   blight frontier is alive
+   ok   blight is advancing (0.096% by day 2, from 0.032% seeded)
+   ok   blight has not swallowed the map by day 2 (0.1%)
+   ok   blight is a slow siege (0.10% by day 2)
+   ok   ember lights the keep
+   day 2  phase 0  tick 6000  blight 0.10%  frontier 9
+
+-- seed 99999 --
+   ok   the Ward power exists
+   ok   Ward is a PURIFY power, so _cast_purify is finally reachable
+   ok   the Gate building exists
+   ok   all four difficulty tiers load (got 4)
+   ok   the test tier is the neutral one, so the numbers below are the real ones
+   ok   a gate blocks monsters without blocking villagers
+   ok   every nest starts alive
+   ok   a live nest has hit points
+   ok   half damage does not destroy a nest
+   ok   a wounded nest is still standing
+   ok   enough damage destroys a nest
+   ok   a destroyed nest is gone from the map
+   ok   a destroyed nest drops its hit points
+   ok   the threat director sees one fewer nest to spawn from
+   ok   the ground a nest stood on opens up
+   ok   the map has berries on it (82)
+   ok   berry thickets stay compact rather than taking over the map (82)
+   ok   stone is distributed beyond the guaranteed quarry (477 cells)
+   ok   the keep pad is dry land
+   ok   a chosen keep site is used
+   ok   the same seed and site regenerate an identical map
+   ok   the meta layer has enough to buy to outlast a few runs (9 items)
+   ok   buying everything takes many runs (1115 shards)
+   FAIL no id is shared between a building and a power (Meta.unlocked is one flat list)
+   ok   powers are shard-purchasable too (5)
+   ok   the map is at least 112 wide, or the nest ring falls in open water (112)
+   ok   nests are far enough out to give the player warning (30 tiles)
+   ok   the nest ring sits inside the coastline (30 vs ~35)
+   ok   resource clumps have solid interiors to draw as a mass (780 cells)
+   ok   feature 1 mask 0 variant 0 is inside the atlas
+   ok   feature 1 mask 1 variant 0 is inside the atlas
+   ok   feature 1 mask 2 variant 0 is inside the atlas
+   ok   feature 1 mask 3 variant 0 is inside the atlas
+   ok   feature 1 mask 4 variant 0 is inside the atlas
+   ok   feature 1 mask 5 variant 0 is inside the atlas
+   ok   feature 1 mask 6 variant 0 is inside the atlas
+   ok   feature 1 mask 7 variant 0 is inside the atlas
+   ok   feature 1 mask 8 variant 0 is inside the atlas
+   ok   feature 1 mask 9 variant 0 is inside the atlas
+   ok   feature 1 mask 10 variant 0 is inside the atlas
+   ok   feature 1 mask 11 variant 0 is inside the atlas
+   ok   feature 1 mask 12 variant 0 is inside the atlas
+   ok   feature 1 mask 13 variant 0 is inside the atlas
+   ok   feature 1 mask 14 variant 0 is inside the atlas
+   ok   feature 1 mask 15 variant 0 is inside the atlas
+   ok   feature 1 mask 0 variant 1 is inside the atlas
+   ok   feature 1 mask 1 variant 1 is inside the atlas
+   ok   feature 1 mask 2 variant 1 is inside the atlas
+   ok   feature 1 mask 3 variant 1 is inside the atlas
+   ok   feature 1 mask 4 variant 1 is inside the atlas
+   ok   feature 1 mask 5 variant 1 is inside the atlas
+   ok   feature 1 mask 6 variant 1 is inside the atlas
+   ok   feature 1 mask 7 variant 1 is inside the atlas
+   ok   feature 1 mask 8 variant 1 is inside the atlas
+   ok   feature 1 mask 9 variant 1 is inside the atlas
+   ok   feature 1 mask 10 variant 1 is inside the atlas
+   ok   feature 1 mask 11 variant 1 is inside the atlas
+   ok   feature 1 mask 12 variant 1 is inside the atlas
+   ok   feature 1 mask 13 variant 1 is inside the atlas
+   ok   feature 1 mask 14 variant 1 is inside the atlas
+   ok   feature 1 mask 15 variant 1 is inside the atlas
+   ok   feature 1 mask 0 variant 2 is inside the atlas
+   ok   feature 1 mask 1 variant 2 is inside the atlas
+   ok   feature 1 mask 2 variant 2 is inside the atlas
+   ok   feature 1 mask 3 variant 2 is inside the atlas
+   ok   feature 1 mask 4 variant 2 is inside the atlas
+   ok   feature 1 mask 5 variant 2 is inside the atlas
+   ok   feature 1 mask 6 variant 2 is inside the atlas
+   ok   feature 1 mask 7 variant 2 is inside the atlas
+   ok   feature 1 mask 8 variant 2 is inside the atlas
+   ok   feature 1 mask 9 variant 2 is inside the atlas
+   ok   feature 1 mask 10 variant 2 is inside the atlas
+   ok   feature 1 mask 11 variant 2 is inside the atlas
+   ok   feature 1 mask 12 variant 2 is inside the atlas
+   ok   feature 1 mask 13 variant 2 is inside the atlas
+   ok   feature 1 mask 14 variant 2 is inside the atlas
+   ok   feature 1 mask 15 variant 2 is inside the atlas
+   ok   feature 1 mask 0 variant 3 is inside the atlas
+   ok   feature 1 mask 1 variant 3 is inside the atlas
+   ok   feature 1 mask 2 variant 3 is inside the atlas
+   ok   feature 1 mask 3 variant 3 is inside the atlas
+   ok   feature 1 mask 4 variant 3 is inside the atlas
+   ok   feature 1 mask 5 variant 3 is inside the atlas
+   ok   feature 1 mask 6 variant 3 is inside the atlas
+   ok   feature 1 mask 7 variant 3 is inside the atlas
+   ok   feature 1 mask 8 variant 3 is inside the atlas
+   ok   feature 1 mask 9 variant 3 is inside the atlas
+   ok   feature 1 mask 10 variant 3 is inside the atlas
+   ok   feature 1 mask 11 variant 3 is inside the atlas
+   ok   feature 1 mask 12 variant 3 is inside the atlas
+   ok   feature 1 mask 13 variant 3 is inside the atlas
+   ok   feature 1 mask 14 variant 3 is inside the atlas
+   ok   feature 1 mask 15 variant 3 is inside the atlas
+   ok   feature 1 mask 0 variant 4 is inside the atlas
+   ok   feature 1 mask 1 variant 4 is inside the atlas
+   ok   feature 1 mask 2 variant 4 is inside the atlas
+   ok   feature 1 mask 3 variant 4 is inside the atlas
+   ok   feature 1 mask 4 variant 4 is inside the atlas
+   ok   feature 1 mask 5 variant 4 is inside the atlas
+   ok   feature 1 mask 6 variant 4 is inside the atlas
+   ok   feature 1 mask 7 variant 4 is inside the atlas
+   ok   feature 1 mask 8 variant 4 is inside the atlas
+   ok   feature 1 mask 9 variant 4 is inside the atlas
+   ok   feature 1 mask 10 variant 4 is inside the atlas
+   ok   feature 1 mask 11 variant 4 is inside the atlas
+   ok   feature 1 mask 12 variant 4 is inside the atlas
+   ok   feature 1 mask 13 variant 4 is inside the atlas
+   ok   feature 1 mask 14 variant 4 is inside the atlas
+   ok   feature 1 mask 15 variant 4 is inside the atlas
+   ok   feature 1 mask 0 variant 5 is inside the atlas
+   ok   feature 1 mask 1 variant 5 is inside the atlas
+   ok   feature 1 mask 2 variant 5 is inside the atlas
+   ok   feature 1 mask 3 variant 5 is inside the atlas
+   ok   feature 1 mask 4 variant 5 is inside the atlas
+   ok   feature 1 mask 5 variant 5 is inside the atlas
+   ok   feature 1 mask 6 variant 5 is inside the atlas
+   ok   feature 1 mask 7 variant 5 is inside the atlas
+   ok   feature 1 mask 8 variant 5 is inside the atlas
+   ok   feature 1 mask 9 variant 5 is inside the atlas
+   ok   feature 1 mask 10 variant 5 is inside the atlas
+   ok   feature 1 mask 11 variant 5 is inside the atlas
+   ok   feature 1 mask 12 variant 5 is inside the atlas
+   ok   feature 1 mask 13 variant 5 is inside the atlas
+   ok   feature 1 mask 14 variant 5 is inside the atlas
+   ok   feature 1 mask 15 variant 5 is inside the atlas
+   ok   feature 1 mask 0 variant 6 is inside the atlas
+   ok   feature 1 mask 1 variant 6 is inside the atlas
+   ok   feature 1 mask 2 variant 6 is inside the atlas
+   ok   feature 1 mask 3 variant 6 is inside the atlas
+   ok   feature 1 mask 4 variant 6 is inside the atlas
+   ok   feature 1 mask 5 variant 6 is inside the atlas
+   ok   feature 1 mask 6 variant 6 is inside the atlas
+   ok   feature 1 mask 7 variant 6 is inside the atlas
+   ok   feature 1 mask 8 variant 6 is inside the atlas
+   ok   feature 1 mask 9 variant 6 is inside the atlas
+   ok   feature 1 mask 10 variant 6 is inside the atlas
+   ok   feature 1 mask 11 variant 6 is inside the atlas
+   ok   feature 1 mask 12 variant 6 is inside the atlas
+   ok   feature 1 mask 13 variant 6 is inside the atlas
+   ok   feature 1 mask 14 variant 6 is inside the atlas
+   ok   feature 1 mask 15 variant 6 is inside the atlas
+   ok   feature 1 mask 0 variant 7 is inside the atlas
+   ok   feature 1 mask 1 variant 7 is inside the atlas
+   ok   feature 1 mask 2 variant 7 is inside the atlas
+   ok   feature 1 mask 3 variant 7 is inside the atlas
+   ok   feature 1 mask 4 variant 7 is inside the atlas
+   ok   feature 1 mask 5 variant 7 is inside the atlas
+   ok   feature 1 mask 6 variant 7 is inside the atlas
+   ok   feature 1 mask 7 variant 7 is inside the atlas
+   ok   feature 1 mask 8 variant 7 is inside the atlas
+   ok   feature 1 mask 9 variant 7 is inside the atlas
+   ok   feature 1 mask 10 variant 7 is inside the atlas
+   ok   feature 1 mask 11 variant 7 is inside the atlas
+   ok   feature 1 mask 12 variant 7 is inside the atlas
+   ok   feature 1 mask 13 variant 7 is inside the atlas
+   ok   feature 1 mask 14 variant 7 is inside the atlas
+   ok   feature 1 mask 15 variant 7 is inside the atlas
+   ok   feature 1 has all connection masks and variants (128)
+   ok   feature 2 mask 0 variant 0 is inside the atlas
+   ok   feature 2 mask 1 variant 0 is inside the atlas
+   ok   feature 2 mask 2 variant 0 is inside the atlas
+   ok   feature 2 mask 3 variant 0 is inside the atlas
+   ok   feature 2 mask 4 variant 0 is inside the atlas
+   ok   feature 2 mask 5 variant 0 is inside the atlas
+   ok   feature 2 mask 6 variant 0 is inside the atlas
+   ok   feature 2 mask 7 variant 0 is inside the atlas
+   ok   feature 2 mask 8 variant 0 is inside the atlas
+   ok   feature 2 mask 9 variant 0 is inside the atlas
+   ok   feature 2 mask 10 variant 0 is inside the atlas
+   ok   feature 2 mask 11 variant 0 is inside the atlas
+   ok   feature 2 mask 12 variant 0 is inside the atlas
+   ok   feature 2 mask 13 variant 0 is inside the atlas
+   ok   feature 2 mask 14 variant 0 is inside the atlas
+   ok   feature 2 mask 15 variant 0 is inside the atlas
+   ok   feature 2 mask 0 variant 1 is inside the atlas
+   ok   feature 2 mask 1 variant 1 is inside the atlas
+   ok   feature 2 mask 2 variant 1 is inside the atlas
+   ok   feature 2 mask 3 variant 1 is inside the atlas
+   ok   feature 2 mask 4 variant 1 is inside the atlas
+   ok   feature 2 mask 5 variant 1 is inside the atlas
+   ok   feature 2 mask 6 variant 1 is inside the atlas
+   ok   feature 2 mask 7 variant 1 is inside the atlas
+   ok   feature 2 mask 8 variant 1 is inside the atlas
+   ok   feature 2 mask 9 variant 1 is inside the atlas
+   ok   feature 2 mask 10 variant 1 is inside the atlas
+   ok   feature 2 mask 11 variant 1 is inside the atlas
+   ok   feature 2 mask 12 variant 1 is inside the atlas
+   ok   feature 2 mask 13 variant 1 is inside the atlas
+   ok   feature 2 mask 14 variant 1 is inside the atlas
+   ok   feature 2 mask 15 variant 1 is inside the atlas
+   ok   feature 2 mask 0 variant 2 is inside the atlas
+   ok   feature 2 mask 1 variant 2 is inside the atlas
+   ok   feature 2 mask 2 variant 2 is inside the atlas
+   ok   feature 2 mask 3 variant 2 is inside the atlas
+   ok   feature 2 mask 4 variant 2 is inside the atlas
+   ok   feature 2 mask 5 variant 2 is inside the atlas
+   ok   feature 2 mask 6 variant 2 is inside the atlas
+   ok   feature 2 mask 7 variant 2 is inside the atlas
+   ok   feature 2 mask 8 variant 2 is inside the atlas
+   ok   feature 2 mask 9 variant 2 is inside the atlas
+   ok   feature 2 mask 10 variant 2 is inside the atlas
+   ok   feature 2 mask 11 variant 2 is inside the atlas
+   ok   feature 2 mask 12 variant 2 is inside the atlas
+   ok   feature 2 mask 13 variant 2 is inside the atlas
+   ok   feature 2 mask 14 variant 2 is inside the atlas
+   ok   feature 2 mask 15 variant 2 is inside the atlas
+   ok   feature 2 mask 0 variant 3 is inside the atlas
+   ok   feature 2 mask 1 variant 3 is inside the atlas
+   ok   feature 2 mask 2 variant 3 is inside the atlas
+   ok   feature 2 mask 3 variant 3 is inside the atlas
+   ok   feature 2 mask 4 variant 3 is inside the atlas
+   ok   feature 2 mask 5 variant 3 is inside the atlas
+   ok   feature 2 mask 6 variant 3 is inside the atlas
+   ok   feature 2 mask 7 variant 3 is inside the atlas
+   ok   feature 2 mask 8 variant 3 is inside the atlas
+   ok   feature 2 mask 9 variant 3 is inside the atlas
+   ok   feature 2 mask 10 variant 3 is inside the atlas
+   ok   feature 2 mask 11 variant 3 is inside the atlas
+   ok   feature 2 mask 12 variant 3 is inside the atlas
+   ok   feature 2 mask 13 variant 3 is inside the atlas
+   ok   feature 2 mask 14 variant 3 is inside the atlas
+   ok   feature 2 mask 15 variant 3 is inside the atlas
+   ok   feature 2 mask 0 variant 4 is inside the atlas
+   ok   feature 2 mask 1 variant 4 is inside the atlas
+   ok   feature 2 mask 2 variant 4 is inside the atlas
+   ok   feature 2 mask 3 variant 4 is inside the atlas
+   ok   feature 2 mask 4 variant 4 is inside the atlas
+   ok   feature 2 mask 5 variant 4 is inside the atlas
+   ok   feature 2 mask 6 variant 4 is inside the atlas
+   ok   feature 2 mask 7 variant 4 is inside the atlas
+   ok   feature 2 mask 8 variant 4 is inside the atlas
+   ok   feature 2 mask 9 variant 4 is inside the atlas
+   ok   feature 2 mask 10 variant 4 is inside the atlas
+   ok   feature 2 mask 11 variant 4 is inside the atlas
+   ok   feature 2 mask 12 variant 4 is inside the atlas
+   ok   feature 2 mask 13 variant 4 is inside the atlas
+   ok   feature 2 mask 14 variant 4 is inside the atlas
+   ok   feature 2 mask 15 variant 4 is inside the atlas
+   ok   feature 2 mask 0 variant 5 is inside the atlas
+   ok   feature 2 mask 1 variant 5 is inside the atlas
+   ok   feature 2 mask 2 variant 5 is inside the atlas
+   ok   feature 2 mask 3 variant 5 is inside the atlas
+   ok   feature 2 mask 4 variant 5 is inside the atlas
+   ok   feature 2 mask 5 variant 5 is inside the atlas
+   ok   feature 2 mask 6 variant 5 is inside the atlas
+   ok   feature 2 mask 7 variant 5 is inside the atlas
+   ok   feature 2 mask 8 variant 5 is inside the atlas
+   ok   feature 2 mask 9 variant 5 is inside the atlas
+   ok   feature 2 mask 10 variant 5 is inside the atlas
+   ok   feature 2 mask 11 variant 5 is inside the atlas
+   ok   feature 2 mask 12 variant 5 is inside the atlas
+   ok   feature 2 mask 13 variant 5 is inside the atlas
+   ok   feature 2 mask 14 variant 5 is inside the atlas
+   ok   feature 2 mask 15 variant 5 is inside the atlas
+   ok   feature 2 mask 0 variant 6 is inside the atlas
+   ok   feature 2 mask 1 variant 6 is inside the atlas
+   ok   feature 2 mask 2 variant 6 is inside the atlas
+   ok   feature 2 mask 3 variant 6 is inside the atlas
+   ok   feature 2 mask 4 variant 6 is inside the atlas
+   ok   feature 2 mask 5 variant 6 is inside the atlas
+   ok   feature 2 mask 6 variant 6 is inside the atlas
+   ok   feature 2 mask 7 variant 6 is inside the atlas
+   ok   feature 2 mask 8 variant 6 is inside the atlas
+   ok   feature 2 mask 9 variant 6 is inside the atlas
+   ok   feature 2 mask 10 variant 6 is inside the atlas
+   ok   feature 2 mask 11 variant 6 is inside the atlas
+   ok   feature 2 mask 12 variant 6 is inside the atlas
+   ok   feature 2 mask 13 variant 6 is inside the atlas
+   ok   feature 2 mask 14 variant 6 is inside the atlas
+   ok   feature 2 mask 15 variant 6 is inside the atlas
+   ok   feature 2 mask 0 variant 7 is inside the atlas
+   ok   feature 2 mask 1 variant 7 is inside the atlas
+   ok   feature 2 mask 2 variant 7 is inside the atlas
+   ok   feature 2 mask 3 variant 7 is inside the atlas
+   ok   feature 2 mask 4 variant 7 is inside the atlas
+   ok   feature 2 mask 5 variant 7 is inside the atlas
+   ok   feature 2 mask 6 variant 7 is inside the atlas
+   ok   feature 2 mask 7 variant 7 is inside the atlas
+   ok   feature 2 mask 8 variant 7 is inside the atlas
+   ok   feature 2 mask 9 variant 7 is inside the atlas
+   ok   feature 2 mask 10 variant 7 is inside the atlas
+   ok   feature 2 mask 11 variant 7 is inside the atlas
+   ok   feature 2 mask 12 variant 7 is inside the atlas
+   ok   feature 2 mask 13 variant 7 is inside the atlas
+   ok   feature 2 mask 14 variant 7 is inside the atlas
+   ok   feature 2 mask 15 variant 7 is inside the atlas
+   ok   feature 2 has all connection masks and variants (128)
+   ok   the Blight has structures to raise (8 kinds)
+   ok   nothing is buildable on night 1
+   ok   something is buildable by night 9
+   ok   a Blight structure is raised
+   ok   and the world knows it is there
+   ok   a Blight structure blocks the ground
+   ok   it makes the night worse (0.0 -> 3.0)
+   ok   a glancing blow does not level it
+   ok   enough damage levels it
+   ok   and it is gone
+   ok   the ground it stood on opens up immediately
+   ok   and it stops paying into the night the moment it falls
+   ok   keep site was chosen
+   ok   keep site is on the map
+   ok   keep site is walkable
+   ok   all 4 nests placed (got 4)
+   ok   keep has a buildable clearing (120/121 open)
+   ok   nest is a safe distance away (28 tiles)
+   ok   nest is a safe distance away (29 tiles)
+   ok   nest is a safe distance away (36 tiles)
+   ok   nest is a safe distance away (36 tiles)
+   ok   the clock advanced
+   ok   a full day cycle completed (reached day 2)
+   ok   blight frontier is alive
+   ok   blight is advancing (0.080% by day 2, from 0.032% seeded)
+   ok   blight has not swallowed the map by day 2 (0.1%)
+   ok   blight is a slow siege (0.08% by day 2)
+   ok   ember lights the keep
+   day 2  phase 0  tick 6000  blight 0.08%  frontier 9
+
+-- localization --
+   ok   the translation table loaded (728 keys)
+   ok   at least one language registered
+   ok   the locale CSV is reachable at res://content/locale/embergard.csv
+   ok   all 204 content strings resolve
+   ok   placeholders substitute (+3/day)
+
+-- Phase 5 polish --
+   ok   every Phase 5 sound effect is imported (12)
+   ok   the infinite procedural music generator is running
+   ok   the original and three accessible colour palettes exist
+   ok   text size offers several deliberate readable steps
+   ok   the full-screen colour accessibility filter is available
+   ok   desktop action 'game_pause' has a remappable key
+   ok   desktop action 'game_speed' has a remappable key
+   ok   desktop action 'game_jobs' has a remappable key
+   ok   desktop action 'game_build' has a remappable key
+   ok   desktop action 'game_realm' has a remappable key
+   ok   desktop action 'game_cancel' has a remappable key
+   ok   palisade opts into desktop drag placement
+   ok   path opts into desktop drag placement
+   ok   road opts into desktop drag placement
+   ok   contextual onboarding is present and loadable
+   ok   the Chronicle retains a useful number of completed worlds
+
+-- Phase 6 living world --
+   ok   all seven settleable biomes have authored rules
+   ok   coast has a translated identity and hazard
+   ok   grassland has a translated identity and hazard
+   ok   forest has a translated identity and hazard
+   ok   marsh has a translated identity and hazard
+   ok   highland has a translated identity and hazard
+   ok   badlands has a translated identity and hazard
+   ok   tundra has a translated identity and hazard
+   ok   biomes vary enemy nest pressure instead of sharing one ring
+   ok   deep forest timber is richer than badlands timber
+   ok   marsh ground carries a real travel cost
+   ok   the same region and day reproduce the same weather
+   ok   the four-season calendar advances every five days
+   ok   the weather table includes clear skies and six consequential conditions
+   ok   the procedural weather layer is present
+   ok   the storyteller decision panel is present
+   ok   the Chronicle includes the two Phase 6 achievements
+
+-- migration and pacing --
+   ok   migration check seeded a colony (2)
+   ok   nights keep getting harder
+   ok   the threat curve is not exponential (night 10 37, night 20 95)
+   ok   night 20 fits inside the body cap rather than overflowing into invisible stats (95)
+   ok   the colony is idle for less than a third of the cycle (31%)
+   ok   dawn is long enough to be a working morning (45s)
+   ok   swarmling is worth faith to kill
+   ok   shambler is worth faith to kill
+   ok   cinder_colossus is worth faith to kill
+   ok   frost_widow is worth faith to kill
+   ok   heart_warden is worth faith to kill
+   ok   mire_matron is worth faith to kill
+   ok   cinderling is worth faith to kill
+   ok   rot_leech is worth faith to kill
+   ok   spitter is worth faith to kill
+   ok   burrower is worth faith to kill
+   ok   husk is worth faith to kill
+   ok   gloomwing is worth faith to kill
+   ok   shade is worth faith to kill
+   ok   blight_mender is worth faith to kill
+   ok   blight_sapper is worth faith to kill
+   ok   plaguebearer is worth faith to kill
+   ok   brute is worth faith to kill
+   ok   veilwalker is worth faith to kill
+   ok   needleback is worth faith to kill
+   ok   siege_spore is worth faith to kill
+   ok   rammer is worth faith to kill
+   ok   a kill grants faith
+   ok   kills are tallied for the dawn report
+   ok   a colony with no huts has no free beds
+   ok   births stall with nowhere to sleep (no beds)
+   ok   a hut can be placed for the migration check
+   ok   a finished hut offers its beds (4)
+   ok   births stall in a starving colony (little food)
+   ok   the map has a drinkable shoreline (285 cells)
+   ok   the colony can reach water
+   ok   the Well building exists
+   ok   a well provides water
+   ok   400 food is more than a day's supply (22.8 days)
+   ok   a housed, fed, watered colony can grow (0.00582/s)
+   ok   completing migration progress admits exactly one survivor (2 -> 3)
+   ok   admitting a survivor consumes the progress rather than looping
+   ok   a bed beats the ground by a wide margin
+   ok   sleeping rough cannot fully rest a villager
+   ok   the mood breakdown sums to its total (87.00 vs 87.00)
+   ok   the mood breakdown has terms to show
+   ok   the faith breakdown sums to its total (0.1050 vs 0.1050)
+   ok   the faith breakdown still explains WHY passive generation is what it is (3 factors)
+   ok   the faith breakdown agrees with Divine.net_faith_rate
+   ok   the baseline abilities carry a real Burden (0.39/s)
+   ok   every Burden is itemised (6 lines for 6 abilities)
+   ok   an ability can be given back
+   ok   giving an ability back recovers exactly its Burden (0.060)
+   ok   and it can be taken up again
+   ok   taking it back up costs exactly its Burden again
+   ok   the food breakdown sums to the net flow (62000.00 vs 62000.00)
+   ok   a populated colony has a positive food demand
+   ok   the water report is a sane average (80.0)
+
+-- live run scene --
+   ok   the chosen Realm region opens as a local map
+   ok   choosing a region does not place the settlement automatically
+   ok   the local Hearth-site picker opens
+   ok   villagers spawned (6)
+   FAIL every villager is registered with the sim
+   ok   villagers are pathing and moving (4 of 6 moved)
+   ok   no villager walked into a wall or off the map
+   ok   ember begins moving on tap
+   ok   a 2-tile hop glides rather than snapping
+   ok   ember arrives at the tapped cell
+   ok   map has harvestable resources (5062)
+   ok   fresh field jobs have no automatic gathering orders
+   ok   the woodcutting brush marks a tree
+   ok   woodcutters delivered wood (64)
+   ok   quarriers delivered stone (5)
+   ok   villagers hold job assignments (6)
+   ok   building catalog loaded (46 defs)
+   ok   the hearth is placed and complete
+   ok   colony has a drop-off point
+   ok   blueprint placed
+   ok   placement reserves the cost
+   ok   placement does not teleport materials to the site
+   ok   starts as a blueprint awaiting materials
+   ok   cannot build on top of an unfinished site
+   ok   materials were carried to the site ({ &"wood": 24 } of { &"wood": 24 })
+   ok   villagers raised the blueprint (22/22 work)
+   ok   the finished building blocks movement
+   ok   thirsty villagers reach water and drink (5 of 6)
+   ok   eating consumes stored food (528 -> 510)
+   ok   hungry villagers actually got fed (3 of 6)
+   ok   farmers occupy the farm's work slots (3)
+   ok   the farm produces renewable food (8)
+   ok   faith accrues from the colony (x1.30 at mood 78)
+   ok   a miserable colony generates less faith
+   ok   live weather follows the selected Realm biome
+   ok   storms visibly dim the map and slow exposed travel
+   ok   storms feed local corruption pressure
+   ok   a deterministic caravan event can enter the live run
+   ok   headless event resolution takes one valid choice and clears the card
+   ok   monster catalog loaded (21 defs)
+   ok   power catalog loaded (20 defs)
+   ok   threat field finishes building
+   ok   the field reaches the map edge
+   ok   the night spawns monsters (1)
+   ok   monster cap respected
+   ok   the first night respects its gentle body cap
+   ok   first-night monsters remain territorial around their corrupt camp
+   ok   a provoked monster advances on the colony (28 -> 5 tiles, engaged: false)
+   ok   villagers take up guard duty during the night (peak 1)
+   ok   a power can be cast
+   ok   casting spends faith
+   ok   casting starts a cooldown
+   ok   a power on cooldown cannot be recast
+   ok   dawn clears the remaining monsters
+   ok   run saves to disk
+   ok   run loads back
+   ok   stock survives the round trip (473)
+   ok   villagers survive the round trip (6/6)
+   ok   buildings survive the round trip (3/3)
+   ok   the calendar survives the round trip
+   ok   weather preparations survive the round trip
+   ok   storyteller history survives the round trip
+   ok   gathering designations survive the round trip
+   ok   harvested ground stays harvested after a load
+   ok   the blight frontier is rebuilt after a load
+   ok   ascending ends the run
+   ok   ending the run pays out shards (+11)
+   ok   shards are banked, not silently spent (813 -> 824)
+   ok   a finished run clears its save
+   ok   the Chronicle records the finished world's seed and result
+   ok   the recorded seed can recreate and share the same world
+   ok   the build menu is gated by unlocks (4 locked, 21 available)
+
+=== result ===
+5 failure(s):
+  - seed 1: no id is shared between a building and a power (Meta.unlocked is one flat list)
+  - seed 7: no id is shared between a building and a power (Meta.unlocked is one flat list)
+  - seed 424242: no id is shared between a building and a power (Meta.unlocked is one flat list)
+  - seed 99999: no id is shared between a building and a power (Meta.unlocked is one flat list)
+  - seed 2024: every villager is registered with the sim
+(also appended to C:/Users/cadel/AppData/Roaming/Godot/app_userdata/Embergard- Nightkeep/smoke_failures.log)

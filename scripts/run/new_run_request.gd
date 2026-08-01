@@ -14,13 +14,16 @@ static var pending: bool = false
 static var seed_value: int = 0
 static var difficulty: StringName = &""
 static var pick_site: bool = true
+static var doctrines: Array[StringName] = []
 
 
-static func set_request(new_seed: int, difficulty_id: StringName, choose_site: bool) -> void:
+static func set_request(new_seed: int, difficulty_id: StringName, choose_site: bool,
+		doctrine_ids: Array = []) -> void:
 	pending = true
 	seed_value = new_seed
 	difficulty = difficulty_id
 	pick_site = choose_site
+	doctrines = Doctrines.sanitize(doctrine_ids)
 
 
 ## Read and clear. Consuming on read is what stops a returning player being dropped into a
@@ -31,6 +34,8 @@ static func consume() -> Dictionary:
 		"seed": seed_value,
 		"difficulty": difficulty,
 		"pick_site": pick_site,
+		"doctrines": doctrines.duplicate(),
 	}
 	pending = false
+	doctrines.clear()
 	return out

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/stonecutter.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"apothecary"
+display_name = "BUILDING_APOTHECARY"
+description = "BUILDING_APOTHECARY_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 1
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"wood": 14, &"stone": 8, &"herbs": 2}
+build_work = 20.0
+max_hp = 115.0
+repair_cost = {&"wood": 1, &"stone": 1}
+light_radius = 2
+influence_radius = 4
+worker_slots = 2
+input_capacity = 24
+output_capacity = 24
+order = 25
+color = Color(0.48, 0.72, 0.56, 1)
+

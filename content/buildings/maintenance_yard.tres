@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/sawmill.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"maintenance_yard"
+display_name = "BUILDING_MAINTENANCE_YARD"
+description = "BUILDING_MAINTENANCE_YARD_DESC"
+sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 1
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"wood": 14, &"stone": 6}
+build_work = 18.0
+max_hp = 120.0
+repair_cost = {&"wood": 2}
+repair_work = 4.0
+repair_amount = 40.0
+influence_radius = 6
+worker_slots = 2
+workplace_role = &"maintenance"
+inventory_capacity = 40
+storage_tags = Array[StringName]([&"wood", &"stone", &"boards", &"cut_stone", &"ingots"])
+order = 8
+color = Color(0.76, 0.6, 0.38, 1)
+

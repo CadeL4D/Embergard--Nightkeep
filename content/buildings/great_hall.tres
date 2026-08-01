@@ -26,6 +26,7 @@ upgrades_from = &"hearth"
 min_population = 10
 light_radius = 6
 is_stockpile = true
+inventory_capacity = 900
 faith_capacity = 110.0
 influence_radius = 20
 sleep_slots = 0

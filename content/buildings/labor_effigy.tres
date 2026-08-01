@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/palisade.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"divine_labor_effigy"
+display_name = "BUILDING_LABOR_EFFIGY"
+description = "BUILDING_LABOR_EFFIGY_DESC"
+sprite = ExtResource("2_tex")
+category = &"divine"
+tier = 1
+footprint = Vector2i(1, 1)
+blocks_movement = false
+max_blight = 80
+cost = {}
+build_work = 0.0
+max_hp = 70.0
+repair_cost = {}
+light_radius = 2
+faith_upkeep = 0.8
+influence_radius = 3
+order = 90
+color = Color(0.95, 0.72, 0.38, 1)
+menu_hidden = true
+work_aura = 0.35

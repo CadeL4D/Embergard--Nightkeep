@@ -4,6 +4,7 @@ extends Control
 var weather: StringName = &"clear"
 var severity: float = 0.0
 var _time: float = 0.0
+var _redraw_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -21,11 +22,19 @@ func _process(delta: float) -> void:
 	if weather == &"clear" or severity <= 0.05:
 		return
 	_time += delta * (0.15 if Accessibility.reduced_motion else 1.0)
+	var interval := Accessibility.animation_interval()
+	if interval > 0.0:
+		_redraw_accum += delta
+		if _redraw_accum < interval:
+			return
+		_redraw_accum = 0.0
 	queue_redraw()
 
 
 func _draw() -> void:
-	var count := roundi(lerpf(18.0, 94.0, severity))
+	var count := roundi(
+		lerpf(18.0, 94.0, severity) * Accessibility.particle_density()
+	)
 	match weather:
 		&"rain", &"storm":
 			_draw_rain(count, weather == &"storm")

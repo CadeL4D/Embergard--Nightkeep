@@ -10,15 +10,15 @@ display_name = "BUILDING_SHRINE"
 description = "BUILDING_SHRINE_DESC"
 sprite = ExtResource("2_tex")
 category = &"divine"
-tier = 2
+tier = 1
 footprint = Vector2i(2, 3)
 blocks_movement = true
 max_blight = 30
 cost = {
-&"stone": 20,
+&"stone": 10,
 &"wood": 12
 }
-build_work = 34.0
+build_work = 26.0
 max_hp = 180.0
 light_radius = 5
 is_stockpile = false
@@ -30,4 +30,4 @@ sleep_slots = 0
 worker_slots = 1
 order = 40
 color = Color(0.78, 0.72, 0.9, 1)
-unlock_cost = 110
+unlock_cost = 0

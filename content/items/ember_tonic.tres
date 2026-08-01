@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"ember_tonic"
+display_name = "ITEM_EMBER_TONIC"
+slot = &"consumable"
+max_durability = 1
+consumable_effect = {&"mood": 20.0, &"rest": 15.0, &"blight_sickness": -1.0}
+order = 34

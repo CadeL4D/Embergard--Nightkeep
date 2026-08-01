@@ -14,6 +14,10 @@ const CARDS := {
 	&"blight": [&"TUTORIAL_BLIGHT_TITLE", &"TUTORIAL_BLIGHT_BODY"],
 	&"climate": [&"TUTORIAL_CLIMATE_TITLE", &"TUTORIAL_CLIMATE_BODY"],
 	&"stories": [&"TUTORIAL_STORIES_TITLE", &"TUTORIAL_STORIES_BODY"],
+	&"storage": [&"TUTORIAL_STORAGE_TITLE", &"TUTORIAL_STORAGE_BODY"],
+	&"repairs": [&"TUTORIAL_REPAIR_TITLE", &"TUTORIAL_REPAIR_BODY"],
+	&"hand": [&"TUTORIAL_HAND_TITLE", &"TUTORIAL_HAND_BODY"],
+	&"routes": [&"TUTORIAL_ROUTES_TITLE", &"TUTORIAL_ROUTES_BODY"],
 }
 
 @onready var _card: PanelContainer = $Dim/Center/Card
@@ -53,6 +57,14 @@ func _ready() -> void:
 	Events.blight_changed.connect(func(_cell: int, blighted: bool) -> void:
 		if blighted and Sim.day > 1:
 			show_once(&"blight")
+	)
+	Events.day_advanced.connect(func(day: int) -> void:
+		if day == 2:
+			show_once(&"storage")
+			show_once(&"repairs")
+		elif day == 3:
+			show_once(&"hand")
+			show_once(&"routes")
 	)
 
 

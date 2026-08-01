@@ -26,5 +26,7 @@ is_stockpile = false
 influence_radius = 5
 sleep_slots = 0
 worker_slots = 2
+input_capacity = 24
+output_capacity = 24
 order = 23
 color = Color(0.8, 0.66, 0.42, 1)

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/shambler.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"husk"
+display_name = "MONSTER_HUSK"
+sprite = ExtResource("2_tex")
+max_health = 52.0
+move_speed = 12.0
+damage = 8.0
+attack_cooldown = 1.55
+structure_damage_scale = 1.2
+attack_type = &"blight"
+behavior_tags = Array[StringName]([&"splitting"])
+split_into = &"swarmling"
+split_count = 3
+resistances = {&"blight": 0.45, &"fire": -0.3}
+faith_on_death = 2.8
+threat_cost = 2.7
+min_night = 4
+weight = 0.72
+burn_per_second = 3.0
+burn_threshold = 175

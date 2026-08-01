@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/brute.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"heart_warden"
+display_name = "BOSS_HEART_WARDEN"
+sprite = ExtResource("2_tex")
+max_health = 920.0
+move_speed = 8.0
+damage = 28.0
+attack_cooldown = 1.9
+structure_damage_scale = 4.0
+attack_type = &"blight"
+behavior_tags = Array[StringName]([&"boss", &"siege", &"support", &"rooted"])
+support_heal = 18.0
+support_radius = 5.0
+support_cooldown = 2.0
+resistances = {&"blight": 0.85, &"piercing": 0.25, &"holy": -0.5}
+faith_on_death = 45.0
+is_boss = true
+presentation_scale = 2.0
+presentation_tint = Color(1.08, 0.58, 1.16, 1)
+boss_reward = 10
+weight = 0.0
+burn_per_second = 1.0
+burn_threshold = 220

@@ -72,7 +72,8 @@ func _ready() -> void:
 	# for a new world, and silently resuming their old one instead would be maddening.
 	var request := NewRunRequest.consume()
 	if bool(request["pending"]):
-		start_run(int(request["seed"]), request["difficulty"], bool(request["pick_site"]))
+		start_run(int(request["seed"]), request["difficulty"], bool(request["pick_site"]),
+			request.get("doctrines", []))
 		return
 
 	if RunSave.has_save():
@@ -107,7 +108,10 @@ func _resume() -> bool:
 ## `pick_site` opens the site picker instead of founding immediately. Off by default so
 ## every existing caller — the smoke test, the debug reseed, the summary card — keeps
 ## working unchanged and headlessly; only the New World flow turns it on.
-func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool = false) -> void:
+func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool = false,
+		doctrine_ids: Array = []) -> void:
+	if Sim.running and not Diagnostics.current.is_empty():
+		Diagnostics.mark_abandoned()
 	_clear_entities()
 	# Site selection is pre-game, not the previous colony continuing behind a
 	# modal map. Clear all live run state and halt the clock before either picker.
@@ -134,6 +138,7 @@ func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool
 	Difficulties.select(difficulty_id if difficulty_id != &"" else Meta.last_difficulty)
 
 	Realm.start_new(seed_value)
+	Realm.set_doctrines(doctrine_ids)
 	if pick_site:
 		_begin_region_selection()
 		return
@@ -291,6 +296,12 @@ func _spawn_transferred_villagers(rows: Array) -> void:
 		v.rest = float(row.get("rest", 80.0))
 		v.mood = float(row.get("mood", 60.0))
 		v.health = float(row.get("health", v.max_health))
+		v.carry_kind = StringName(row.get("carry_kind", &""))
+		v.carry_amount = int(row.get("carry_amount", 0))
+		v.pending_loads = row.get("pending_loads", []).duplicate(true)
+		v.statuses = row.get("statuses", {}).duplicate(true)
+		if row.has("record"):
+			v.restore_profile(row.get("record", {}))
 
 
 func _spawn_cells(want: int) -> PackedInt32Array:
@@ -419,6 +430,9 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if not _ended and Sim.running:
 			RunSave.save()
+			# Suspension is the one checkpoint that must be durable before the OS is
+			# allowed to freeze or kill the process.
+			SaveService.flush()
 
 
 # --- Run lifecycle -----------------------------------------------------------------------
@@ -525,6 +539,8 @@ func _end_run(ascended: bool, message: String, realm_completed: bool = false) ->
 	# Harder tiers pay proportionally more. Without this the hard tiers are strictly
 	# worse choices and nobody plays the content.
 	shards = int(shards * Difficulties.shard_mult())
+	if not Difficulties.progression_awards():
+		shards = 0
 	Meta.award(shards, Sim.day)
 
 	# Ascension: the meta layer's difficulty ratchet, and until now a number `threat_dial()` read
@@ -554,6 +570,7 @@ func _end_run(ascended: bool, message: String, realm_completed: bool = false) ->
 		"shards": shards,
 		"ascended": ascended,
 		"realm_completed": realm_completed,
+		"progression_awards": Difficulties.progression_awards(),
 	})
 	RunSave.clear()
 

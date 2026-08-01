@@ -1,0 +1,23 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+Locale: 772 keys, languages en, using en
+=== stress: 60 villagers, 120 monsters; disabled: none ===
+villagers alive : 59
+monsters alive  : 120
+nodes           : 1124
+orphan nodes    : 0
+objects         : 4805
+resources       : 311
+static memory   : 89.1 MiB
+video memory    : 0.0 MiB
+draw calls      : 0
+render objects  : 0
+feature detail  : { "forest_boundaries": 41, "rock_overlays": 15, "trees": 4396, "berries": 592, "resource_batches": 1 }
+frame avg       : 3.25 ms  (308 fps uncapped)
+frame p95       : 13.36 ms
+frame p99       : 22.72 ms
+frame max       : 77.46 ms
+wall/frame avg  : 9.94 ms (host pacing diagnostic)
+path queue      : 2
+blight frontier : 6
+VERDICT: within (desktop target 5.5 ms)

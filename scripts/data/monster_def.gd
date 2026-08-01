@@ -19,6 +19,29 @@ extends Resource
 ## Damage multiplier against structures. Brutes exist to break walls; spitters do
 ## not, so they route around rather than chewing through.
 @export var structure_damage_scale: float = 1.0
+@export var attack_type: StringName = &"crushing"
+@export var resistances: Dictionary = {}
+@export var behavior_tags: Array[StringName] = []
+@export var statuses_inflicted: Array[StringName] = []
+@export var status_duration: float = 18.0
+
+@export_group("Special behavior")
+## Splitting and death bursts are resolved as scheduled simulation effects. They do not create
+## physics bodies or one-shot scene effects, which keeps a large mobile wave deterministic.
+@export var split_into: StringName = &""
+@export_range(0, 6) var split_count: int = 0
+@export var death_burst_damage: float = 0.0
+@export var death_burst_radius: float = 0.0
+@export var death_burst_type: StringName = &"fire"
+@export var support_heal: float = 0.0
+@export var support_radius: float = 0.0
+@export var support_cooldown: float = 3.0
+
+@export_group("Boss")
+@export var is_boss: bool = false
+@export var presentation_scale: float = 1.0
+@export var presentation_tint: Color = Color.WHITE
+@export var boss_reward: int = 0
 
 @export_group("Reward")
 ## Faith granted for destroying one of these.
@@ -62,3 +85,7 @@ extends Resource
 
 func is_ranged() -> bool:
 	return attack_range > 1.5
+
+
+func has_behavior(tag: StringName) -> bool:
+	return tag in behavior_tags or (tag == &"boss" and is_boss)

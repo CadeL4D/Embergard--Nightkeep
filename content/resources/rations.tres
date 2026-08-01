@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ResourceDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/resource_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"rations"
+display_name = "RESOURCE_RATIONS"
+category = &"processed"
+spoilage_per_day = 0.02
+storage_tags = Array[StringName]([&"food"])
+display_order = 9

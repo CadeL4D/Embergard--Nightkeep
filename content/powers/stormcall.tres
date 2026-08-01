@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"stormcall"
+display_name = "POWER_STORMCALL"
+description = "POWER_STORMCALL_DESC"
+kind = 13
+faith_cost = 48.0
+cooldown = 75.0
+amount = 90.0
+weather_id = &"storm"
+required_temple_tier = 2
+burden = 0.2
+color = Color(0.45, 0.7, 1, 1)
+order = 18
+

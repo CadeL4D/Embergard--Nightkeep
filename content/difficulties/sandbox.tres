@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DifficultyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/difficulty_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"sandbox"
+display_name = "DIFFICULTY_SANDBOX"
+description = "DIFFICULTY_SANDBOX_DESC"
+hostile_spawning = false
+progression_awards = false
+sandbox_tools = true
+shard_mult = 0.0
+order = 5
+color = Color(0.78, 0.62, 0.9, 1)

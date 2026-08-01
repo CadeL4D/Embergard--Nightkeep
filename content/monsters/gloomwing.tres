@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/shade.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"gloomwing"
+display_name = "MONSTER_GLOOMWING"
+sprite = ExtResource("2_tex")
+max_health = 24.0
+move_speed = 24.0
+damage = 6.0
+attack_range = 4.0
+attack_cooldown = 1.25
+structure_damage_scale = 0.1
+attack_type = &"blight"
+behavior_tags = Array[StringName]([&"phasing", &"ranged"])
+resistances = {&"piercing": 0.6, &"crushing": 0.55, &"holy": -0.7}
+faith_on_death = 3.0
+threat_cost = 2.8
+min_night = 8
+weight = 0.58
+burn_per_second = 0.0
+burn_threshold = 255

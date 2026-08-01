@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"ash_spear"
+display_name = "ITEM_ASH_SPEAR"
+slot = &"weapon"
+max_durability = 130
+damage = {&"piercing": 8.0}
+modifiers = {&"reach": 1.0}
+job_tags = Array[StringName]([&"warrior"])
+order = 12

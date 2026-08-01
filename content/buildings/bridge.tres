@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/path.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"bridge"
+display_name = "BUILDING_BRIDGE"
+description = "BUILDING_BRIDGE_DESC"
+sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 1
+footprint = Vector2i(1, 1)
+blocks_movement = false
+drag_placeable = true
+bridges_water = true
+max_blight = 255
+path_tier = 1
+cost = {&"wood": 4}
+build_work = 3.0
+max_hp = 45.0
+resistances = {&"fire": -0.4}
+repair_cost = {&"wood": 1}
+repair_work = 2.0
+repair_amount = 25.0
+order = 7
+color = Color(0.65, 0.52, 0.36, 1)
+

@@ -10,6 +10,9 @@ const SFX_IDS: Array[StringName] = [
 	&"ui_press", &"ui_back", &"build_place", &"build_complete", &"resource_drop",
 	&"power_cast", &"warning", &"wave", &"monster_die", &"villager_die",
 	&"tome_written", &"dawn",
+	&"tower_fire", &"monster_attack", &"production", &"injury", &"hand_lift",
+	&"hand_drop", &"route_depart", &"route_arrive", &"route_lost", &"weather_storm",
+	&"boss", &"repair", &"heal",
 ]
 
 const SPECS := {
@@ -25,6 +28,19 @@ const SPECS := {
 	&"villager_die": [0.520, 310.0, 105.0, 0.13, 0.08],
 	&"tome_written": [0.650, 440.0, 880.0, 0.11, 0.015],
 	&"dawn": [1.150, 220.0, 440.0, 0.12, 0.01],
+	&"tower_fire": [0.175, 520.0, 150.0, 0.11, 0.09],
+	&"monster_attack": [0.210, 135.0, 82.0, 0.1, 0.22],
+	&"production": [0.190, 260.0, 390.0, 0.07, 0.04],
+	&"injury": [0.155, 310.0, 120.0, 0.09, 0.16],
+	&"hand_lift": [0.280, 190.0, 570.0, 0.1, 0.03],
+	&"hand_drop": [0.250, 520.0, 170.0, 0.1, 0.06],
+	&"route_depart": [0.480, 294.0, 440.0, 0.09, 0.025],
+	&"route_arrive": [0.560, 392.0, 784.0, 0.1, 0.015],
+	&"route_lost": [0.650, 220.0, 92.0, 0.12, 0.08],
+	&"weather_storm": [0.950, 92.0, 45.0, 0.11, 0.4],
+	&"boss": [1.050, 82.0, 55.0, 0.17, 0.18],
+	&"repair": [0.180, 420.0, 230.0, 0.07, 0.1],
+	&"heal": [0.360, 350.0, 620.0, 0.08, 0.015],
 }
 
 

@@ -21,6 +21,7 @@ build_work = 6.0
 max_hp = 60.0
 light_radius = 0
 is_stockpile = true
+inventory_capacity = 120
 influence_radius = 3
 sleep_slots = 0
 worker_slots = 0

@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/brute.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"mire_matron"
+display_name = "BOSS_MIRE_MATRON"
+sprite = ExtResource("2_tex")
+max_health = 560.0
+move_speed = 9.0
+damage = 16.0
+attack_cooldown = 1.8
+structure_damage_scale = 2.0
+attack_type = &"blight"
+behavior_tags = Array[StringName]([&"boss", &"support", &"splitting", &"infection"])
+statuses_inflicted = Array[StringName]([&"infected"])
+status_duration = 35.0
+split_into = &"rot_leech"
+split_count = 5
+support_heal = 14.0
+support_radius = 4.5
+support_cooldown = 2.5
+resistances = {&"blight": 0.75, &"holy": -0.35, &"fire": -0.18}
+faith_on_death = 28.0
+is_boss = true
+presentation_scale = 1.65
+presentation_tint = Color(0.72, 1.05, 0.72, 1)
+boss_reward = 5
+weight = 0.0
+burn_per_second = 1.0
+burn_threshold = 210

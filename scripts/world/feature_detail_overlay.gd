@@ -48,6 +48,13 @@ const NODE_ATLAS_COLS := 8
 const TREE_VARIANTS := 8
 const BERRY_VARIANTS := 4
 const STONE_SHELF_SPACING := 34.0
+# The mobile renderer is faster with one 5k-instance batch than with dozens of
+# smaller CanvasItems. Keep the code chunk-capable for larger future maps, while
+# the launch-size 112x112 colony deliberately resolves to one batch.
+const RESOURCE_CHUNK_CELLS := 112
+const FEATURE_ATLAS_SHADER := preload(
+	"res://assets/shaders/feature_atlas_multimesh.gdshader"
+)
 
 var _boundaries: Array[Dictionary] = []
 var _boundary_lines: Array[Line2D] = []
@@ -57,12 +64,21 @@ var _stone_membership := PackedByteArray()
 var _tree_nodes: Array[Dictionary] = []
 var _berry_nodes: Array[Dictionary] = []
 var _node_atlas: ImageTexture
+var _boundary_texture: ImageTexture
+var _resource_material: ShaderMaterial
+var _resource_multimeshes: Dictionary = {}
 var _rebuild_queued := false
 var _stone_rebuild_needed := true
+var _draw_boundaries := true
+var _draw_resource_nodes := true
+var _draw_rocks := true
 
 
 func _ready() -> void:
 	_node_atlas = _build_node_atlas()
+	_boundary_texture = _build_boundary_texture()
+	_resource_material = ShaderMaterial.new()
+	_resource_material.shader = FEATURE_ATLAS_SHADER
 	Events.map_generated.connect(_queue_full_rebuild)
 	Events.terrain_changed.connect(_on_terrain_changed)
 
@@ -103,6 +119,7 @@ func _rebuild() -> void:
 		_rock_overlays.clear()
 		_stone_membership = PackedByteArray()
 		_stone_rebuild_needed = true
+		_sync_resource_multimesh(grid)
 		_sync_boundary_lines()
 		queue_redraw()
 		return
@@ -141,7 +158,93 @@ func _rebuild() -> void:
 				"center": berry_center, "seed": seed, "coord": c,
 			})
 
+	_sync_resource_multimesh(grid)
 	queue_redraw()
+
+
+func _sync_resource_multimesh(grid: Grid) -> void:
+	var groups: Dictionary = {}
+	for node in _tree_nodes:
+		var variant := int(node["seed"]) % TREE_VARIANTS
+		_append_resource_instance(
+			groups, Vector2(node["center"]), variant, 0
+		)
+	for node in _berry_nodes:
+		var c: Vector2i = node["coord"]
+		var color_index := _mix(
+			floori(float(c.x) / 3.0), floori(float(c.y) / 2.0),
+			World.seed_value + 809
+		) % 4
+		var variant := int(node["seed"]) % BERRY_VARIANTS
+		_append_resource_instance(
+			groups, Vector2(node["center"]), variant, 1 + color_index
+		)
+
+	for key in _resource_multimeshes:
+		(_resource_multimeshes[key] as MultiMeshInstance2D).visible = groups.has(key) \
+			and _draw_resource_nodes
+	for key in groups:
+		var chunk := Vector2i(key)
+		var batch := _resource_multimeshes.get(chunk) as MultiMeshInstance2D
+		if batch == null:
+			batch = MultiMeshInstance2D.new()
+			batch.name = "ResourceChunk_%d_%d" % [chunk.x, chunk.y]
+			batch.texture = _node_atlas
+			batch.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			batch.material = _resource_material
+			batch.z_index = 1
+			add_child(batch)
+			_resource_multimeshes[chunk] = batch
+		var world_origin := Vector2(
+			chunk * RESOURCE_CHUNK_CELLS * Grid.TILE_SIZE
+		)
+		batch.position = world_origin
+		batch.visible = _draw_resource_nodes
+		var entries: Array = groups[key]
+		var multimesh := MultiMesh.new()
+		multimesh.transform_format = MultiMesh.TRANSFORM_2D
+		multimesh.use_custom_data = true
+		var quad := QuadMesh.new()
+		quad.size = Vector2(NODE_SPRITE_SIZE, NODE_SPRITE_SIZE)
+		multimesh.mesh = quad
+		multimesh.instance_count = entries.size()
+		var extent := RESOURCE_CHUNK_CELLS * Grid.TILE_SIZE
+		multimesh.custom_aabb = AABB(
+			Vector3(-NODE_SPRITE_SIZE, -NODE_SPRITE_SIZE, -1.0),
+			Vector3(
+				extent + NODE_SPRITE_SIZE * 2,
+				extent + NODE_SPRITE_SIZE * 2,
+				2.0
+			)
+		)
+		for instance_index in entries.size():
+			var entry: Dictionary = entries[instance_index]
+			multimesh.set_instance_transform_2d(
+				instance_index,
+				Transform2D(
+					0.0, _pixel(Vector2(entry["center"])) - world_origin
+				)
+			)
+			multimesh.set_instance_custom_data(
+				instance_index,
+				Color(
+					float(entry["column"]), float(entry["row"]), 0.0, 0.0
+				)
+			)
+		batch.multimesh = multimesh
+
+
+func _append_resource_instance(
+	groups: Dictionary, center: Vector2, column: int, row: int
+	) -> void:
+	var chunk_world_size := RESOURCE_CHUNK_CELLS * Grid.TILE_SIZE
+	var chunk := Vector2i(
+		floori(center.x / chunk_world_size),
+		floori(center.y / chunk_world_size)
+	)
+	var entries: Array = groups.get(chunk, [])
+	entries.append({"center": center, "column": column, "row": row})
+	groups[chunk] = entries
 
 
 func _build_boundaries(grid: Grid) -> void:
@@ -672,26 +775,21 @@ func _sync_boundary_lines() -> void:
 		if is_instance_valid(line):
 			line.free()
 	_boundary_lines.clear()
-
 	for boundary in _boundaries:
-		var points: PackedVector2Array = boundary["points"]
-		var closed := _closed(points)
-		_add_boundary_line(closed, FOREST_EDGE_DARK, 6.0)
-		_add_boundary_line(closed, FOREST_OUTER, 3.5)
-		_add_boundary_line(closed, FOREST_EDGE_BASE, 1.5)
-
-
-func _add_boundary_line(points: PackedVector2Array, color: Color, width: float) -> void:
-	var line := Line2D.new()
-	line.points = points
-	line.width = width
-	line.default_color = color
-	line.antialiased = false
-	line.joint_mode = Line2D.LINE_JOINT_ROUND
-	line.round_precision = 4
-	line.show_behind_parent = true
-	add_child(line)
-	_boundary_lines.append(line)
+		var line := Line2D.new()
+		line.points = boundary["points"] as PackedVector2Array
+		line.width = 6.0
+		line.texture = _boundary_texture
+		line.texture_mode = Line2D.LINE_TEXTURE_TILE
+		line.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		line.joint_mode = Line2D.LINE_JOINT_ROUND
+		line.round_precision = 2
+		line.closed = true
+		line.show_behind_parent = true
+		line.visible = _draw_boundaries
+		add_child(line)
+		_boundary_lines.append(line)
+	queue_redraw()
 
 
 func _collect_region(
@@ -879,17 +977,42 @@ func _stone_clearance(
 
 
 func _draw() -> void:
-	for overlay in _rock_overlays:
-		draw_texture(
-			overlay["texture"] as Texture2D,
-			Vector2(overlay["position"])
-		)
+	if _draw_rocks:
+		for overlay in _rock_overlays:
+			draw_texture(
+				overlay["texture"] as Texture2D,
+				Vector2(overlay["position"])
+			)
 
-	for node in _tree_nodes:
-		_draw_tree_node(node)
+func set_profile_hidden(parts: PackedStringArray) -> PackedStringArray:
+	var applied := PackedStringArray()
+	for part in parts:
+		match part:
+			"feature_boundaries":
+				_draw_boundaries = false
+				for line in _boundary_lines:
+					line.visible = false
+				applied.append(part)
+			"feature_nodes":
+				_draw_resource_nodes = false
+				for batch in _resource_multimeshes.values():
+					(batch as MultiMeshInstance2D).visible = false
+				applied.append(part)
+			"feature_rocks":
+				_draw_rocks = false
+				applied.append(part)
+	queue_redraw()
+	return applied
 
-	for node in _berry_nodes:
-		_draw_berry_node(node)
+
+func profile_counts() -> Dictionary:
+	return {
+		"forest_boundaries": _boundaries.size(),
+		"rock_overlays": _rock_overlays.size(),
+		"trees": _tree_nodes.size(),
+		"berries": _berry_nodes.size(),
+		"resource_batches": _resource_multimeshes.size(),
+	}
 
 
 func _draw_tree_node(node: Dictionary) -> void:
@@ -952,6 +1075,21 @@ func _build_node_atlas() -> ImageTexture:
 				variant,
 				family
 			)
+	return ImageTexture.create_from_image(image)
+
+
+func _build_boundary_texture() -> ImageTexture:
+	# A single textured six-pixel stroke reproduces the old nested 6/3.5/1.5
+	# contour. That cuts each forest from three draw calls to one and lets Godot
+	# cull whole off-screen forest contours independently.
+	var image := Image.create(2, 6, false, Image.FORMAT_RGBA8)
+	for x in 2:
+		image.set_pixel(x, 0, FOREST_EDGE_DARK)
+		image.set_pixel(x, 1, FOREST_OUTER)
+		image.set_pixel(x, 2, FOREST_EDGE_BASE)
+		image.set_pixel(x, 3, FOREST_EDGE_BASE)
+		image.set_pixel(x, 4, FOREST_OUTER)
+		image.set_pixel(x, 5, FOREST_EDGE_DARK)
 	return ImageTexture.create_from_image(image)
 
 

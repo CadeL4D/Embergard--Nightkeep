@@ -12,19 +12,19 @@ extends Node
 ## resource would collapse both the site-picker decision and the Well's reason to exist.
 const KINDS: Array[StringName] = [
 	# Raw — pulled out of the map.
-	&"wood", &"stone", &"food",
+	&"wood", &"stone", &"food", &"ore", &"emberglass", &"herbs",
 	# Processed — a workplace turned raw material into something better. See JobDef.cycle_cost.
-	&"boards", &"cut_stone",
+	&"boards", &"cut_stone", &"ingots", &"rations", &"medicine",
 	# Made — the gate to the upper half of the building list.
-	&"tools",
+	&"tools", &"arrows", &"bolts",
 ]
 
 ## Groups for the resource readout, so eleven numbers do not arrive as one undifferentiated
 ## strip. Keys are locale keys; values are the kinds in display order.
 const KIND_GROUPS: Array = [
-	[&"GROUP_RAW", [&"wood", &"stone", &"food"]],
-	[&"GROUP_PROCESSED", [&"boards", &"cut_stone"]],
-	[&"GROUP_MADE", [&"tools"]],
+	[&"GROUP_RAW", [&"wood", &"stone", &"food", &"ore", &"emberglass", &"herbs"]],
+	[&"GROUP_PROCESSED", [&"boards", &"cut_stone", &"ingots", &"rations", &"medicine"]],
+	[&"GROUP_MADE", [&"tools", &"arrows", &"bolts"]],
 ]
 
 ## How often the labour reconciler runs, in seconds. Quotas are a coarse control;
@@ -100,24 +100,36 @@ var _migrant_cell: int = -1
 var _spawn_parent: Node = null
 
 var stock: Dictionary = {}                ## StringName -> int
+## Goods with no valid container remain physically at the Hearth. This is an
+## unbounded recovery buffer, not a normal destination for hauling.
+var overflow: Dictionary = {}             ## StringName -> int
+var overflow_spoilage_progress: Dictionary = {}
+var overflow_items: Array[Dictionary] = []
+var _next_item_serial: int = 1
 
 ## Materials promised to blueprints but not yet carried out to them. Placing a
 ## blueprint reserves its cost immediately, so the wood is visibly gone from your
 ## spendable total the moment you commit — otherwise you could queue five huts
 ## against one hut's worth of timber and only discover it when nothing got built.
 var reserved: Dictionary = {}             ## StringName -> int
+var buffered: Dictionary = {}             ## workshop inputs committed but not consumed
 var quotas: Dictionary = {}               ## job id -> headcount the player wants
 var villagers: Array = []
 var buildings: Array = []
+var memorials: Array = []
 
 ## Cells where gathered goods can be dropped off. The Hearth seeds this at run
 ## start; real stockpile buildings append to it in M4.
 var stockpiles: PackedInt32Array = PackedInt32Array()
+## centre cell -> completed Building. Kept beside stockpiles so inventory lookup
+## never scans all 160 buildings during hauling and needs checks.
+var _storage_by_cell: Dictionary = {}
 
 ## cell -> villager currently working it. The single most visible "the AI is dumb"
 ## bug in this genre is five people converging on one tree, and this is what
 ## prevents it.
 var _claims: Dictionary = {}
+var _patient_claims: Dictionary = {}       ## patient iid -> medic
 
 ## Occupancy of the two kinds of building slot, keyed by building instance id.
 ## Kept as explicit ledgers rather than counted by scanning every villager, because
@@ -156,20 +168,33 @@ var _last_food: int = 0
 
 
 func _ready() -> void:
+	if not Events.day_advanced.is_connected(_on_day_advanced):
+		Events.day_advanced.connect(_on_day_advanced)
 	reset()
 
 
 func reset() -> void:
 	stock.clear()
+	overflow.clear()
+	overflow_spoilage_progress.clear()
+	overflow_items.clear()
+	_next_item_serial = 1
 	reserved.clear()
+	buffered.clear()
 	for k in KINDS:
 		stock[k] = 0
+		overflow[k] = 0
+		overflow_spoilage_progress[k] = 0.0
 		reserved[k] = 0
+		buffered[k] = 0
 	quotas.clear()
 	villagers.clear()
 	buildings.clear()
+	memorials.clear()
 	stockpiles = PackedInt32Array()
+	_storage_by_cell.clear()
 	_claims.clear()
+	_patient_claims.clear()
 	_bed_users.clear()
 	_work_users.clear()
 	_rebalance_timer = 0.0
@@ -300,6 +325,8 @@ func birth_blocker() -> String:
 		return "little food"
 	if average_mood() < BIRTH_MIN_MOOD:
 		return "unhappy"
+	if _eligible_birth_pair().is_empty():
+		return "no household"
 	return ""
 
 
@@ -436,7 +463,8 @@ func food_days() -> float:
 	var per_second := food_demand_per_second()
 	if per_second <= 0.0:
 		return 999.0
-	return float(amount_of(&"food")) / (per_second * Sim.cycle_seconds())
+	return float(amount_of(&"food") + amount_of(&"rations") * 2) \
+		/ (per_second * Sim.cycle_seconds())
 
 
 ## Food the colony eats per second, right now.
@@ -459,7 +487,7 @@ func _admit_migrant(born: bool = false) -> void:
 	var cell := World.nearest_walkable(World.keep_cell, 8) if born else _arrival_cell()
 	if cell == -1:
 		return
-	if spawn_villager(cell) != null:
+	if spawn_villager(cell, born) != null:
 		Events.migrant_arrived.emit(cell)
 		Events.notice.emit(tr(&"NOTICE_CHILD_BORN" if born else &"NOTICE_SURVIVOR_ARRIVES"), 0)
 
@@ -475,6 +503,34 @@ func admit_event_survivors(count: int) -> int:
 	if admitted > 0:
 		Events.notice.emit(L10n.t(&"NOTICE_MIGRANTS_JOINED", [admitted]), 0)
 	return admitted
+
+
+func admit_route_settler(row: Dictionary) -> bool:
+	if _spawn_parent == null or population() >= Difficulties.max_villagers():
+		return false
+	var cell := _arrival_cell()
+	if cell == -1:
+		cell = World.nearest_walkable(World.keep_cell, 8)
+	if cell == -1:
+		return false
+	var v: Villager = VILLAGER_SCENE.instantiate()
+	v.position = World.grid.to_world_index(cell)
+	v.job = StringName(row.get("job", &""))
+	v.food = float(row.get("food", 80.0))
+	v.water = float(row.get("water", 80.0))
+	v.rest = float(row.get("rest", 80.0))
+	v.mood = float(row.get("mood", 60.0))
+	v.health = float(row.get("health", v.max_health))
+	v.carry_kind = StringName(row.get("carry_kind", &""))
+	v.carry_amount = int(row.get("carry_amount", 0))
+	v.pending_loads = row.get("pending_loads", []).duplicate(true)
+	v.statuses = row.get("statuses", {}).duplicate(true)
+	if row.has("record"):
+		v.restore_profile(row.get("record", {}))
+	_spawn_parent.add_child(v)
+	_form_households()
+	Events.migrant_arrived.emit(cell)
+	return true
 
 
 func adjust_mood(amount: float) -> void:
@@ -502,25 +558,119 @@ func _arrival_cell() -> int:
 
 ## The one place a villager is created. Founders and migrants come through here alike, so the
 ## two can never drift apart.
-func spawn_villager(cell: int) -> Node:
-	if _spawn_parent == null or not World.grid.is_valid_index(cell):
+func spawn_villager(cell: int, born: bool = false) -> Node:
+	if _spawn_parent == null or not World.grid.is_valid_index(cell) \
+			or population() >= Difficulties.max_villagers():
 		return null
 	var v: Villager = VILLAGER_SCENE.instantiate()
+	v.profile = Villager._make_profile(villagers.size(), born)
+	if born:
+		var parents := _eligible_birth_pair()
+		if parents.size() == 2:
+			v.profile.household_id = parents[0].profile.household_id
+			for parent in parents:
+				parent.profile.birth_cooldown_until_day = Sim.day + 5
 	v.position = World.grid.to_world_index(cell)
 	_spawn_parent.add_child(v)
+	_form_households()
 	return v
+
+
+func _eligible_birth_pair() -> Array:
+	var by_id: Dictionary = {}
+	for v in villagers:
+		if is_instance_valid(v) and v.alive and v.is_adult():
+			by_id[v.profile.stable_id] = v
+	for v in villagers:
+		if not is_instance_valid(v) or not v.alive or not v.is_adult():
+			continue
+		if v.profile.partner_id.is_empty() or v.profile.birth_cooldown_until_day > Sim.day:
+			continue
+		var partner = by_id.get(v.profile.partner_id)
+		if partner != null and partner.profile.birth_cooldown_until_day <= Sim.day:
+			return [v, partner]
+	return []
+
+
+func _form_households() -> void:
+	var unpaired: Array = []
+	for v in villagers:
+		if is_instance_valid(v) and v.alive and v.is_adult() and v.profile.partner_id.is_empty():
+			unpaired.append(v)
+	unpaired.sort_custom(func(a, b) -> bool: return a.profile.stable_id < b.profile.stable_id)
+	while unpaired.size() >= 2:
+		var first = unpaired.pop_front()
+		var second = unpaired.pop_front()
+		var household := "home-%s" % first.profile.stable_id
+		first.profile.partner_id = second.profile.stable_id
+		second.profile.partner_id = first.profile.stable_id
+		first.profile.household_id = household
+		second.profile.household_id = household
+
+
+func refresh_households() -> void:
+	_form_households()
+
+
+func record_memorial(record: Dictionary) -> void:
+	memorials.append(record.duplicate(true))
+	if memorials.size() > 256:
+		memorials.pop_front()
+
+
+func release_household_partner(departed: Villager) -> void:
+	if departed == null or departed.profile.partner_id.is_empty():
+		return
+	for villager in villagers:
+		if is_instance_valid(villager) and villager != departed \
+				and villager.profile.stable_id == departed.profile.partner_id:
+			villager.profile.partner_id = ""
+			villager.profile.household_id = ""
+			break
+
+
+func _on_day_advanced(_day: int) -> void:
+	for v in villagers.duplicate():
+		if not is_instance_valid(v) or not v.alive:
+			continue
+		var was_adult: bool = v.is_adult()
+		v.profile.age_days += 1
+		if not was_adult and v.is_adult():
+			Events.notice.emit("%s has come of age." % v.profile.display_name, 0)
+		if v.profile.age_days >= v.profile.max_age_days:
+			v.die(&"age")
+	_form_households()
+	apply_daily_spoilage()
 
 
 # --- Resources ---------------------------------------------------------------------
 
 func add(kind: StringName, amount: int) -> void:
-	stock[kind] = maxi(stock.get(kind, 0) + amount, 0)
-	Events.resources_changed.emit(kind, stock[kind])
+	if amount == 0:
+		return
+	if amount < 0:
+		withdraw_any(kind, -amount)
+		return
+	var remaining := amount
+	while remaining > 0:
+		var cell := nearest_storage_destination(World.keep_cell, kind)
+		if cell == -1:
+			break
+		var b := storage_at(cell)
+		if b == null:
+			break
+		var accepted: int = b.inventory_deposit(kind, remaining)
+		if accepted <= 0:
+			break
+		remaining -= accepted
+	if remaining > 0:
+		overflow[kind] = int(overflow.get(kind, 0)) + remaining
+	_change_stock(kind, amount)
 
 
 ## What is actually spendable: on the shelf and not already promised elsewhere.
 func available(kind: StringName) -> int:
-	return maxi(stock.get(kind, 0) - reserved.get(kind, 0), 0)
+	return maxi(stock.get(kind, 0) - reserved.get(kind, 0) - buffered.get(kind, 0), 0)
 
 
 func can_afford(cost: Dictionary) -> bool:
@@ -549,24 +699,37 @@ func unreserve(cost: Dictionary) -> void:
 ## A builder collecting promised materials from a stockpile. Takes them off the
 ## shelf AND releases the matching promise, since they are now in someone's arms.
 func withdraw_reserved(kind: StringName, amount: int) -> int:
-	var taken := mini(amount, mini(stock.get(kind, 0), reserved.get(kind, 0)))
+	var source := nearest_storage_source(World.keep_cell, kind)
+	return withdraw_reserved_at(source, kind, amount) if source != -1 else 0
+
+
+func withdraw_reserved_at(cell: int, kind: StringName, amount: int) -> int:
+	var taken := mini(amount, mini(amount_at(cell, kind), reserved.get(kind, 0)))
 	if taken <= 0:
 		return 0
 	reserved[kind] = reserved.get(kind, 0) - taken
-	add(kind, -taken)
-	return taken
+	return withdraw_at(cell, kind, taken)
 
 
 func spend(cost: Dictionary) -> bool:
+	return spend_near(World.keep_cell, cost)
+
+
+func spend_near(from: int, cost: Dictionary) -> bool:
 	if not can_afford(cost):
 		return false
 	for kind: StringName in cost:
-		add(kind, -int(cost[kind]))
+		withdraw_any(kind, int(cost[kind]), from)
 	return true
 
 
 func amount_of(kind: StringName) -> int:
 	return stock.get(kind, 0)
+
+
+func _change_stock(kind: StringName, delta: int) -> void:
+	stock[kind] = maxi(int(stock.get(kind, 0)) + delta, 0)
+	Events.resources_changed.emit(kind, stock[kind])
 
 
 # --- Stockpiles ---------------------------------------------------------------------
@@ -584,24 +747,397 @@ func remove_stockpile(cell: int) -> void:
 	stockpiles.resize(stockpiles.size() - 1)
 
 
-## Closest drop-off point to a villager. Returns -1 if the colony has nowhere to
-## put anything, in which case gatherers simply hold their load.
-func nearest_stockpile(from: int, kind: StringName = &"") -> int:
+func register_storage(b: Building) -> void:
+	if b == null or b.def == null or not b.def.is_stockpile:
+		return
+	_storage_by_cell[b.centre_cell()] = b
+	# A newly completed store immediately absorbs compatible Hearth overflow. The
+	# aggregate cache does not change because this is a physical move, not creation.
+	for raw_kind in overflow.keys():
+		var kind := StringName(raw_kind)
+		var have := int(overflow.get(kind, 0))
+		if have <= 0 or not DefenseControl.stockpile_accepts(b.centre_cell(), kind):
+			continue
+		var accepted: int = b.inventory_deposit(kind, have)
+		if accepted > 0:
+			overflow[kind] = have - accepted
+	for i in range(overflow_items.size() - 1, -1, -1):
+		if b.inventory_deposit_item(overflow_items[i]):
+			overflow_items.remove_at(i)
+
+
+func unregister_storage(b: Building) -> void:
+	if b == null:
+		return
+	var cell := b.centre_cell()
+	if _storage_by_cell.get(cell) == b:
+		_storage_by_cell.erase(cell)
+
+
+func storage_at(cell: int) -> Building:
+	var b = _storage_by_cell.get(cell)
+	if b == null or not is_instance_valid(b) or b.state != Building.State.COMPLETE:
+		return null
+	return b as Building
+
+
+func overflow_cell() -> int:
+	return World.keep_cell
+
+
+func amount_at(cell: int, kind: StringName) -> int:
+	var total := 0
+	var b := storage_at(cell)
+	if b != null:
+		total += int(b.inventory.get(kind, 0))
+	if cell == overflow_cell():
+		total += int(overflow.get(kind, 0))
+	return total
+
+
+func deposit_at(cell: int, kind: StringName, amount: int) -> int:
+	var b := storage_at(cell)
+	if b == null or amount <= 0:
+		return 0
+	var accepted := b.inventory_deposit(kind, amount)
+	if accepted > 0:
+		_change_stock(kind, accepted)
+	return accepted
+
+
+func deposit_building_input(b: Building, kind: StringName, amount: int) -> int:
+	if b == null or not is_instance_valid(b):
+		return 0
+	var accepted := b.deposit_input_local(kind, amount)
+	if accepted > 0:
+		buffered[kind] = int(buffered.get(kind, 0)) + accepted
+		_change_stock(kind, accepted)
+	return accepted
+
+
+func consume_building_inputs(b: Building, cost: Dictionary) -> bool:
+	if b == null:
+		return false
+	for kind: StringName in cost:
+		if int(b.input_buffer.get(kind, 0)) < int(cost[kind]):
+			return false
+	for kind: StringName in cost:
+		var taken := b.withdraw_input_local(kind, int(cost[kind]))
+		buffered[kind] = maxi(int(buffered.get(kind, 0)) - taken, 0)
+		_change_stock(kind, -taken)
+	return true
+
+
+func deposit_building_output(b: Building, kind: StringName, amount: int) -> int:
+	if b == null or not is_instance_valid(b):
+		return 0
+	var accepted := b.deposit_output_local(kind, amount)
+	if accepted > 0:
+		_change_stock(kind, accepted)
+	return accepted
+
+
+func withdraw_building_output(b: Building, kind: StringName, amount: int) -> int:
+	if b == null or not is_instance_valid(b):
+		return 0
+	var taken := b.withdraw_output_local(kind, amount)
+	if taken > 0:
+		_change_stock(kind, -taken)
+	return taken
+
+
+func withdraw_at(cell: int, kind: StringName, amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var remaining := amount
+	var taken := 0
+	var b := storage_at(cell)
+	if b != null:
+		var local_taken: int = b.inventory_withdraw(kind, remaining)
+		taken += local_taken
+		remaining -= local_taken
+	if remaining > 0 and cell == overflow_cell():
+		var overflow_taken := mini(remaining, int(overflow.get(kind, 0)))
+		overflow[kind] = int(overflow.get(kind, 0)) - overflow_taken
+		taken += overflow_taken
+	if taken > 0:
+		_change_stock(kind, -taken)
+	return taken
+
+
+func withdraw_any(kind: StringName, amount: int, from: int = -1) -> int:
+	var remaining := mini(maxi(amount, 0), amount_of(kind))
+	var total := 0
+	var origin := from if World.grid.is_valid_index(from) else World.keep_cell
+	while remaining > 0:
+		var cell := nearest_storage_source(origin, kind)
+		if cell == -1:
+			break
+		var taken := withdraw_at(cell, kind, remaining)
+		if taken <= 0:
+			break
+		total += taken
+		remaining -= taken
+	return total
+
+
+## On destruction the container disappears but its numbers do not. Overflow is
+## deliberately allowed beyond Hearth capacity so a lost warehouse cannot delete a realm.
+func evacuate_inventory(b: Building) -> void:
+	if b == null or (b.inventory.is_empty() and b.item_inventory.is_empty() \
+			and b.input_buffer.is_empty() and b.output_buffer.is_empty()):
+		return
+	for raw_kind in b.inventory.keys():
+		var kind := StringName(raw_kind)
+		overflow[kind] = int(overflow.get(kind, 0)) + int(b.inventory.get(kind, 0))
+	b.inventory.clear()
+	overflow_items.append_array(b.item_inventory.duplicate(true))
+	b.item_inventory.clear()
+	for raw_kind in b.input_buffer.keys():
+		var kind := StringName(raw_kind)
+		var amount := int(b.input_buffer.get(kind, 0))
+		overflow[kind] = int(overflow.get(kind, 0)) + amount
+		buffered[kind] = maxi(int(buffered.get(kind, 0)) - amount, 0)
+	b.input_buffer.clear()
+	for raw_kind in b.output_buffer.keys():
+		var kind := StringName(raw_kind)
+		overflow[kind] = int(overflow.get(kind, 0)) + int(b.output_buffer.get(kind, 0))
+	b.output_buffer.clear()
+
+
+func rebuild_stock_cache() -> void:
+	for kind in KINDS:
+		stock[kind] = int(overflow.get(kind, 0))
+		buffered[kind] = 0
+	for b in buildings:
+		if not is_instance_valid(b):
+			continue
+		for raw_kind in b.inventory.keys():
+			var kind := StringName(raw_kind)
+			stock[kind] = int(stock.get(kind, 0)) + int(b.inventory.get(kind, 0))
+		for raw_kind in b.input_buffer.keys():
+			var kind := StringName(raw_kind)
+			var amount := int(b.input_buffer.get(kind, 0))
+			stock[kind] = int(stock.get(kind, 0)) + amount
+			buffered[kind] = int(buffered.get(kind, 0)) + amount
+		for raw_kind in b.output_buffer.keys():
+			var kind := StringName(raw_kind)
+			stock[kind] = int(stock.get(kind, 0)) + int(b.output_buffer.get(kind, 0))
+	Events.resources_changed.emit(&"", 0)
+
+
+func apply_daily_spoilage() -> void:
+	for candidate in buildings:
+		var b := candidate as Building
+		if b == null or not is_instance_valid(b) or b.inventory.is_empty():
+			continue
+		for raw_kind in b.inventory.keys():
+			var kind := StringName(raw_kind)
+			var resource: ResourceDef = Resources.get_resource(kind)
+			if resource == null or resource.spoilage_per_day <= 0.0:
+				continue
+			var expected: float = float(b.inventory.get(kind, 0)) * resource.spoilage_per_day \
+				* b.def.spoilage_multiplier * Doctrines.modifier(&"spoilage") \
+				+ float(b.spoilage_progress.get(kind, 0.0))
+			var lost: int = mini(floori(expected), int(b.inventory.get(kind, 0)))
+			b.spoilage_progress[kind] = expected - float(lost)
+			if lost > 0:
+				b.inventory_withdraw(kind, lost)
+				_change_stock(kind, -lost)
+	for kind in KINDS:
+		var resource: ResourceDef = Resources.get_resource(kind)
+		if resource == null or resource.spoilage_per_day <= 0.0:
+			continue
+		var expected: float = float(overflow.get(kind, 0)) * resource.spoilage_per_day * 1.25 \
+			* Doctrines.modifier(&"spoilage") \
+			+ float(overflow_spoilage_progress.get(kind, 0.0))
+		var lost: int = mini(floori(expected), int(overflow.get(kind, 0)))
+		overflow_spoilage_progress[kind] = expected - float(lost)
+		if lost > 0:
+			overflow[kind] = int(overflow.get(kind, 0)) - lost
+			_change_stock(kind, -lost)
+
+
+# --- Lightweight items and equipment ----------------------------------------------------
+
+func create_item(def_id: StringName, preferred_cell: int = -1) -> ItemRecord:
+	var item_def := Items.get_item(def_id)
+	if item_def == null:
+		return null
+	var uid := "%s-%d-%d" % [String(Realm.awake_id), Sim.tick, _next_item_serial]
+	_next_item_serial += 1
+	var record := ItemRecord.create(item_def, uid)
+	store_item(record, preferred_cell)
+	return record
+
+
+func store_item(record: ItemRecord, preferred_cell: int = -1) -> bool:
+	if record == null or Items.get_item(record.def_id) == null:
+		return false
+	var origin := preferred_cell if World.grid.is_valid_index(preferred_cell) else World.keep_cell
+	var best: Building = null
+	var best_dist := 0x7FFFFFFF
+	var item_def := Items.get_item(record.def_id)
+	for raw_cell in _storage_by_cell.keys():
+		var cell := int(raw_cell)
+		var b := storage_at(cell)
+		if b == null or b.inventory_free() <= 0 or not b.accepts_item(item_def):
+			continue
+		var distance := World.grid.dist_sq(origin, cell)
+		if distance < best_dist:
+			best_dist = distance
+			best = b
+	if best != null and best.inventory_deposit_item(record.to_dict()):
+		return true
+	overflow_items.append(record.to_dict())
+	return true
+
+
+func item_count(def_id: StringName = &"") -> int:
+	var total := 0
+	for b in buildings:
+		if not is_instance_valid(b):
+			continue
+		for row: Dictionary in b.item_inventory:
+			if def_id.is_empty() or StringName(row.get("def", &"")) == def_id:
+				total += 1
+	for row: Dictionary in overflow_items:
+		if def_id.is_empty() or StringName(row.get("def", &"")) == def_id:
+			total += 1
+	return total
+
+
+func total_item_count(def_id: StringName = &"") -> int:
+	var total := item_count(def_id)
+	for villager in villagers:
+		if not is_instance_valid(villager) or not villager.alive:
+			continue
+		for row in villager.profile.equipment.values():
+			if typeof(row) == TYPE_DICTIONARY \
+					and (def_id.is_empty() or StringName(row.get("def", &"")) == def_id):
+				total += 1
+	return total
+
+
+func take_equipment(job_def: JobDef, slot: StringName, policy: StringName) -> ItemRecord:
+	if policy == &"none":
+		return null
+	var best_row: Dictionary = {}
+	var best_building: Building = null
+	var best_index := -1
+	var best_score := INF if policy == &"preserve_durability" else -INF
+	for candidate in buildings:
+		var b := candidate as Building
+		if b == null or not is_instance_valid(b):
+			continue
+		for i in b.item_inventory.size():
+			var row: Dictionary = b.item_inventory[i]
+			var score := _equipment_score(row, job_def, slot)
+			if score < 0.0:
+				continue
+			if (policy == &"preserve_durability" and score < best_score) \
+					or (policy != &"preserve_durability" and score > best_score):
+				best_score = score
+				best_row = row
+				best_building = b
+				best_index = i
+	for i in overflow_items.size():
+		var row: Dictionary = overflow_items[i]
+		var score := _equipment_score(row, job_def, slot)
+		if score < 0.0:
+			continue
+		if (policy == &"preserve_durability" and score < best_score) \
+				or (policy != &"preserve_durability" and score > best_score):
+			best_score = score
+			best_row = row
+			best_building = null
+			best_index = i
+	if best_index < 0:
+		return null
+	if best_building != null:
+		best_building.item_inventory.remove_at(best_index)
+	else:
+		overflow_items.remove_at(best_index)
+	return ItemRecord.from_dict(best_row)
+
+
+func _equipment_score(row: Dictionary, job_def: JobDef, slot: StringName) -> float:
+	var item_def := Items.get_item(StringName(row.get("def", &"")))
+	if item_def == null or item_def.slot != slot:
+		return -1.0
+	if job_def != null and not item_def.supports_job(job_def.equipment_tags):
+		return -1.0
+	var score := float(row.get("durability", 0)) / float(maxi(item_def.max_durability, 1))
+	for value in item_def.modifiers.values():
+		score += absf(float(value))
+	for value in item_def.damage.values():
+		score += absf(float(value)) * 0.1
+	for value in item_def.resistances.values():
+		score += absf(float(value))
+	return score
+
+
+func distribute_legacy_stock(legacy: Dictionary) -> void:
+	for b in buildings:
+		if is_instance_valid(b):
+			b.inventory.clear()
+			b.input_buffer.clear()
+			b.output_buffer.clear()
+	for kind in KINDS:
+		stock[kind] = 0
+		overflow[kind] = 0
+		buffered[kind] = 0
+	for raw_kind in legacy.keys():
+		add(StringName(raw_kind), int(legacy.get(raw_kind, 0)))
+
+
+func nearest_storage_destination(from: int, kind: StringName) -> int:
 	var best := -1
 	var best_score := 0x7FFFFFFF
-	for cell in stockpiles:
+	for raw_cell in _storage_by_cell.keys():
+		var cell := int(raw_cell)
+		var b := storage_at(cell)
+		if b == null or not b.accepts_resource(kind) or b.inventory_free() <= 0:
+			continue
 		if not DefenseControl.stockpile_accepts(cell, kind):
 			continue
-		var d := World.grid.dist_sq(from, cell)
-		# One priority step outweighs twenty tiles of walking without making distance irrelevant.
-		var score := d - (DefenseControl.stockpile_priority(cell) - 1) * 400
+		var score := World.grid.dist_sq(from, cell) \
+			- (DefenseControl.stockpile_priority(cell) - 1) * 400
 		if score < best_score:
 			best_score = score
 			best = cell
-	# A restrictive setup must never strand a load permanently. Fall back to any storehouse.
-	if best == -1 and kind != &"":
-		return nearest_stockpile(from)
 	return best
+
+
+func nearest_storage_source(from: int, kind: StringName) -> int:
+	var best := -1
+	var best_dist := 0x7FFFFFFF
+	for raw_cell in _storage_by_cell.keys():
+		var cell := int(raw_cell)
+		if amount_at(cell, kind) <= 0:
+			continue
+		var distance := World.grid.dist_sq(from, cell)
+		if distance < best_dist:
+			best_dist = distance
+			best = cell
+	var overflow_at := overflow_cell()
+	if int(overflow.get(kind, 0)) > 0 and World.grid.is_valid_index(overflow_at):
+		var overflow_dist := World.grid.dist_sq(from, overflow_at)
+		if overflow_dist < best_dist:
+			best = overflow_at
+	return best
+
+
+## Closest drop-off point to a villager. Returns -1 if the colony has nowhere to
+## put anything, in which case gatherers simply hold their load.
+func nearest_stockpile(from: int, kind: StringName = &"") -> int:
+	if kind.is_empty():
+		for candidate in KINDS:
+			var cell := nearest_storage_destination(from, candidate)
+			if cell != -1:
+				return cell
+		return -1
+	return nearest_storage_destination(from, kind)
 
 
 # --- Buildings ---------------------------------------------------------------------
@@ -746,6 +1282,9 @@ func check_placement(def: BuildingDef, anchor: int) -> Dictionary:
 	if def == null or not grid.is_valid_index(anchor):
 		result["reason"] = tr(&"PLACE_OFF_MAP")
 		return result
+	if buildings.size() >= Difficulties.max_player_buildings():
+		result["reason"] = L10n.t(&"PLACE_BUILDING_CAP", [Difficulties.max_player_buildings()])
+		return result
 
 	var cells := grid.footprint_cells(grid.coord(anchor), def.footprint)
 	if cells.is_empty():
@@ -772,6 +1311,9 @@ func check_placement(def: BuildingDef, anchor: int) -> Dictionary:
 		if World.claimed[cell] != 0:
 			bad[cell] = true
 			blocked = true
+		elif def.bridges_water:
+			if World.terrain[cell] != Terrain.Type.WATER or World.feature[cell] != Terrain.Feature.NONE:
+				bad[cell] = true
 		elif not Terrain.WALKABLE.get(World.terrain[cell], false):
 			bad[cell] = true
 		elif Terrain.blocks_building(World.feature[cell]):
@@ -833,6 +1375,15 @@ func place_building(def: BuildingDef, anchor: int, parent: Node) -> Node:
 	return b
 
 
+func place_divine_construct(def: BuildingDef, anchor: int) -> Building:
+	if def == null or not def.menu_hidden or _spawn_parent == null:
+		return null
+	var placed := place_building(def, anchor, _spawn_parent) as Building
+	if placed != null:
+		placed.complete()
+	return placed
+
+
 ## Bottom-left corner of the footprint in world space — see Building's note on why
 ## the node sits at the base rather than the centre.
 func _building_origin(def: BuildingDef, anchor: int) -> Vector2:
@@ -881,18 +1432,31 @@ func site_count() -> int:
 # --- Food ------------------------------------------------------------------------------
 
 func has_food() -> bool:
-	return amount_of(&"food") > 0
+	return amount_of(&"food") > 0 or amount_of(&"rations") > 0
 
 
 ## Take a meal from the stores. Returns how much was actually eaten, which may be
 ## less than asked for — a colony with two food left should still get two food of
 ## relief rather than nothing.
 func consume_food(amount: int) -> int:
-	var available := amount_of(&"food")
-	var taken := mini(amount, available)
-	if taken > 0:
-		add(&"food", -taken)
-	return taken
+	var source := nearest_food_source(World.keep_cell)
+	return consume_food_at(source, amount) if source != -1 else 0
+
+
+func consume_food_at(cell: int, amount: int) -> int:
+	var remaining := maxi(amount, 0)
+	var raw_taken := withdraw_at(cell, &"food", mini(remaining, amount_at(cell, &"food")))
+	if raw_taken > 0:
+		remaining -= raw_taken
+	if remaining <= 0:
+		return amount
+	# One preserved ration supplies two raw-food units. Spending rounds up, while
+	# the returned nourishment never exceeds the meal that was requested.
+	var ration_taken := withdraw_at(cell, &"rations",
+		mini(ceili(float(remaining) / 2.0), amount_at(cell, &"rations")))
+	if ration_taken > 0:
+		remaining = maxi(remaining - ration_taken * 2, 0)
+	return amount - remaining
 
 
 # --- Water --------------------------------------------------------------------------------
@@ -941,7 +1505,13 @@ func has_water_access() -> bool:
 ## pool rather than per-stockpile stock, so any drop-off point will do — the walk
 ## is the cost, not the logistics.
 func nearest_food_source(from: int) -> int:
-	return nearest_stockpile(from, &"food") if has_food() else -1
+	var raw := nearest_storage_source(from, &"food")
+	var ration := nearest_storage_source(from, &"rations")
+	if raw == -1:
+		return ration
+	if ration == -1:
+		return raw
+	return raw if World.grid.dist_sq(from, raw) <= World.grid.dist_sq(from, ration) else ration
 
 
 ## Player-facing readiness score in the same rough units as a nightly threat budget.
@@ -952,17 +1522,14 @@ func defense_readiness() -> float:
 	for b in buildings:
 		if not is_instance_valid(b) or b.is_site():
 			continue
-		match b.def.id:
-			&"watchtower":
-				score += 8.0
-			&"stone_tower":
-				score += 13.0
-			&"wall", &"gate":
-				score += 1.0
-			&"stone_wall", &"stone_gate":
-				score += 2.0
-			&"hearth", &"great_hall", &"stone_keep", &"citadel":
-				score += 3.0
+		var def: BuildingDef = b.def
+		if def.attack_damage > 0.0:
+			var sustained := def.attack_damage / maxf(def.attack_cooldown, 0.1)
+			score += clampf(sustained * 0.7 + def.attack_range * 0.35, 2.0, 18.0)
+		elif def.blocks_movement or def.blocks_monsters_only:
+			score += clampf(def.max_hp / 100.0, 0.5, 4.0)
+		if def.center_tier > 0:
+			score += 3.0
 	return score
 
 
@@ -1018,12 +1585,13 @@ func nearest_bed(from: int) -> Node:
 
 
 func workplace_free(b: Node) -> bool:
-	return _slot_users(_work_users, b).size() < b.def.worker_slots
+	return b.production_is_available() \
+		and _slot_users(_work_users, b).size() < b.effective_worker_slots()
 
 
 func claim_workplace(b: Node, who: Object) -> bool:
 	var users := _slot_users(_work_users, b)
-	if users.size() >= b.def.worker_slots or who in users:
+	if not b.production_is_available() or users.size() >= b.effective_worker_slots() or who in users:
 		return false
 	users.append(who)
 	return true
@@ -1050,8 +1618,24 @@ func nearest_workplace(building_id: StringName, from: int) -> Node:
 		if not workplace_free(b):
 			continue
 		var d := World.grid.dist_sq(from, b.anchor)
-		if d < best_dist:
-			best_dist = d
+		var score: int = d - (b.production_priority - 1) * 400
+		if score < best_dist:
+			best_dist = score
+			best = b
+	return best
+
+
+func nearest_repair_target(from: int) -> Node:
+	var best: Node = null
+	var best_score := 0x7FFFFFFF
+	for b in buildings:
+		if not is_instance_valid(b) or not b.needs_repair() or not is_claimable(b.anchor):
+			continue
+		if not DefenseControl.allows_work(b.anchor) or not can_afford(b.def.repair_cost):
+			continue
+		var score: int = World.grid.dist_sq(from, b.anchor) - (b.repair_priority - 1) * 400
+		if score < best_score:
+			best_score = score
 			best = b
 	return best
 
@@ -1105,6 +1689,47 @@ func release_all_by(who: Object) -> void:
 	for cell in _claims.keys():
 		if _claims[cell] == who:
 			_claims.erase(cell)
+	for key in _patient_claims.keys():
+		if _patient_claims[key] == who:
+			_patient_claims.erase(key)
+
+
+func nearest_patient(from: int, medic: Villager = null) -> Villager:
+	var best: Villager = null
+	var best_score := INF
+	for candidate in villagers:
+		var patient := candidate as Villager
+		if patient == null or patient == medic or not patient.alive or not patient.needs_treatment():
+			continue
+		var key := patient.get_instance_id()
+		if _patient_claims.has(key) and is_instance_valid(_patient_claims[key]):
+			continue
+		var urgency := (100.0 - patient.health) * 20.0 \
+			+ (500.0 if patient.statuses.has(&"infected") else 0.0) \
+			+ (300.0 if patient.statuses.has(&"poisoned") else 0.0)
+		var score := float(World.grid.dist_sq(from, patient.cell())) - urgency
+		if score < best_score:
+			best_score = score
+			best = patient
+	return best
+
+
+func claim_patient(patient: Villager, medic: Villager) -> bool:
+	if patient == null or medic == null:
+		return false
+	var key := patient.get_instance_id()
+	if _patient_claims.has(key) and is_instance_valid(_patient_claims[key]):
+		return _patient_claims[key] == medic
+	_patient_claims[key] = medic
+	return true
+
+
+func release_patient(patient: Villager, medic: Villager) -> void:
+	if patient == null:
+		return
+	var key := patient.get_instance_id()
+	if _patient_claims.get(key) == medic:
+		_patient_claims.erase(key)
 
 
 # --- Job quotas and assignment ----------------------------------------------------------
@@ -1165,7 +1790,7 @@ func rebalance() -> void:
 	# the reconciler, though only until the command expires.
 	var assignable: Array = []
 	for v in alive:
-		if not v.is_player_commanded():
+		if v.is_adult() and not v.is_player_commanded():
 			assignable.append(v)
 
 	# Anyone holding a job whose workplace no longer exists is freed FIRST.

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="MonsterDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/monster_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monsters/swarmling.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"rot_leech"
+display_name = "MONSTER_ROT_LEECH"
+sprite = ExtResource("2_tex")
+max_health = 22.0
+move_speed = 21.0
+damage = 5.0
+attack_cooldown = 1.0
+structure_damage_scale = 0.15
+attack_type = &"blight"
+behavior_tags = Array[StringName]([&"infection", &"light"])
+statuses_inflicted = Array[StringName]([&"infected", &"slowed"])
+status_duration = 14.0
+resistances = {&"blight": 0.65, &"fire": -0.35}
+faith_on_death = 1.6
+threat_cost = 1.7
+min_night = 6
+weight = 0.7
+burn_per_second = 7.0
+burn_threshold = 135

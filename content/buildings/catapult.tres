@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/watchtower.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"catapult"
+display_name = "BUILDING_CATAPULT"
+description = "BUILDING_CATAPULT_DESC"
+sprite = ExtResource("2_tex")
+category = &"defence"
+tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = true
+max_blight = 75
+cost = {
+&"boards": 14,
+&"cut_stone": 6,
+&"tools": 2
+}
+build_work = 38.0
+max_hp = 230.0
+repair_cost = {&"boards": 2, &"cut_stone": 1}
+repair_work = 5.0
+repair_amount = 60.0
+influence_radius = 7
+attack_damage = 19.0
+attack_range = 8.0
+attack_cooldown = 2.8
+attack_type = &"crushing"
+attack_area_radius = 2.0
+ammo_kind = &"stone"
+ammo_per_shot = 1
+default_target_policy = &"structure"
+order = 40
+color = Color(0.62, 0.6, 0.55, 1)
+

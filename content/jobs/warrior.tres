@@ -17,3 +17,4 @@ priority = 0
 default_quota = 1
 color = Color(0.85, 0.5, 0.45, 1)
 defends = true
+equipment_tags = Array[StringName]([&"warrior"])

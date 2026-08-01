@@ -2,19 +2,17 @@ class_name RunSave
 extends RefCounted
 ## Crash-safe persistence for the whole Realm and whichever colony is currently awake.
 
-const SAVE_PATH := "user://run.dat"
-const TEMP_PATH := "user://run.tmp"
-## 6 adds per-colony control zones, stockpile rules, cleansing, refugees, and recoverable ruins.
-const SCHEMA_VERSION := 6
+## 9 adds serialized GameRules and deterministic multi-day TradeRoutes. Schema 7 and earlier are
+## still distributed to real stores deterministically during restore.
+const SCHEMA_VERSION := 9
 
 
 static func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return SaveService.has_save()
 
 
 static func clear() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	SaveService.clear_all()
 
 
 static func save() -> bool:
@@ -23,6 +21,7 @@ static func save() -> bool:
 	var data := {
 		"version": SCHEMA_VERSION,
 		"difficulty": String(Difficulties.current_id()),
+		"game_rules": Difficulties.rules_dict(),
 		"tick": Sim.tick,
 		"day": Sim.day,
 		"phase": int(Sim.phase),
@@ -31,18 +30,7 @@ static func save() -> bool:
 		"climate": Climate.to_dict(),
 		"storyteller": Storyteller.to_dict(),
 	}
-	var f := FileAccess.open(TEMP_PATH, FileAccess.WRITE)
-	if f == null:
-		push_error("RunSave: cannot open %s" % TEMP_PATH)
-		return false
-	f.store_var(data)
-	f.close()
-	var dir := DirAccess.open("user://")
-	if dir == null:
-		return false
-	if dir.file_exists("run.dat"):
-		dir.remove("run.dat")
-	return dir.rename("run.tmp", "run.dat") == OK
+	return SaveService.queue_snapshot(data)
 
 
 ## Restore a run into the existing Run scene. Schema 2 is migrated to a one-colony Realm so an
@@ -54,11 +42,14 @@ static func load_into(_run: Node, entities: Node) -> bool:
 	var version := int(data.get("version", 0))
 	if version == 2:
 		data = _migrate_v2(data)
-	elif version not in [3, 4, 5, SCHEMA_VERSION]:
+	elif version not in [3, 4, 5, 6, 7, 8, SCHEMA_VERSION]:
 		push_warning("RunSave: schema %d is not supported" % version)
 		return false
 
-	Difficulties.select(StringName(data.get("difficulty", Difficulties.DEFAULT_ID)))
+	if version >= 9 and data.has("game_rules"):
+		Difficulties.load_rules(data.get("game_rules", {}))
+	else:
+		Difficulties.select(StringName(data.get("difficulty", Difficulties.DEFAULT_ID)))
 	if not Realm.load_dict(data.get("realm", {})):
 		return false
 	var ledger := Realm.awake_ledger()
@@ -76,22 +67,23 @@ static func load_into(_run: Node, entities: Node) -> bool:
 		"world_seed": Realm.world_seed,
 		"next_event_day": Sim.day + 2,
 	}))
-	Events.phase_changed.emit(Sim.phase, Sim.PHASE_DURATION[Sim.phase])
+	Events.phase_changed.emit(Sim.phase, Difficulties.phase_duration(Sim.phase))
 	Events.colony_awakened.emit(Realm.awake_id)
+	if bool(data.get("__autosave_recovered", false)):
+		Events.notice.emit(L10n.t(&"SAVE_RECOVERED"), 1)
 	return true
 
 
 static func _read():
-	if not has_save():
+	var result := SaveService.read_latest()
+	if result.is_empty():
 		return null
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if f == null:
-		return null
-	var data = f.get_var()
-	f.close()
+	var data = result.get("data")
 	if typeof(data) != TYPE_DICTIONARY:
 		push_warning("RunSave: save file is not a dictionary")
 		return null
+	data = data.duplicate(true)
+	data["__autosave_recovered"] = bool(result.get("recovered", false))
 	return data
 
 
@@ -133,6 +125,7 @@ static func _migrate_v2(old: Dictionary) -> Dictionary:
 	return {
 		"version": SCHEMA_VERSION,
 		"difficulty": old.get("difficulty", String(Difficulties.DEFAULT_ID)),
+		"game_rules": Difficulties.rules_dict(),
 		"tick": int(old.get("tick", 0)),
 		"day": int(old.get("day", 1)),
 		"phase": int(old.get("phase", Sim.Phase.DAY)),
