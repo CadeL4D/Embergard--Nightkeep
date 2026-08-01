@@ -1167,8 +1167,11 @@ func _check_ledger(seed_value: int) -> void:
 func _check_phase5(seed_value: int) -> void:
 	_expect(Audio._sfx.size() == AudioData.SFX_IDS.size(), seed_value,
 		"every Phase 5 sound effect is imported (%d)" % Audio._sfx.size())
-	_expect(Audio._music_player != null and Audio._music_player.stream is AudioStreamGenerator,
-		seed_value, "the infinite procedural music generator is running")
+	_expect(Audio._music_player != null and Audio._music_player.stream is AudioStreamWAV \
+		and Audio._music_players.size() == AudioData.MUSIC_IDS.size(), seed_value,
+		"the synchronized baked music layers are running")
+	_expect(BlightField.new().coverage() == 0.0, seed_value,
+		"title-screen Blight mood sampling is safe before a world exists")
 	_expect(Accessibility.PALETTE_NAMES.size() == 4, seed_value,
 		"the original and three accessible colour palettes exist")
 	_expect(Accessibility.TEXT_SCALES.size() >= 4, seed_value,

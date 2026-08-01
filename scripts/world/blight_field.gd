@@ -247,6 +247,11 @@ func _mark_pixel(cell: int, intensity: int) -> void:
 
 
 func coverage() -> float:
+	# The Audio autoload samples this on the title screen, before World.generate()
+	# has called setup(). Returning an empty-map value is both accurate and keeps a
+	# menu idle from producing a runtime exception every three quarters of a second.
+	if _world == null or _world.blight.is_empty():
+		return 0.0
 	var blight: PackedByteArray = _world.blight
 	var count := 0
 	for i in blight.size():

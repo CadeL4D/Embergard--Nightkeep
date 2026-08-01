@@ -34,26 +34,16 @@ var _sfx: Dictionary = {}
 var _pool: Array[AudioStreamPlayer] = []
 var _pool_cursor: int = 0
 var _music_player: AudioStreamPlayer
-var _music_playback: AudioStreamGeneratorPlayback
-var _music_time: float = 0.0
-var _drone_phase: float = 0.0
-var _fifth_phase: float = 0.0
-var _melody_phase: float = 0.0
+var _music_players: Dictionary = {}
 var _night_blend: float = 0.0
 var _target_night_blend: float = 0.0
 var _blight_blend: float = 0.0
 var _target_blight_blend: float = 0.0
-var _blight_phase: float = 0.0
 var _mood_sample_accum: float = 0.0
 var _resource_amounts: Dictionary = {}
 var _last_resource_sound_ms: int = 0
 
 const POOL_SIZE := 12
-const MUSIC_RATE := 22050.0
-const MUSIC_BUFFER := 0.55
-const MUSIC_ROOT := 146.832
-
-
 func _ready() -> void:
 	_ensure_buses()
 	load_settings()
@@ -61,6 +51,22 @@ func _ready() -> void:
 	_build_music()
 	_wire_events()
 	set_process(true)
+
+
+func _exit_tree() -> void:
+	# Release playback references explicitly. Mobile operating systems can tear an
+	# app down while audio is active, and leaving stream references alive beyond
+	# their players produces noisy shutdown diagnostics in the same code path.
+	for player: AudioStreamPlayer in _music_players.values():
+		player.stop()
+		player.stream = null
+	_music_players.clear()
+	_music_player = null
+	for player: AudioStreamPlayer in _pool:
+		player.stop()
+		player.stream = null
+	_pool.clear()
+	_sfx.clear()
 
 
 # --- Buses -----------------------------------------------------------------------------
@@ -169,16 +175,25 @@ func _register_catalog() -> void:
 
 
 func _build_music() -> void:
-	_music_player = AudioStreamPlayer.new()
-	_music_player.name = "ProceduralMusic"
-	_music_player.bus = BUS_MUSIC
-	var generator := AudioStreamGenerator.new()
-	generator.mix_rate = MUSIC_RATE
-	generator.buffer_length = MUSIC_BUFFER
-	_music_player.stream = generator
-	add_child(_music_player)
-	_music_player.play()
-	_music_playback = _music_player.get_stream_playback() as AudioStreamGeneratorPlayback
+	# Keep all three WAVs synchronized and cross-fade their player volumes.  This
+	# avoids AudioStreamGenerator on iOS and removes all sample synthesis from the
+	# main thread while retaining the layered day/night/Blight score.
+	for id: StringName in AudioData.MUSIC_IDS:
+		var stream := load("res://assets/audio/music/%s.wav" % id) as AudioStream
+		if stream == null:
+			push_warning("Audio: missing baked music layer %s" % id)
+			continue
+		var player := AudioStreamPlayer.new()
+		player.name = "Music%s" % String(id).capitalize()
+		player.bus = BUS_MUSIC
+		player.stream = stream
+		player.volume_db = -80.0
+		add_child(player)
+		_music_players[id] = player
+		player.play()
+	_music_player = _music_players.get(&"day") as AudioStreamPlayer
+	_apply_music_mix()
+	print("Audio: %d baked music layers started" % _music_players.size())
 
 
 func _wire_events() -> void:
@@ -289,36 +304,16 @@ func _process(delta: float) -> void:
 		_target_blight_blend = clampf(
 			World.blight_field.coverage() * 1.7 if World.blight_field != null else 0.0,
 			0.0, 1.0)
-	if _music_playback == null:
-		return
-	var frames := mini(_music_playback.get_frames_available(), 4096)
-	for _i in frames:
-		_music_playback.push_frame(_music_frame())
+	_apply_music_mix()
 
 
-## Infinite modal score: Dorian by day, Aeolian at night, with a constant root/fifth drone.
-## There is no song boundary to become repetitive during a long world and no per-frame allocation.
-func _music_frame() -> Vector2:
-	var dt := 1.0 / MUSIC_RATE
-	_music_time += dt
-	var root := MUSIC_ROOT * lerpf(1.0, 0.5, _night_blend)
-	_drone_phase = fmod(_drone_phase + TAU * root * dt, TAU)
-	_fifth_phase = fmod(_fifth_phase + TAU * root * 1.4983 * dt, TAU)
-	var step := int(_music_time / 1.45)
-	var day_scale := [0, 2, 3, 5, 7, 9, 10]
-	var night_scale := [0, 2, 3, 5, 7, 8, 10]
-	var index := absi(step * 17 + 11) % day_scale.size()
-	var semitone := lerpf(float(day_scale[index]), float(night_scale[index]), _night_blend)
-	var melody_hz := root * 2.0 * pow(2.0, semitone / 12.0)
-	_melody_phase = fmod(_melody_phase + TAU * melody_hz * dt, TAU)
-	_blight_phase = fmod(_blight_phase + TAU * root * 0.503 * dt, TAU)
-	var local := fmod(_music_time, 1.45)
-	var envelope := exp(-local * 2.4) * (0.45 if step % 3 != 1 else 0.0)
-	var drone := sin(_drone_phase) * 0.045 + sin(_fifth_phase) * 0.024
-	var melody := sin(_melody_phase) * envelope * 0.026
-	var breath := sin(_music_time * TAU / 12.0) * 0.006
-	# A slow detuned layer makes Blight territory audible before the player opens an overlay.
-	var corruption := (sin(_blight_phase) * 0.018 \
-		+ sin(_blight_phase * 1.059) * 0.012) * _blight_blend
-	var sample := drone + melody + breath + corruption
-	return Vector2(sample, sample * 0.96)
+func _apply_music_mix() -> void:
+	_set_layer_gain(&"day", 1.0 - _night_blend)
+	_set_layer_gain(&"night", _night_blend)
+	_set_layer_gain(&"blight", _blight_blend * 0.82)
+
+
+func _set_layer_gain(id: StringName, gain: float) -> void:
+	var player := _music_players.get(id) as AudioStreamPlayer
+	if player != null:
+		player.volume_db = linear_to_db(maxf(gain, 0.0001)) if gain > 0.0 else -80.0

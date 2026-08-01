@@ -15,6 +15,16 @@ const SFX_IDS: Array[StringName] = [
 	&"boss", &"repair", &"heal",
 ]
 
+## Music is baked for the same reason as the one-shots: generating the score in
+## Audio._process() made the title screen create tens of thousands of temporary
+## arrays every second.  That is tolerable on a desktop allocator but can make
+## iOS terminate the process shortly after launch.  Three synchronized loops
+## preserve the day/night/Blight mix without doing sample work at runtime.
+const MUSIC_IDS: Array[StringName] = [&"day", &"night", &"blight"]
+const MUSIC_DURATION := 16.0
+const DAY_NOTES := [294.0, 330.0, 349.5, 392.0, 441.0, 392.0, 349.5, 330.0]
+const NIGHT_NOTES := [147.0, 165.0, 174.5, 196.0, 220.5, 196.0, 174.5, 165.0]
+
 const SPECS := {
 	&"ui_press": [0.070, 620.0, 460.0, 0.05, 0.0],
 	&"ui_back": [0.090, 360.0, 250.0, 0.04, 0.0],
@@ -81,3 +91,46 @@ static func make(id: StringName) -> AudioStreamWAV:
 	stream.stereo = false
 	stream.data = bytes
 	return stream
+
+
+static func make_music(id: StringName) -> AudioStreamWAV:
+	var frames := roundi(MUSIC_DURATION * RATE)
+	var bytes := PackedByteArray()
+	bytes.resize(frames * 2)
+	for i in frames:
+		var time := float(i) / float(RATE)
+		var sample := _music_sample(id, time)
+		var pcm := int(clampf(sample, -0.95, 0.95) * 32767.0)
+		bytes[i * 2] = pcm & 0xff
+		bytes[i * 2 + 1] = (pcm >> 8) & 0xff
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = RATE
+	stream.stereo = false
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = frames
+	stream.data = bytes
+	return stream
+
+
+static func _music_sample(id: StringName, time: float) -> float:
+	# Every frequency completes a whole number of cycles in sixteen seconds,
+	# keeping the baked loop boundary quiet. Melody notes change every two
+	# seconds while their envelope is nearly silent, avoiding transition clicks.
+	var segment := int(time / 2.0) % 8
+	var local := fmod(time, 2.0)
+	var envelope := exp(-local * 3.6)
+	match id:
+		&"night":
+			return sin(TAU * 73.5 * time) * 0.052 \
+				+ sin(TAU * 110.25 * time) * 0.025 \
+				+ sin(TAU * NIGHT_NOTES[segment] * time) * envelope * 0.022
+		&"blight":
+			return sin(TAU * 73.5 * time) * 0.020 \
+				+ sin(TAU * 77.0 * time) * 0.016 \
+				+ sin(TAU * 37.0 * time) * 0.010
+		_:
+			return sin(TAU * 147.0 * time) * 0.045 \
+				+ sin(TAU * 220.5 * time) * 0.022 \
+				+ sin(TAU * DAY_NOTES[segment] * time) * envelope * 0.026
