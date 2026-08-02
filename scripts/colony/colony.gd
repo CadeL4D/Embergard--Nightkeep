@@ -1641,14 +1641,15 @@ func nearest_workplace(building_id: StringName, from: int) -> Node:
 	return best
 
 
-## Nearest completed house regardless of whether every formal bed is occupied.
-## Used for phase sheltering: overcrowded villagers may recover slowly, but they do
-## not stand outside the door and offer themselves to monsters.
+## Nearest completed house regardless of whether every formal bed is occupied. A
+## Village Center is the final fallback: it has no formal beds, but somebody with no
+## hut should still walk home and get indoors instead of sleeping where night found them.
 func nearest_shelter(from: int) -> Node:
 	var best: Node = null
 	var best_dist := 0x7FFFFFFF
 	for b in buildings:
-		if not is_instance_valid(b) or b.is_site() or b.def.sleep_slots <= 0:
+		if not is_instance_valid(b) or b.is_site() \
+				or (b.def.sleep_slots <= 0 and b.def.center_tier <= 0):
 			continue
 		var d := World.grid.dist_sq(from, b.anchor)
 		if d < best_dist:

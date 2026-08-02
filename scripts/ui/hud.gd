@@ -22,7 +22,8 @@ const BOTTOM_MENU_LABELS: Array[StringName] = [
 ]
 
 @onready var _safe_area: MarginContainer = $SafeArea
-@onready var _resources: Label = $SafeArea/Layout/TopRow/ResourceColumn/ResourceBar/Resources
+@onready var _resources: ResourceReadout = \
+	$SafeArea/Layout/TopRow/ResourceColumn/ResourceBar/Resources
 @onready var _resource_bar: PanelContainer = $SafeArea/Layout/TopRow/ResourceColumn/ResourceBar
 @onready var _breakdown: BreakdownPanel = $SafeArea/Layout/TopRow/ResourceColumn/Breakdown
 @onready var _jobs_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton
@@ -106,6 +107,8 @@ const BOTTOM_MENU_LABELS: Array[StringName] = [
 @onready var _bottom_buttons: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons
 @onready var _menu_cycle_button: Button = \
 	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton
+@onready var _bottom_menu_button: Button = \
+	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BottomMenuButton
 @onready var _active_menu_label: Label = \
 	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/ActiveMenu
 @onready var _menu_switcher: MenuSwitcher = $MenuSwitcher
@@ -154,6 +157,7 @@ var _menu_touch_index: int = -1
 var _menu_touch_elapsed: float = 0.0
 var _menu_touch_position: Vector2 = Vector2.ZERO
 var _menu_switcher_open: bool = false
+var _bottom_menu_expanded: bool = false
 
 
 func _ready() -> void:
@@ -168,8 +172,14 @@ func _ready() -> void:
 	_library_button.toggled.connect(_on_library_toggled)
 	_library_auto.toggled.connect(Divine.set_library_auto_manage)
 	_control_button.toggled.connect(_on_control_toggled)
-	_realm_button.pressed.connect(_on_realm)
+	_realm_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"realm")))
 	_menu_cycle_button.gui_input.connect(_on_menu_cycle_input)
+	_bottom_menu_button.pressed.connect(_on_bottom_menu_pressed)
+	_jobs_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"jobs")))
+	_build_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"build")))
+	_hand_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"hand")))
+	_library_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"library")))
+	_control_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"control")))
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(_on_cancel)
 	Events.resources_changed.connect(_on_resources_changed)
@@ -270,6 +280,8 @@ func _on_accessibility_changed(kind: StringName) -> void:
 		_apply_handedness()
 	if kind == &"management_pause":
 		_sync_management_pause()
+	if kind == &"status_display":
+		_refresh_phase()
 
 
 func _apply_handedness() -> void:
@@ -279,7 +291,8 @@ func _apply_handedness() -> void:
 	# applies to world gestures, but moving the one persistent navigation anchor
 	# would make the tap/hold interaction impossible to learn by muscle memory.
 	var order: Array[Control] = [
-		_menu_cycle_button, _active_menu_label, _powers, _jobs_button, _build_button,
+		_menu_cycle_button, _bottom_menu_button, _active_menu_label, _powers,
+		_jobs_button, _build_button,
 		_hand_button, _library_button, _control_button, _realm_button,
 	]
 	for index in order.size():
@@ -1183,6 +1196,20 @@ func _input(event: InputEvent) -> void:
 		_menu_switcher_open = false
 
 
+func _on_bottom_menu_pressed() -> void:
+	_set_bottom_menu_expanded(not _bottom_menu_expanded)
+
+
+func _set_bottom_menu_expanded(expanded: bool) -> void:
+	_bottom_menu_expanded = expanded
+	_bottom_menu_button.tooltip_text = tr(
+		&"UI_BOTTOM_MENU_CLOSE" if expanded else &"UI_BOTTOM_MENU_OPEN")
+	for button: Button in [_jobs_button, _build_button, _hand_button, _library_button,
+			_control_button, _realm_button]:
+		button.visible = expanded
+	_powers.visible = not expanded and BOTTOM_MENU_IDS[_bottom_menu_index] == &"powers"
+
+
 func _activate_bottom_menu(index: int) -> void:
 	if BOTTOM_MENU_IDS.is_empty():
 		return
@@ -1222,6 +1249,9 @@ func _activate_bottom_menu(index: int) -> void:
 		&"realm":
 			_on_realm()
 	_active_menu_label.text = tr(BOTTOM_MENU_LABELS[_bottom_menu_index])
+	_set_bottom_menu_expanded(false)
+
+
 ## The phase clock is the game's spine, and at dusk it becomes the most important
 ## thing on screen — the countdown is what turns "it is getting dark" into a
 ## scramble.
@@ -1230,18 +1260,28 @@ func _refresh_phase() -> void:
 	var extra := ""
 	if Sim.phase == Sim.Phase.NIGHT and Threat.alive_count() > 0:
 		extra = L10n.t(&"HUD_HOSTILES", [Threat.alive_count()])
-	_phase_label.text = L10n.t(&"HUD_CLOCK", [
-		Sim.day, tr(names[Sim.phase]), int(Sim.seconds_remaining()), extra])
-	_phase_label.text += "\n" + Climate.hud_text()
 	var forecast := Threat.next_night_forecast()
 	var risk_keys: Array[StringName] = [&"FORECAST_READY", &"FORECAST_CLOSE", &"FORECAST_DANGER"]
 	var monster_names: PackedStringArray = forecast["names"]
+	if Accessibility.compact_status_display:
+		var compact_hostiles := ""
+		if Sim.phase == Sim.Phase.NIGHT and Threat.alive_count() > 0:
+			compact_hostiles = "  !%d" % Threat.alive_count()
+		_phase_label.text = L10n.t(&"HUD_CLOCK_COMPACT", [Sim.day, tr(names[Sim.phase]),
+			int(Sim.seconds_remaining()), Climate.name_of_weather(), compact_hostiles])
+		_phase_label.add_theme_font_size_override("font_size", 8)
+	else:
+		_phase_label.text = L10n.t(&"HUD_CLOCK", [
+			Sim.day, tr(names[Sim.phase]), int(Sim.seconds_remaining()), extra])
+		_phase_label.text += "\n" + Climate.hud_text()
+		_phase_label.add_theme_font_size_override("font_size", 9)
 	var shown := PackedStringArray()
 	for i in mini(monster_names.size(), 3):
 		shown.append(monster_names[i])
-	_phase_label.text += "\n" + L10n.t(&"FORECAST_LINE", [
-		int(forecast["night"]), int(forecast["bodies"]),
-		", ".join(shown), tr(risk_keys[int(forecast["risk"])])])
+	if not Accessibility.compact_status_display:
+		_phase_label.text += "\n" + L10n.t(&"FORECAST_LINE", [
+			int(forecast["night"]), int(forecast["bodies"]),
+			", ".join(shown), tr(risk_keys[int(forecast["risk"])])])
 	_phase_label.tooltip_text = L10n.t(&"CLIMATE_TOOLTIP", [
 		Climate.name_of_season(), Climate.name_of_weather(),
 		int(round(Climate.farm_multiplier() * 100.0)),
@@ -1399,6 +1439,9 @@ func _refresh_selection() -> void:
 	_sel_who.text = L10n.t(&"SELECT_IDENTITY",
 		[who.profile.display_name, who.profile.age_days, role])
 	_sel_doing.text = who.describe()
+	var danger := who.danger_text()
+	if not danger.is_empty():
+		_sel_doing.text += "\n" + L10n.t(&"SELECT_DANGER", [danger])
 	var gear: PackedStringArray = []
 	for row in who.profile.equipment.values():
 		if typeof(row) != TYPE_DICTIONARY:
@@ -1487,40 +1530,49 @@ func _on_resources_changed(_kind: StringName, _amount: int) -> void:
 ## about whether they are about to starve; "food 128 -9/day" tells them everything, and tapping the
 ## bar opens the arithmetic behind it (see RateLedger).
 func _refresh_resources() -> void:
-	var lines := PackedStringArray()
+	var display_rows: Array = []
 
 	for group: Array in Colony.KIND_GROUPS:
 		var label: StringName = group[0]
 		var kinds: Array = group[1]
-		var parts := PackedStringArray()
+		var entries: Array = []
 		var any := false
 		for kind: StringName in kinds:
 			var amount := Colony.amount_of(kind)
 			if amount > 0:
 				any = true
-			var entry := L10n.t(&"HUD_RESOURCE_ENTRY", [L10n.resource(kind), amount])
+			var rate := ""
 			# Food is the only stock with a measurable flow, so it is the only one that earns a
 			# rate. See Colony's note on why supply is measured and demand computed.
 			if kind == &"food":
-				entry += _per_day(Colony.food_net_per_second() * Sim.cycle_seconds())
-			parts.append(entry)
+				rate = _per_day(Colony.food_net_per_second() * Sim.cycle_seconds())
+			var accessible := L10n.t(&"HUD_RESOURCE_ENTRY", [L10n.resource(kind), amount]) + rate
+			entries.append({
+				"kind": kind,
+				"text": "%s %d%s" % [L10n.resource(kind), amount, rate],
+				"accessible": accessible,
+			})
 		# The raw row always shows, even at zero: an empty larder is the most important number on
 		# the screen, and hiding it would be the one case where absence is not information.
 		if any or label == &"GROUP_RAW":
-			lines.append(L10n.t(&"HUD_RESOURCE_GROUP",
-				[tr(label), " ".join(parts)]))
+			display_rows.append({"label": tr(label), "entries": entries})
 
 	# Faith carries its ceiling: a reservoir that scales with population means "faith 91" says
 	# nothing without knowing whether that is nearly full or barely started. And its rate, because
 	# a number that silently depends on morale is indistinguishable from a broken one.
-	lines.append(L10n.t(&"HUD_RESOURCES_BOTTOM", [
-		Colony.population(), _growth_text(),
-		int(_average_water()), _sign_of(_water_trend()),
-		int(Colony.average_mood()), _mood_sign(),
-		"%d/%d" % [int(Divine.faith), int(Divine.faith_max())],
-		_sign_of(RateLedger.faith().total)]))
-
-	_resources.text = "\n".join(lines)
+	var population_text := "%d%s" % [Colony.population(), _growth_text()]
+	var water_text := "%d%s" % [int(_average_water()), _sign_of(_water_trend())]
+	var mood_text := "%d%s" % [int(Colony.average_mood()), _mood_sign()]
+	var faith_text := "%d/%d%s" % [int(Divine.faith), int(Divine.faith_max()),
+		_sign_of(RateLedger.faith().total)]
+	display_rows.append({"label": "", "entries": [
+		{"kind": &"population", "text": population_text,
+			"accessible": "population " + population_text},
+		{"kind": &"water", "text": water_text, "accessible": "water " + water_text},
+		{"kind": &"mood", "text": mood_text, "accessible": "mood " + mood_text},
+		{"kind": &"faith", "text": faith_text, "accessible": "faith " + faith_text},
+	]})
+	_resources.set_rows(display_rows)
 
 
 ## Mood's sign, with a deadband.

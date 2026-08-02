@@ -194,6 +194,9 @@ var _awaiting_path: bool = false
 var _path_request_serial: int = 0
 var _tint_timer: float = 0.0
 var _presentation_accum: float = 0.0
+var _last_damage_reason: StringName = &""
+var _damage_reason_timer: float = 0.0
+var _presented_danger: StringName = &""
 
 ## How often a villager re-samples the light under it for tinting.
 const TINT_INTERVAL := 0.2
@@ -213,9 +216,7 @@ func _ready() -> void:
 	# Frame count read from the resource list rather than baked into the scene, so
 	# adding a resource kind cannot silently leave the icon strip a frame short and
 	# mislabel every haul after it.
-	# The authored strip currently has six generic material glyphs. New resources
-	# deliberately reuse those silhouettes until their final item art lands.
-	_carry.hframes = 6
+	_carry.hframes = Colony.KINDS.size()
 	_carry.visible = false
 	Colony.villagers.append(self)
 	Events.villager_spawned.emit(self)
@@ -372,6 +373,29 @@ func damage_resistances() -> Dictionary:
 	return out
 
 
+## Preserve Agent's ordinary damage contract while recording a player-facing cause.
+## Damage-over-time paths call _receive_harm directly so poison cannot be mistaken for
+## weather merely because both use elemental resistance.
+func take_damage(amount: float, source: Node = null,
+		damage_type: StringName = &"crushing") -> void:
+	var reason: StringName = &"attack"
+	if source == null:
+		reason = {
+			&"fire": &"burning",
+			&"blight": &"blight",
+			&"elemental": &"weather",
+		}.get(damage_type, &"attack")
+	_receive_harm(amount, reason, source, damage_type)
+
+
+func _receive_harm(amount: float, reason: StringName, source: Node = null,
+		damage_type: StringName = &"crushing") -> void:
+	_last_damage_reason = reason
+	_damage_reason_timer = 4.0
+	queue_redraw()
+	super.take_damage(amount, source, damage_type)
+
+
 func is_player_commanded() -> bool:
 	return state == State.COMMANDED
 
@@ -391,7 +415,12 @@ func apply_boost(speed: float, damage: float, duration: float) -> void:
 ## "monsters are through the gate and my warriors are on the far side of the village".
 func _surface_speed(cell_index: int) -> float:
 	var status_scale := 0.72 if statuses.has(&"slowed") else 1.0
-	return World.speed_at(cell_index) * (1.0 + boost_speed) * status_scale * profile.agility
+	# Recall is urgent and can begin from the edge of a large work zone. At ordinary
+	# work speed a distant gatherer could spend the whole dusk commuting and still be
+	# outside at night, which looked exactly like a paused shelter order.
+	var recall_scale := 2.0 if _shift_sleep and not _sheltered else 1.0
+	return World.speed_at(cell_index) * (1.0 + boost_speed) * status_scale \
+		* profile.agility * recall_scale
 
 
 # --- Decisions ----------------------------------------------------------------------
@@ -402,11 +431,11 @@ func think(delta: float) -> void:
 		return
 	_decay_needs(delta)
 
-	# The settlement now has real shifts. Civilians sleep indoors after dark; guards
-	# cover that shift and sleep through daylight. This runs ahead of commands and
-	# ordinary needs because a stale move order must not leave somebody outside for
-	# an entire night.
-	if _should_shift_sleep():
+	# The settlement has real shifts. Every civilian job stops after dark and heads
+	# indoors; guards cover the night and sleep through daylight. The emergency
+	# shelter order uses the same reliable house path instead of stopping people a
+	# couple of tiles from the Village Center.
+	if _should_shift_sleep() or DefenseControl.should_shelter(self):
 		_tick_shift_sleep(delta)
 		return
 	elif _shift_sleep:
@@ -421,12 +450,7 @@ func think(delta: float) -> void:
 	if _awaiting_path:
 		return
 
-	# A shelter order is the one colony-wide command allowed to preempt ordinary needs and work.
-	# Warriors remain on the line; everyone else drops their claim and returns to the Village Center.
-	if DefenseControl.should_shelter(self):
-		_tick_shelter()
-		return
-	elif state == State.FLEEING:
+	if state == State.FLEEING:
 		state = State.IDLE
 
 	# Needs preempt work, but never interrupt themselves. The order is thirst, hunger, rest:
@@ -448,18 +472,9 @@ func think(delta: float) -> void:
 			_begin_sleep()
 			return
 
-	# Nightfall is a recall for the people it needs to be, and no longer for everybody.
-	#
-	# The old rule sent every villager to guard duty at dusk, which meant 31% of the game was a
-	# colony standing in a circle watching. Now:
-	#
-	#   * WARRIORS always defend. That is the job.
-	#   * Everyone else keeps working IF the ground they are on is lit. Light already gates the
-	#     blight and burns monsters; this makes it gate the working day too, which turns Ember
-	#     placement into an economic decision after dark instead of a purely defensive one.
-	#   * Anyone caught in the dark falls back to the light, because a villager alone outside it
-	#     is a villager who dies.
-	if Sim.is_dark() and not _works_after_dark():
+	# Only guards reach the night branch. Civilian shifts are preempted above so they can walk
+	# home and shelter before dark instead of continuing their jobs or being drafted as guards.
+	if Sim.is_dark():
 		_tick_guard(delta)
 		return
 
@@ -516,32 +531,12 @@ func _tick_statuses(delta: float) -> void:
 		statuses[status] = remaining
 		match StringName(status):
 			&"infected":
-				take_damage(0.22 * delta, null, &"blight")
+				_receive_harm(0.22 * delta, &"infected", null, &"blight")
 				mood = maxf(mood - 0.16 * delta, 0.0)
 			&"burning":
-				take_damage(0.55 * delta, null, &"fire")
+				_receive_harm(0.55 * delta, &"burning", null, &"fire")
 			&"poisoned":
-				take_damage(0.35 * delta, null, &"elemental")
-
-
-## Light level a villager needs under them to keep working after dark.
-##
-## Below the Ember's own strength on purpose: a torch-lit watchtower should be enough to work by,
-## not just the Ember itself, or the colony can only ever have one productive night shift.
-const NIGHT_WORK_LIGHT := 110
-
-## Whether this villager carries on working once it is dark.
-##
-## Warriors never do — they fight. Everyone else needs light where they stand, and needs a monster
-## not to be breathing down their neck: a woodcutter who keeps chopping while a Shambler closes on
-## them is not brave, they are a bug.
-func _works_after_dark() -> bool:
-	var def := Jobs.get_job(job)
-	if def != null and def.defends:
-		return false
-	if World.light_at(cell()) < NIGHT_WORK_LIGHT:
-		return false
-	return _nearest_monster(GUARD_RANGE * 3.0 * Grid.TILE_SIZE) == null
+				_receive_harm(0.35 * delta, &"poisoned", null, &"elemental")
 
 
 # --- Work shifts ---------------------------------------------------------------------------
@@ -552,10 +547,10 @@ func _is_guard() -> bool:
 
 
 func _should_shift_sleep() -> bool:
-	# Guards sleep only during DAY and wake at dusk. Civilians start home once late
-	# dusk actually becomes dark, giving them a short commute window so they are
-	# indoors—not merely walking toward a house—when NIGHT begins.
-	return Sim.phase == Sim.Phase.DAY if _is_guard() else Sim.is_dark()
+	# Guards sleep only during DAY and wake at dusk. Civilians use the whole dusk as
+	# a commute window so they are indoors, not merely walking home, when NIGHT begins.
+	return Sim.phase == Sim.Phase.DAY if _is_guard() \
+		else Sim.phase in [Sim.Phase.DUSK, Sim.Phase.NIGHT]
 
 
 func is_sheltered() -> bool:
@@ -608,6 +603,7 @@ func _tick_shift_sleep(delta: float) -> void:
 func _end_shift_sleep() -> void:
 	_shift_sleep = false
 	_set_sheltered(false)
+	_cancel_path_request()
 	_release_bed()
 	_target_cell = -1
 	stop()
@@ -625,10 +621,8 @@ func _set_sheltered(value: bool) -> void:
 
 # --- Guard duty --------------------------------------------------------------------------
 
-## At dusk everyone drops what they were carrying-on-with and defends. Villagers
-## rally to the brightest defended point they can find rather than scattering to
-## meet monsters in the dark, because a villager caught alone outside the light is
-## a villager who dies.
+## Night guards rally to the brightest defended point they can find rather than
+## scattering to meet monsters in the dark.
 func _tick_guard(delta: float) -> void:
 	if state != State.GUARDING:
 		_release_target()
@@ -814,26 +808,30 @@ func _tick_eating() -> void:
 	state = State.IDLE
 
 
-## Head for a bed if one is free, otherwise sleep rough where you stand. Refusing to
-## rest without a bed would just deadlock a colony that has not built huts yet.
+## Head for a bed if one is free. When every bed is occupied, return to the nearest
+## home and sleep rough indoors; only a colony without any shelter rests in place.
 func _begin_sleep() -> void:
 	stop()
 	_release_target()
+	_release_bed()
 	var hut: Node = Colony.nearest_bed(cell())
+	if hut != null and Colony.claim_bed(hut, self):
+		_bed_claimed = true
+	else:
+		# A full house is still a better place to sleep rough than a distant work
+		# site. With no formal bed, walk home and recover to the rough-rest cap.
+		hut = Colony.nearest_shelter(cell())
 	if hut == null:
 		state = State.RESTING
 		return
-	if not Colony.claim_bed(hut, self):
-		state = State.RESTING
-		return
 	_bed = hut
-	_bed_claimed = true
 	_target_cell = hut.anchor
 	_request_path(hut.work_cell(), State.SLEEPING)
 
 
 func _tick_sleeping(delta: float) -> void:
 	if _bed == null or not is_instance_valid(_bed):
+		_set_sheltered(false)
 		_release_bed()
 		state = State.RESTING
 		return
@@ -841,11 +839,17 @@ func _tick_sleeping(delta: float) -> void:
 		return
 	if not _within_reach(_bed.work_cell()):
 		# Never made it. Sleep where we are rather than looping on an unreachable hut.
+		_set_sheltered(false)
 		_release_bed()
 		state = State.RESTING
 		return
-	rest = minf(rest + REST_IN_BED * _bed.def.sleep_recovery_multiplier * delta, NEED_MAX)
-	if rest >= NEED_MAX * 0.95:
+	_set_sheltered(true)
+	var recovery: float = REST_IN_BED * _bed.def.sleep_recovery_multiplier \
+		if _bed_claimed else REST_ROUGH
+	var target_rest := NEED_MAX * 0.95 if _bed_claimed else ROUGH_REST_CAP
+	rest = minf(rest + recovery * delta, target_rest)
+	if rest >= target_rest - 0.5:
+		_set_sheltered(false)
 		_release_bed()
 		state = State.IDLE
 
@@ -1545,24 +1549,6 @@ func _enter_rest() -> void:
 	state = State.RESTING
 
 
-## Fall back to the Hearth or highest-tier Village Center. This state deliberately uses normal
-## pathfinding—the order protects civilians from danger, it does not teleport them through walls.
-func _tick_shelter() -> void:
-	var destination := DefenseControl.shelter_cell()
-	if destination == -1:
-		return
-	if state != State.FLEEING:
-		_release_target()
-		_release_workplace()
-		stop()
-		state = State.FLEEING
-	if is_moving():
-		return
-	if World.grid.dist_sq(cell(), destination) <= 4:
-		return
-	_request_path(destination, State.FLEEING)
-
-
 func _decay_needs(delta: float) -> void:
 	# Difficulty scales the decay, not the thresholds. Moving the thresholds would change
 	# WHEN a villager decides to eat relative to how full they are, which quietly rewrites
@@ -1590,18 +1576,22 @@ func _decay_needs(delta: float) -> void:
 	# being a bar that goes down.
 	if food <= 0.0:
 		var starvation := STARVE_DAMAGE * delta
+		_last_damage_reason = &"starvation"
+		_damage_reason_timer = 4.0
 		if health <= starvation:
 			die(&"starvation")
 		else:
-			take_damage(starvation)
+			_receive_harm(starvation, &"starvation")
 		if not alive:
 			return
 	if water <= 0.0:
 		var dehydration := DEHYDRATE_DAMAGE * delta
+		_last_damage_reason = &"dehydration"
+		_damage_reason_timer = 4.0
 		if health <= dehydration:
 			die(&"dehydration")
 		else:
-			take_damage(dehydration)
+			_receive_harm(dehydration, &"dehydration")
 		if not alive:
 			return
 
@@ -1681,6 +1671,9 @@ func _request_path(dest: int, next_state: State) -> void:
 			return
 		if path.is_empty():
 			# Unreachable. Give up this target so we do not re-request it forever.
+			if next_state == State.SLEEPING:
+				_set_sheltered(false)
+				_release_bed()
 			if next_state in [State.SEEKING, State.FETCHING, State.DELIVERING,
 					State.BUILDING, State.HAULING]:
 				_release_target()
@@ -1688,7 +1681,11 @@ func _request_path(dest: int, next_state: State) -> void:
 			return
 		var def := Jobs.get_job(job)
 		var is_guard := def != null and def.defends
-		if not DefenseControl.path_allowed(path, is_guard, next_state == State.FLEEING):
+		# Going home must remain legal after darkness falls. The old check only
+		# exempted FLEEING, so a sleeper whose route crossed one unlit tile had the
+		# route rejected and appeared to pause forever outside the village.
+		var returning_to_safety := next_state in [State.FLEEING, State.SLEEPING]
+		if not DefenseControl.path_allowed(path, is_guard, returning_to_safety):
 			if next_state in [State.SEEKING, State.FETCHING, State.DELIVERING,
 					State.BUILDING, State.HAULING]:
 				_release_target()
@@ -1766,16 +1763,66 @@ func on_death(cause: StringName) -> void:
 
 # --- Presentation ------------------------------------------------------------------------
 
+
+func danger_reason() -> StringName:
+	if statuses.has(&"burning"):
+		return &"burning"
+	if statuses.has(&"poisoned"):
+		return &"poisoned"
+	if statuses.has(&"infected"):
+		return &"infected"
+	if statuses.has(&"blight_sickness"):
+		return &"blight"
+	if water <= 0.0:
+		return &"dehydration"
+	if food <= 0.0:
+		return &"starvation"
+	if _damage_reason_timer > 0.0:
+		return _last_damage_reason
+	if rest <= REST_URGENT:
+		return &"exhaustion"
+	return &""
+
+
+func danger_text() -> String:
+	var reason := danger_reason()
+	if reason.is_empty():
+		return ""
+	var keys := {
+		&"attack": &"DANGER_ATTACK",
+		&"starvation": &"DANGER_STARVATION",
+		&"dehydration": &"DANGER_DEHYDRATION",
+		&"exhaustion": &"DANGER_EXHAUSTION",
+		&"burning": &"DANGER_BURNING",
+		&"poisoned": &"DANGER_POISONED",
+		&"infected": &"DANGER_INFECTED",
+		&"blight": &"DANGER_BLIGHT",
+		&"weather": &"DANGER_WEATHER",
+	}
+	return tr(StringName(keys.get(reason, &"DANGER_ATTACK")))
+
+
 func _process(delta: float) -> void:
 	super(delta)
+	if _damage_reason_timer > 0.0 and not Sim.paused:
+		_damage_reason_timer = maxf(_damage_reason_timer - delta * Sim.time_scale, 0.0)
+	var current_danger := danger_reason()
+	if current_danger != _presented_danger:
+		_presented_danger = current_danger
+		queue_redraw()
 	_animate(delta)
 
 
 func _draw() -> void:
+	if _sheltered:
+		return
+	var reason := danger_reason()
+	if not reason.is_empty():
+		_draw_danger_icon(reason)
 	# Health is always legible while selected or wounded, without covering the map
 	# with dozens of full green bars during normal work.
-	if _sheltered or (health >= max_health - 0.01 and not selected \
-			and hurt_visual_remaining <= 0.0):
+	if health >= max_health - 0.01 and not selected \
+			and hurt_visual_remaining <= 0.0:
 		return
 	var fraction := clampf(health / maxf(max_health, 1.0), 0.0, 1.0)
 	var back := Rect2(Vector2(-8, -23), Vector2(16, 3))
@@ -1783,6 +1830,55 @@ func _draw() -> void:
 	var color := Color(0.34, 0.84, 0.46) if fraction > 0.55 else (
 		Color(0.96, 0.67, 0.24) if fraction > 0.25 else Color(1.0, 0.24, 0.2))
 	draw_rect(Rect2(back.position + Vector2.ONE, Vector2(14.0 * fraction, 1.0)), color, true)
+
+
+func _draw_danger_icon(reason: StringName) -> void:
+	var centre := Vector2(0, -31)
+	var fill: Color = {
+		&"starvation": Color(0.94, 0.57, 0.22),
+		&"dehydration": Color(0.25, 0.7, 1.0),
+		&"exhaustion": Color(0.65, 0.69, 0.85),
+		&"burning": Color(1.0, 0.31, 0.12),
+		&"poisoned": Color(0.47, 0.85, 0.3),
+		&"infected": Color(0.65, 0.84, 0.29),
+		&"blight": Color(0.78, 0.36, 0.95),
+		&"weather": Color(0.43, 0.82, 1.0),
+	}.get(reason, Color(1.0, 0.3, 0.24))
+	draw_circle(centre, 6.5, Color(0.025, 0.03, 0.045, 0.96))
+	draw_circle(centre, 5.5, fill.darkened(0.2))
+	match reason:
+		&"dehydration":
+			draw_colored_polygon(PackedVector2Array([centre + Vector2(0, -4),
+				centre + Vector2(3, 1), centre + Vector2(2, 4), centre + Vector2(-2, 4),
+				centre + Vector2(-3, 1)]), fill.lightened(0.22))
+		&"exhaustion":
+			draw_string(ThemeDB.fallback_font, centre + Vector2(-3.5, 3.5), "Z",
+				HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color.WHITE)
+		&"burning":
+			draw_colored_polygon(PackedVector2Array([centre + Vector2(-3, 4),
+				centre + Vector2(-2, -1), centre + Vector2(1, -5), centre + Vector2(1, 0),
+				centre + Vector2(3, 3)]), fill.lightened(0.25))
+		&"poisoned", &"infected":
+			draw_circle(centre, 2.2, Color(0.04, 0.07, 0.04))
+			for direction in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+				draw_line(centre + direction * 2.0, centre + direction * 4.0, Color.WHITE, 1.2)
+		&"blight":
+			draw_colored_polygon(PackedVector2Array([centre + Vector2(0, -4),
+				centre + Vector2(4, 0), centre + Vector2(0, 4), centre + Vector2(-4, 0)]),
+				fill.lightened(0.2))
+		&"weather":
+			draw_polyline(PackedVector2Array([centre + Vector2(2, -4),
+				centre + Vector2(-1, 0), centre + Vector2(2, 0), centre + Vector2(-2, 4)]),
+				Color.WHITE, 1.5)
+		&"starvation":
+			draw_line(centre + Vector2(-2, -4), centre + Vector2(-2, 4), Color.WHITE, 1.2)
+			for offset in [-4.0, -2.5, -1.0]:
+				draw_line(centre + Vector2(offset, -4), centre + Vector2(offset, -1),
+					Color.WHITE, 0.8)
+			draw_line(centre + Vector2(2, -4), centre + Vector2(2, 4), Color.WHITE, 1.2)
+		_:
+			draw_line(centre + Vector2(-3, -3), centre + Vector2(3, 3), Color.WHITE, 1.4)
+			draw_line(centre + Vector2(3, -3), centre + Vector2(-3, 3), Color.WHITE, 1.4)
 
 
 ## Facing and walk cycle are derived from actual movement rather than tracked as
@@ -1882,7 +1978,7 @@ func _animate(delta: float) -> void:
 		_carry.visible = showing
 	if not showing:
 		return
-	var icon := posmod(Colony.KINDS.find(carry_kind), 6)
+	var icon := Colony.KINDS.find(carry_kind)
 	if icon >= 0 and _carry.frame != icon:
 		_carry.frame = icon
 	if not _carry.modulate.is_equal_approx(tint):

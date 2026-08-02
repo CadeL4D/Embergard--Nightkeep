@@ -314,6 +314,16 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 		civilians += 1
 		if villager.is_sheltered():
 			sheltered += 1
+	if sheltered != civilians:
+		print("   shelter diagnostics: phase=%s elapsed=%.1f queue=%d" % [
+			Sim.Phase.keys()[Sim.phase], Sim.phase_elapsed, World.paths.last_queue_length])
+		for villager: Villager in Colony.villagers:
+			var job_def := Jobs.get_job(villager.job)
+			print("      %s job=%s defends=%s state=%s shift=%s sheltered=%s moving=%s waiting=%s cell=%d target=%d bed=%s" % [
+				villager.profile.display_name, villager.job, job_def != null and job_def.defends,
+				Villager.State.keys()[villager.state], villager._shift_sleep,
+				villager.is_sheltered(), villager.is_moving(), villager._awaiting_path,
+				villager.cell(), villager._target_cell, is_instance_valid(villager._bed)])
 	_expect(civilians > 0 and sheltered == civilians, seed_value,
 		"civilian villagers are indoors for the night (%d/%d)" % [sheltered, civilians])
 	if Threat.alive_count() > 0:
@@ -345,12 +355,8 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 	# Sampled over a WINDOW, not at one instant, and this is the fix for a flake that had been
 	# misreported as random noise for most of two sessions.
 	#
-	# The original counted GUARDING once. That was sound when nightfall recalled everybody, but Phase
-	# 2 made the night deliberately non-uniform: warriors defend, and everyone else keeps working as
-	# long as the ground they stand on is lit (Villager._works_after_dark). Add the villagers who are
-	# legitimately eating, drinking or asleep at that moment and a count of zero is a perfectly
-	# correct state for a six-person colony — so the assertion failed roughly one run in twenty on
-	# behaviour that was working exactly as designed.
+	# The original counted GUARDING once. Guards may still be finishing their wake-up path when
+	# NIGHT begins, so a count of zero at one instant can be a valid transient state.
 	#
 	# What actually matters is that somebody takes up guard duty during the night, so that is what is
 	# measured.

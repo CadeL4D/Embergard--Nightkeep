@@ -70,6 +70,7 @@ var hold_duration: float = 0.35
 var screen_shake_strength: float = 0.7
 var high_visibility_targets: bool = false
 var pause_while_managing: bool = false
+var compact_status_display: bool = false
 var diagnostics_export_opt_in: bool = false
 
 var _filter: ColorRect
@@ -123,6 +124,7 @@ func load_settings() -> void:
 			SCREEN_SHAKE_LEVELS, float(cfg.get_value(SECTION, "screen_shake_strength", 0.7)))]
 		high_visibility_targets = bool(cfg.get_value(SECTION, "high_visibility_targets", false))
 		pause_while_managing = bool(cfg.get_value(SECTION, "pause_while_managing", false))
+		compact_status_display = bool(cfg.get_value(SECTION, "compact_status_display", false))
 		diagnostics_export_opt_in = bool(cfg.get_value(
 			SECTION, "diagnostics_export_opt_in", false))
 		for action: StringName in ACTION_DEFAULTS:
@@ -147,6 +149,7 @@ func save_settings() -> void:
 	cfg.set_value(SECTION, "screen_shake_strength", screen_shake_strength)
 	cfg.set_value(SECTION, "high_visibility_targets", high_visibility_targets)
 	cfg.set_value(SECTION, "pause_while_managing", pause_while_managing)
+	cfg.set_value(SECTION, "compact_status_display", compact_status_display)
 	cfg.set_value(SECTION, "diagnostics_export_opt_in", diagnostics_export_opt_in)
 	cfg.set_value(TUTORIAL_SECTION, "enabled", tutorials_enabled)
 	cfg.set_value(TUTORIAL_SECTION, "seen", tutorial_seen)
@@ -206,6 +209,11 @@ func set_high_visibility_targets(value: bool) -> void:
 func set_pause_while_managing(value: bool) -> void:
 	pause_while_managing = value
 	changed.emit(&"management_pause")
+
+
+func set_compact_status_display(value: bool) -> void:
+	compact_status_display = value
+	changed.emit(&"status_display")
 
 
 func set_diagnostics_export_opt_in(value: bool) -> void:

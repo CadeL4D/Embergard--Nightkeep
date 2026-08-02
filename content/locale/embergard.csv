@@ -12,6 +12,10 @@ UI_BUILD,Build
 UI_JOBS,Jobs
 UI_POWER_UPS,Powers
 UI_BOTTOM_MENU_HINT,Tap to cycle menus. Hold and drag to choose one.
+UI_BOTTOM_MENU_OPEN,Show every menu
+UI_BOTTOM_MENU_CLOSE,Hide menu list
+UI_CYCLE,Cycle
+UI_MENUS,Menu
 UI_ASCEND,Ascend
 UI_ASCEND_CONFIRM,Sure?
 UI_PAUSE,Pause
@@ -43,6 +47,7 @@ PHASE_DUSK,DUSK
 PHASE_NIGHT,NIGHT
 PHASE_DAWN,DAWN
 HUD_CLOCK,Day {0}   {1}   {2}s{3}
+HUD_CLOCK_COMPACT,D{0}  {1} {2}s  {3}{4}
 HUD_HOSTILES,"   {0} hostile"
 HUD_RESOURCES_TOP,wood {0}   stone {1}   food {2} {3}
 HUD_RESOURCES_BOTTOM,pop {0}{1}   water {2}{3}   mood {4}{5}   faith {6}{7}
@@ -57,6 +62,16 @@ BLOCK_LITTLE_FOOD,little food
 BLOCK_UNHAPPY,unhappy
 SELECT_SURVIVOR,Survivor
 SELECT_NEEDS,health {0}/{1}  food {2}  water {3}  rest {4}  mood {5}
+SELECT_DANGER,"Warning: {0}"
+DANGER_ATTACK,under attack
+DANGER_STARVATION,starving
+DANGER_DEHYDRATION,dehydrated
+DANGER_EXHAUSTION,exhausted and going to sleep
+DANGER_BURNING,burning
+DANGER_POISONED,poisoned
+DANGER_INFECTED,infected
+DANGER_BLIGHT,Blight sickness
+DANGER_WEATHER,weather exposure
 MIGRANTS_ASK,{0} survivors ask for shelter{1}
 MIGRANTS_ASK_ONE,{0} survivor asks for shelter{1}
 MIGRANTS_BEDS_WARNING,"  ·  only {0} beds"
@@ -399,6 +414,7 @@ ACCESS_REDUCED_MOTION,Reduce camera and menu motion
 ACCESS_SCREEN_SHAKE,Screen shake
 ACCESS_HIGH_VISIBILITY_TARGETS,High-visibility target outlines
 ACCESS_PAUSE_WHILE_MANAGING,Pause while managing
+ACCESS_COMPACT_STATUS_DISPLAY,Compact day weather and night forecast
 ACCESS_DIAGNOSTICS_OPT_IN,Allow manual diagnostic export
 ACCESS_EXPORT_DIAGNOSTICS,Export local diagnostics
 ACCESS_DIAGNOSTICS_EXPORTED,Diagnostics exported to app storage

@@ -1813,6 +1813,111 @@ const CARRY_TOOLS := [
 ]
 
 
+## Dark rock with a hot metallic seam.
+const CARRY_ORE := [
+	".........",
+	"...kkk...",
+	"..kSSSk..",
+	".kSSOSSk.",
+	".kSOOSSk.",
+	".kSSSOSk.",
+	"..kSSSk..",
+	"...kkk...",
+	".........",
+]
+
+## A sharp translucent shard with an ember trapped in its centre.
+const CARRY_EMBERGLASS := [
+	"....k....",
+	"...kAk...",
+	"..kAAAk..",
+	".kAAOAAk.",
+	"kAAOYOAAk",
+	".kAAOAAk.",
+	"..kAAAk..",
+	"...kAk...",
+	"....k....",
+]
+
+## Three leafy sprigs; deliberately thin where food is a round bundle.
+const CARRY_HERBS := [
+	"....g....",
+	"..g.g.g..",
+	"..GgggG..",
+	"...gGg...",
+	".g..g..g.",
+	".Gg.g.gG.",
+	"...gGg...",
+	"...kkk...",
+	".........",
+]
+
+## Two bright metal bars viewed in perspective.
+const CARRY_INGOTS := [
+	".........",
+	"..kkkkk..",
+	".kLLLLLk.",
+	".kLYYYLk.",
+	"..kkkkk..",
+	".kLLLLLk.",
+	".kLYYYLk.",
+	"..kkkkk..",
+	".........",
+]
+
+## A tied provision sack, distinct from loose red food.
+const CARRY_RATIONS := [
+	"....k....",
+	"...kxk...",
+	"...kkk...",
+	"..kNNNk..",
+	".kNxxxNk.",
+	".kNxxxNk.",
+	".kNNNNNk.",
+	"..kkkkk..",
+	".........",
+]
+
+## A green field-medicine pouch with a pale cross.
+const CARRY_MEDICINE := [
+	".........",
+	"..kkkkk..",
+	".kGGGGGk.",
+	".kGGYGGk.",
+	".kGYYYGk.",
+	".kGGYGGk.",
+	".kGGGGGk.",
+	"..kkkkk..",
+	".........",
+]
+
+## A light arrow bundle: diagonal shafts and small pale heads.
+const CARRY_ARROWS := [
+	"......L..",
+	".....Lk..",
+	"....Lkx..",
+	"...Lkx...",
+	"..Lkx....",
+	".Lkx.....",
+	"Lkx......",
+	"xx.......",
+	".........",
+]
+
+## Short, broad crossbow bolts with square metal heads.
+const CARRY_BOLTS := [
+	".........",
+	"......LL.",
+	".....LLL.",
+	"....LkL..",
+	"...LkL...",
+	"..LkL....",
+	".LkL.....",
+	"kk.......",
+	".........",
+]
+
+
 ## Keyed by resource kind. The baker lays these out in Colony.KINDS order so the
 ## villager can pick its frame with a single array lookup instead of a match block.
 ##
@@ -1824,9 +1929,17 @@ static func carry_frames() -> Dictionary:
 		&"wood": CARRY_WOOD,
 		&"stone": CARRY_STONE,
 		&"food": CARRY_FOOD,
+		&"ore": CARRY_ORE,
+		&"emberglass": CARRY_EMBERGLASS,
+		&"herbs": CARRY_HERBS,
 		&"boards": CARRY_BOARDS,
 		&"cut_stone": CARRY_CUT_STONE,
+		&"ingots": CARRY_INGOTS,
+		&"rations": CARRY_RATIONS,
+		&"medicine": CARRY_MEDICINE,
 		&"tools": CARRY_TOOLS,
+		&"arrows": CARRY_ARROWS,
+		&"bolts": CARRY_BOLTS,
 	}
 
 
