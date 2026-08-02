@@ -31,6 +31,19 @@ func _ready() -> void:
 		probe.get_theme_font_size("font_size"),
 	])
 
+	# Difficulty catalogs grow over time. Keep the primary action beside the form and
+	# prove that another added row cannot silently push it beneath a short phone screen.
+	menu.call("_show", 1)
+	await _settle_frames()
+	var begin_button := menu.get_node("Center/Create/Body/Actions/BeginButton") as Button
+	var form := menu.get_node("Center/Create/Body/Rows") as VBoxContainer
+	var viewport_size := get_viewport().get_visible_rect().size
+	var mobile_safe_rect := Rect2(Vector2(8, 8), viewport_size - Vector2(16, 16))
+	assert(mobile_safe_rect.encloses(begin_button.get_global_rect()),
+		"New World primary action must remain inside the mobile viewport")
+	assert(begin_button.global_position.x >= form.get_global_rect().end.x,
+		"New World primary action must remain in the right-hand action rail")
+
 	var screens := [
 		[0, "phase5_menu"],
 		[1, "phase5_new_world"],

@@ -26,14 +26,14 @@ enum Screen { ROOT, CREATE, OPTIONS, HISTORY, CREDITS }
 @onready var _continue_button: Button = $Center/Root/Rows/ContinueButton
 @onready var _best: Label = $Center/Root/Rows/Best
 
-@onready var _difficulty_rows: GridContainer = $Center/Create/Rows/Difficulties
-@onready var _seed_field: LineEdit = $Center/Create/Rows/SeedRow/SeedField
-@onready var _pick_site: CheckBox = $Center/Create/Rows/PickSite
-@onready var _difficulty_blurb: Label = $Center/Create/Rows/Blurb
+@onready var _difficulty_rows: GridContainer = $Center/Create/Body/Rows/Difficulties
+@onready var _seed_field: LineEdit = $Center/Create/Body/Rows/SeedRow/SeedField
+@onready var _pick_site: CheckBox = $Center/Create/Body/Rows/PickSite
+@onready var _difficulty_blurb: Label = $Center/Create/Body/Rows/Blurb
 @onready var _doctrine_options: Array[OptionButton] = [
-	$Center/Create/Rows/DoctrineRow/Doctrine1,
-	$Center/Create/Rows/DoctrineRow/Doctrine2,
-	$Center/Create/Rows/DoctrineRow/Doctrine3,
+	$Center/Create/Body/Rows/DoctrineRow/Doctrine1,
+	$Center/Create/Body/Rows/DoctrineRow/Doctrine2,
+	$Center/Create/Body/Rows/DoctrineRow/Doctrine3,
 ]
 
 @onready var _settings_panel: SettingsPanel = $Center/Options/Rows/Settings
@@ -81,9 +81,9 @@ func _wire_navigation() -> void:
 	$Center/Root/Rows/CreditsButton.pressed.connect(func() -> void: _show(Screen.CREDITS))
 	$Center/Root/Rows/QuitButton.pressed.connect(func() -> void: get_tree().quit())
 
-	$Center/Create/Rows/Buttons/BackButton.pressed.connect(func() -> void: _show(Screen.ROOT))
-	$Center/Create/Rows/Buttons/BeginButton.pressed.connect(_on_begin)
-	$Center/Create/Rows/SeedRow/RerollButton.pressed.connect(_reroll_seed)
+	$Center/Create/Body/Actions/BackButton.pressed.connect(func() -> void: _show(Screen.ROOT))
+	$Center/Create/Body/Actions/BeginButton.pressed.connect(_on_begin)
+	$Center/Create/Body/Rows/SeedRow/RerollButton.pressed.connect(_reroll_seed)
 	$Center/Options/Rows/BackButton.pressed.connect(_on_options_closed)
 	$Center/History/Rows/BackButton.pressed.connect(func() -> void: _show(Screen.ROOT))
 	$Center/Credits/Rows/BackButton.pressed.connect(func() -> void: _show(Screen.ROOT))

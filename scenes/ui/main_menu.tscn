@@ -172,51 +172,55 @@ visible = false
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 
-[node name="Rows" type="VBoxContainer" parent="Center/Create"]
+[node name="Body" type="HBoxContainer" parent="Center/Create"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Rows" type="VBoxContainer" parent="Center/Create/Body"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="Heading" type="Label" parent="Center/Create/Rows"]
+[node name="Heading" type="Label" parent="Center/Create/Body/Rows"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.603922, 0.235294, 1)
 theme_override_font_sizes/font_size = 10
 text = "UI_NEW_WORLD"
 
-[node name="Difficulties" type="GridContainer" parent="Center/Create/Rows"]
+[node name="Difficulties" type="GridContainer" parent="Center/Create/Body/Rows"]
 custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 theme_override_constants/separation = 3
 columns = 2
 
-[node name="DoctrineLabel" type="Label" parent="Center/Create/Rows"]
+[node name="DoctrineLabel" type="Label" parent="Center/Create/Body/Rows"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.823529, 0.760784, 0.603922, 1)
 theme_override_font_sizes/font_size = 9
 text = "UI_DOCTRINES"
 
-[node name="DoctrineRow" type="HBoxContainer" parent="Center/Create/Rows"]
+[node name="DoctrineRow" type="HBoxContainer" parent="Center/Create/Body/Rows"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="Doctrine1" type="OptionButton" parent="Center/Create/Rows/DoctrineRow"]
+[node name="Doctrine1" type="OptionButton" parent="Center/Create/Body/Rows/DoctrineRow"]
 custom_minimum_size = Vector2(78, 24)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 8
 
-[node name="Doctrine2" type="OptionButton" parent="Center/Create/Rows/DoctrineRow"]
+[node name="Doctrine2" type="OptionButton" parent="Center/Create/Body/Rows/DoctrineRow"]
 custom_minimum_size = Vector2(78, 24)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 8
 
-[node name="Doctrine3" type="OptionButton" parent="Center/Create/Rows/DoctrineRow"]
+[node name="Doctrine3" type="OptionButton" parent="Center/Create/Body/Rows/DoctrineRow"]
 custom_minimum_size = Vector2(78, 24)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 8
 
-[node name="Blurb" type="Label" parent="Center/Create/Rows"]
+[node name="Blurb" type="Label" parent="Center/Create/Body/Rows"]
 custom_minimum_size = Vector2(240, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.701961, 0.760784, 0.819608, 1)
@@ -224,49 +228,58 @@ theme_override_font_sizes/font_size = 10
 text = ""
 autowrap_mode = 2
 
-[node name="SeedRow" type="HBoxContainer" parent="Center/Create/Rows"]
+[node name="SeedRow" type="HBoxContainer" parent="Center/Create/Body/Rows"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="SeedLabel" type="Label" parent="Center/Create/Rows/SeedRow"]
+[node name="SeedLabel" type="Label" parent="Center/Create/Body/Rows/SeedRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "UI_SEED"
 vertical_alignment = 1
 
-[node name="SeedField" type="LineEdit" parent="Center/Create/Rows/SeedRow"]
+[node name="SeedField" type="LineEdit" parent="Center/Create/Body/Rows/SeedRow"]
 custom_minimum_size = Vector2(112, 24)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 9
 
-[node name="RerollButton" type="Button" parent="Center/Create/Rows/SeedRow"]
+[node name="RerollButton" type="Button" parent="Center/Create/Body/Rows/SeedRow"]
 custom_minimum_size = Vector2(48, 24)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "UI_ROLL"
 
-[node name="PickSite" type="CheckBox" parent="Center/Create/Rows"]
+[node name="PickSite" type="CheckBox" parent="Center/Create/Body/Rows"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 button_pressed = true
 text = "UI_CHOOSE_WHERE_TO_SETTLE"
 
-[node name="Buttons" type="HBoxContainer" parent="Center/Create/Rows"]
+[node name="Actions" type="VBoxContainer" parent="Center/Create/Body"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 6
 
-[node name="BackButton" type="Button" parent="Center/Create/Rows/Buttons"]
-custom_minimum_size = Vector2(72, 27)
+[node name="TopSpacer" type="Control" parent="Center/Create/Body/Actions"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="BeginButton" type="Button" parent="Center/Create/Body/Actions"]
+custom_minimum_size = Vector2(132, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "UI_CARRY_THE_EMBER"
+
+[node name="BackButton" type="Button" parent="Center/Create/Body/Actions"]
+custom_minimum_size = Vector2(132, 28)
 layout_mode = 2
 text = "UI_BACK"
 
-[node name="BeginButton" type="Button" parent="Center/Create/Rows/Buttons"]
-custom_minimum_size = Vector2(126, 27)
+[node name="BottomSpacer" type="Control" parent="Center/Create/Body/Actions"]
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 9
-text = "UI_CARRY_THE_EMBER"
+size_flags_vertical = 3
+mouse_filter = 2
 
 [node name="Options" type="PanelContainer" parent="Center"]
 visible = false
