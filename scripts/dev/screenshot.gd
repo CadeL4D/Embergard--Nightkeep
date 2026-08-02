@@ -123,14 +123,13 @@ func _place(id: StringName, anchor: int, parent: Node) -> void:
 
 func _capture_all() -> void:
 	var camera: Camera2D = _run.get_node("CameraRig")
-	var bottom := _run.get_node("Hud/SafeArea/Layout/BottomRow")
-	var jobs_button: Button = bottom.get_node("ButtonsClip/Buttons/JobsButton")
-	var build_button: Button = bottom.get_node("ButtonsClip/Buttons/BuildButton")
+	var hud: CanvasLayer = _run.get_node("Hud")
 	for shot: Dictionary in SHOTS:
 		var panel: String = shot.get("panel", "")
 		DefenseControl.cancel_gather_paint()
-		jobs_button.button_pressed = panel == "jobs"
-		build_button.button_pressed = panel == "build"
+		var menu_id: StringName = &"jobs" if panel == "jobs" else (
+			&"build" if panel == "build" else &"powers")
+		hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(menu_id))
 		if panel == "gather":
 			DefenseControl.set_gather_mode(&"woodcutting")
 		_seed_monsters(int(shot.get("monsters", 0)))

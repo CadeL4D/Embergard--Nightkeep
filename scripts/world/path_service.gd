@@ -96,6 +96,10 @@ func step(tick: int) -> void:
 	while solves_this_tick < BUDGET_PER_TICK and not _queue.is_empty():
 		var r: Request = _queue.pop_front()
 		if tick - r.issued_tick > MAX_AGE_TICKS:
+			# Treat an expired solve as unreachable so callers clear their waiting
+			# state. Silently dropping it leaves an agent waiting forever.
+			if r.callback.is_valid():
+				r.callback.call(PackedInt32Array())
 			continue
 		if not r.callback.is_valid():
 			continue

@@ -1,0 +1,10 @@
+   FAIL materials were carried to the site ({  } of { &"wood": 24 })
+   FAIL villagers raised the blueprint (0/22 work)
+   FAIL the finished building blocks movement
+   FAIL civilian villagers are indoors for the night (0/5)
+4 failure(s):
+  - seed 2024: materials were carried to the site ({  } of { &"wood": 24 })
+  - seed 2024: villagers raised the blueprint (0/22 work)
+  - seed 2024: the finished building blocks movement
+  - seed 2024: civilian villagers are indoors for the night (0/5)
+(also appended to C:/Users/cadel/AppData/Roaming/Godot/app_userdata/Embergard- Nightkeep/smoke_failures.log)

@@ -16,13 +16,12 @@ func _ready() -> void:
 	add_child(_run)
 	await _settle(24)
 	_paint_example_zones()
-	var controls: Button = _run.get_node(
-		"Hud/SafeArea/Layout/BottomRow/ButtonsClip/Buttons/ControlButton")
-	controls.button_pressed = true
+	var hud: CanvasLayer = _run.get_node("Hud")
+	hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(&"control"))
 	await _settle(12)
 	_capture("phase7_colony_controls")
 
-	controls.button_pressed = false
+	hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(&"powers"))
 	DefenseControl.cancel_paint()
 	var camera: Camera2D = _run.get_node("CameraRig")
 	camera.zoom = Vector2.ONE
