@@ -232,8 +232,6 @@ func _accessibility_tab() -> VBoxContainer:
 		Accessibility.high_visibility_targets, Accessibility.set_high_visibility_targets))
 	rows.add_child(_check(&"ACCESS_PAUSE_WHILE_MANAGING",
 		Accessibility.pause_while_managing, Accessibility.set_pause_while_managing))
-	rows.add_child(_check(&"ACCESS_COMPACT_STATUS_DISPLAY",
-		Accessibility.compact_status_display, Accessibility.set_compact_status_display))
 	var diagnostics := _check(&"ACCESS_DIAGNOSTICS_OPT_IN",
 		Accessibility.diagnostics_export_opt_in, Accessibility.set_diagnostics_export_opt_in)
 	rows.add_child(diagnostics)

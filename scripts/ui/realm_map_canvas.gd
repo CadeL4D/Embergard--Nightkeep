@@ -85,6 +85,16 @@ func _finish_zoom_out() -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if zoomed_in:
+		# The local preview is intentionally smaller than this control on wide screens.
+		# Treat its surrounding field as a generous Back target for mouse and touch.
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT \
+				and event.pressed and not _preview_rect().has_point(event.position):
+			zoom_out()
+			accept_event()
+		elif event is InputEventScreenTouch and event.pressed \
+				and not _preview_rect().has_point(event.position):
+			zoom_out()
+			accept_event()
 		return
 	if event is InputEventMouseMotion:
 		_hovered_id = _site_from_point(event.position)
@@ -232,9 +242,10 @@ func _draw_overview(alpha: float) -> void:
 				center + Vector2(radius, -radius) * 0.6, Color(0.83, 0.65, 0.65, alpha), 2.0)
 
 	if _hovered_id != &"" and not zoomed_in:
-		var point := _region_center(_hovered_id)
-		draw_circle(point, 3.5, Color(1.0, 0.86, 0.58, 0.82 * alpha))
-		draw_circle(point, 7.0, Color(1.0, 0.86, 0.58, 0.44 * alpha), false, 1.0)
+		# Show the exact region a click opens; the overview and its hit target now agree.
+		var hovered_rect := _region_rect(_hovered_id)
+		draw_rect(hovered_rect, Color(1.0, 0.72, 0.30, 0.10 * alpha), true)
+		draw_rect(hovered_rect.grow(-0.5), Color(1.0, 0.86, 0.58, 0.88 * alpha), false, 1.0)
 	draw_rect(rect, Color(0.68, 0.74, 0.72, 0.48 * alpha), false, 1.0)
 
 

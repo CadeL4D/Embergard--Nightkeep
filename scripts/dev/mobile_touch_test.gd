@@ -90,29 +90,18 @@ func _test_drawer_exclusivity(hud: CanvasLayer) -> void:
 
 
 func _test_bottom_menu(hud: CanvasLayer) -> void:
-	hud._activate_bottom_menu(0)
-	var launcher: Button = hud.get_node(
-		"SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton")
-	var start := launcher.get_global_rect().get_center()
-	hud._on_menu_cycle_input(_touch(7, start, true))
-	hud._input(_touch(7, start, false))
+	hud._select_bottom_menu(0)
+	var selected: Button = hud.get_node(
+		"SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BottomMenuButton")
+	hud._on_menu_cycle_pressed()
 	_expect(hud._bottom_menu_index == 1 \
-		and hud.get_node("SafeArea/Layout/BottomRow/JobPanel").visible,
-		"tapping the bottom-left launcher cycles to the next menu")
-
-	hud._activate_bottom_menu(0)
-	hud._on_menu_cycle_input(_touch(8, start, true))
-	hud._menu_touch_elapsed = Accessibility.hold_duration
-	hud._process(0.01)
-	var switcher: MenuSwitcher = hud.get_node("MenuSwitcher")
-	var library_index: int = hud.BOTTOM_MENU_IDS.find(&"library")
-	var target: Vector2 = switcher._rects[library_index].get_center()
-	hud._input(_drag(8, target, target - start))
-	hud._input(_touch(8, target, false))
-	_expect(hud._bottom_menu_index == library_index \
-		and hud.get_node("SafeArea/Layout/BottomRow/LibraryPanel").visible,
-		"holding and dragging the launcher opens the chosen menu")
-	hud._activate_bottom_menu(0)
+		and not hud.get_node("SafeArea/Layout/BottomRow/JobPanel").visible \
+		and selected.text == tr(hud.BOTTOM_MENU_LABELS[1]),
+		"Cycle chooses Jobs and renames the selected menu action without opening it")
+	hud._on_bottom_menu_pressed()
+	_expect(hud.get_node("SafeArea/Layout/BottomRow/JobPanel").visible,
+		"pressing the selected Jobs action opens job assignment")
+	hud._select_bottom_menu(0)
 
 
 func _test_house_branches() -> void:

@@ -91,7 +91,10 @@ func _finish_first_selection() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if visible and not _choosing_first and event.is_action_pressed(&"ui_cancel"):
-		close()
+		if _canvas.zoomed_in:
+			_canvas.zoom_out()
+		else:
+			close()
 		get_viewport().set_input_as_handled()
 
 

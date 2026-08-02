@@ -31,6 +31,15 @@ func _ready() -> void:
 		_expect(first_image.save_png("res://artifacts/phase4_world_select.png") == OK,
 			"the first-settlement regional screen can be captured for visual QA")
 	var picked_region := Realm.suggested_first_region()
+	var exact_region_hits := true
+	for y in Realm.REGION_HEIGHT:
+		for x in Realm.REGION_WIDTH:
+			var region_id := Realm.region_id(Vector2i(x, y))
+			if first_canvas._site_from_point(first_canvas._region_rect(region_id).get_center()) \
+					!= region_id:
+				exact_region_hits = false
+	_expect(exact_region_hits,
+		"every visible overview region opens the same local region at its centre")
 	_expect(Realm.corruption_sources.size() >= 3,
 		"latent local corruption is distributed across multiple hidden places")
 	var latent_before := float(Realm.site(picked_region)["corruption"])
@@ -42,6 +51,18 @@ func _ready() -> void:
 		await get_tree().process_frame
 	_expect(first_canvas.zoomed_in and first_picker._primary.visible,
 		"selecting an area zooms into its detailed local preview before confirmation")
+	var outside_tap := InputEventScreenTouch.new()
+	outside_tap.index = 4
+	outside_tap.pressed = true
+	outside_tap.position = Vector2(1.0, first_canvas.size.y * 0.5)
+	first_canvas._gui_input(outside_tap)
+	for _frame in 18:
+		await get_tree().process_frame
+	_expect(not first_canvas.zoomed_in,
+		"tapping beside the local preview returns to the full Realm overview")
+	first_canvas.zoom_to(picked_region)
+	for _frame in 18:
+		await get_tree().process_frame
 	if DisplayServer.get_name() != "headless":
 		var preview_image := get_viewport().get_texture().get_image()
 		_expect(preview_image.save_png("res://artifacts/phase4_region_preview.png") == OK,

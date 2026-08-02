@@ -12,7 +12,6 @@ const CODEX_ENTRIES := preload("res://scripts/ui/codex_entries.gd")
 @onready var _codex_topics: ItemList = $Center/Card/Views/Codex/Content/Topics
 @onready var _codex_body: RichTextLabel = $Center/Card/Views/Codex/Content/Body
 
-var _was_paused := false
 var _codex_rows: Array[Dictionary] = []
 
 
@@ -32,7 +31,6 @@ func _ready() -> void:
 func open() -> void:
 	if visible:
 		return
-	_was_paused = Sim.paused
 	Sim.set_paused(true)
 	visible = true
 	_show_root()
@@ -44,8 +42,9 @@ func close() -> void:
 		return
 	_settings.save()
 	visible = false
-	if not _was_paused:
-		Sim.set_paused(false)
+	# This button is labelled Resume, so it must always resume. Preserving a pause that
+	# happened before the menu opened made Continue appear to do nothing.
+	Sim.set_paused(false)
 
 
 func _show_root() -> void:

@@ -109,9 +109,6 @@ const BOTTOM_MENU_LABELS: Array[StringName] = [
 	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton
 @onready var _bottom_menu_button: Button = \
 	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BottomMenuButton
-@onready var _active_menu_label: Label = \
-	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/ActiveMenu
-@onready var _menu_switcher: MenuSwitcher = $MenuSwitcher
 @onready var _phase_label: Label = $SafeArea/Layout/TopRow/PhaseBar/Row/Phase
 @onready var _pause_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/PauseButton
 @onready var _speed_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/SpeedButton
@@ -150,14 +147,10 @@ var _tap_frame: int = -1
 var _demolish_armed: bool = false
 var _demolish_timer: float = 0.0
 var _management_pause_owned: bool = false
+var _management_pause_suppressed: bool = false
 var _upgrade_widgets: Dictionary = {}
 var _upgrade_key: String = ""
 var _bottom_menu_index: int = 0
-var _menu_touch_index: int = -1
-var _menu_touch_elapsed: float = 0.0
-var _menu_touch_position: Vector2 = Vector2.ZERO
-var _menu_switcher_open: bool = false
-var _bottom_menu_expanded: bool = false
 
 
 func _ready() -> void:
@@ -173,7 +166,7 @@ func _ready() -> void:
 	_library_auto.toggled.connect(Divine.set_library_auto_manage)
 	_control_button.toggled.connect(_on_control_toggled)
 	_realm_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"realm")))
-	_menu_cycle_button.gui_input.connect(_on_menu_cycle_input)
+	_menu_cycle_button.pressed.connect(_on_menu_cycle_pressed)
 	_bottom_menu_button.pressed.connect(_on_bottom_menu_pressed)
 	_jobs_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"jobs")))
 	_build_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"build")))
@@ -266,7 +259,7 @@ func _ready() -> void:
 	_build_powers()
 	_rebuild_library()
 	_refresh()
-	_activate_bottom_menu(0)
+	_select_bottom_menu(0)
 
 
 # --- Layout ------------------------------------------------------------------------
@@ -287,11 +280,9 @@ func _on_accessibility_changed(kind: StringName) -> void:
 func _apply_handedness() -> void:
 	if _bottom_buttons == null:
 		return
-	# The launcher is intentionally fixed in the bottom-left corner. Handedness still
-	# applies to world gestures, but moving the one persistent navigation anchor
-	# would make the tap/hold interaction impossible to learn by muscle memory.
+	# Cycle and the selected menu action stay together as one predictable launcher.
 	var order: Array[Control] = [
-		_menu_cycle_button, _bottom_menu_button, _active_menu_label, _powers,
+		_menu_cycle_button, _bottom_menu_button, _powers,
 		_jobs_button, _build_button,
 		_hand_button, _library_button, _control_button, _realm_button,
 	]
@@ -670,22 +661,65 @@ func _refresh_upgrade_choices(b: Building) -> void:
 			var option: BuildingDef = check["def"]
 			if option == null:
 				continue
+			var choice := HBoxContainer.new()
+			choice.add_theme_constant_override("separation", 5)
 			var button := Button.new()
-			button.custom_minimum_size = Vector2(112, 24)
+			button.custom_minimum_size = Vector2(98, 24)
 			button.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
 			button.pressed.connect(_on_upgrade_to.bind(option.id))
-			_upgrade_choices.add_child(button)
-			_upgrade_widgets[option.id] = button
+			choice.add_child(button)
+			var needs := RichTextLabel.new()
+			needs.bbcode_enabled = true
+			needs.fit_content = true
+			needs.scroll_active = false
+			needs.custom_minimum_size = Vector2(116, 22)
+			needs.add_theme_font_size_override("normal_font_size", UiTheme.FONT_SIZE_SMALL)
+			choice.add_child(needs)
+			_upgrade_choices.add_child(choice)
+			_upgrade_widgets[option.id] = {"button": button, "needs": needs}
 
 	_upgrade_choices.visible = not checks.is_empty()
 	for check: Dictionary in checks:
 		var option: BuildingDef = check["def"]
 		if option == null or not _upgrade_widgets.has(option.id):
 			continue
-		var button: Button = _upgrade_widgets[option.id]
+		var widgets: Dictionary = _upgrade_widgets[option.id]
+		var button: Button = widgets["button"]
+		var needs: RichTextLabel = widgets["needs"]
 		button.disabled = not bool(check["ok"])
 		button.text = L10n.t(&"UI_UPGRADE_TO", [tr(option.display_name)])
 		button.tooltip_text = "%s\n%s" % [tr(option.description), String(check["reason"])]
+		needs.text = _upgrade_requirements(option)
+		needs.tooltip_text = String(check["reason"])
+
+
+func _upgrade_requirements(option: BuildingDef) -> String:
+	var parts := PackedStringArray()
+	var ok_color := UiPalette.OK.to_html(false)
+	var no_color := UiPalette.DANGER.to_html(false)
+	for kind: StringName in option.cost:
+		var have := Colony.available(kind)
+		var required := int(option.cost[kind])
+		parts.append("[color=#%s]%s %d/%d[/color]" % [
+			ok_color if have >= required else no_color,
+			L10n.resource(kind), have, required])
+	if option.center_tier == 0 and option.tier > 1:
+		var center_ok := Colony.center_tier() >= option.tier
+		parts.append("[color=#%s]%s %d/%d[/color]" % [
+			ok_color if center_ok else no_color, tr(&"UI_CENTER_SHORT"),
+			Colony.center_tier(), option.tier])
+	if option.min_population > 0:
+		var population := Colony.population()
+		parts.append("[color=#%s]%s %d/%d[/color]" % [
+			ok_color if population >= option.min_population else no_color,
+			tr(&"UI_POPULATION_SHORT"), population, option.min_population])
+	if option.unlock_cost > 0:
+		var unlocked := Meta.is_unlocked(option.id)
+		parts.append("[color=#%s]%s[/color]" % [
+			ok_color if unlocked else no_color,
+			tr(&"UI_UNLOCKED") if unlocked \
+			else L10n.t(&"UI_SHARDS_REQUIRED", [option.unlock_cost])])
+	return "  ".join(parts)
 
 
 func _on_storage_filter() -> void:
@@ -1111,16 +1145,6 @@ func _process(delta: float) -> void:
 	# 4 Hz, not per frame. A per-frame rebuild of these strings shows up in the
 	# profiler as the UI's own cost while you are trying to profile the sim.
 
-	if _menu_touch_index != -1 and not _menu_switcher_open:
-		_menu_touch_elapsed += delta
-		if _menu_touch_elapsed >= Accessibility.hold_duration:
-			_menu_switcher_open = true
-			var labels := PackedStringArray()
-			for key: StringName in BOTTOM_MENU_LABELS:
-				labels.append(tr(key))
-			_menu_switcher.open(labels, _menu_cycle_button.get_global_rect().get_center())
-			_menu_switcher.update_pointer(_menu_touch_position)
-
 	if _demolish_armed:
 		_demolish_timer -= delta
 		if _demolish_timer <= 0.0:
@@ -1135,7 +1159,6 @@ func _process(delta: float) -> void:
 	# has to poll. Resource counts still refresh on their signal for immediacy.
 	_refresh_resources()
 	_refresh_powers()
-	_refresh_phase()
 	_refresh_selection()
 	_refresh_building_card()
 	if _god_hand != null:
@@ -1156,66 +1179,28 @@ func _process(delta: float) -> void:
 			Divine.tome_capacity()])
 
 
-func _on_menu_cycle_input(event: InputEvent) -> void:
-	if not event is InputEventScreenTouch:
-		return
-	var touch := event as InputEventScreenTouch
-	if not touch.pressed or _menu_touch_index != -1:
-		return
-	_menu_touch_index = touch.index
-	_menu_touch_elapsed = 0.0
-	_menu_touch_position = touch.position
-	_menu_switcher_open = false
-	_menu_cycle_button.accept_event()
-
-
-func _input(event: InputEvent) -> void:
-	if _menu_touch_index == -1:
-		return
-	if event is InputEventScreenDrag:
-		var drag := event as InputEventScreenDrag
-		if drag.index != _menu_touch_index:
-			return
-		_menu_touch_position = drag.position
-		if _menu_switcher_open:
-			_menu_switcher.update_pointer(drag.position)
-	elif event is InputEventScreenTouch:
-		var touch := event as InputEventScreenTouch
-		if touch.index != _menu_touch_index or touch.pressed:
-			return
-		_menu_touch_position = touch.position
-		if _menu_switcher_open:
-			_menu_switcher.update_pointer(touch.position)
-			var picked := _menu_switcher.finish()
-			if picked >= 0:
-				_activate_bottom_menu(picked)
-		else:
-			_activate_bottom_menu((_bottom_menu_index + 1) % BOTTOM_MENU_IDS.size())
-		_menu_touch_index = -1
-		_menu_touch_elapsed = 0.0
-		_menu_switcher_open = false
+func _on_menu_cycle_pressed() -> void:
+	_select_bottom_menu((_bottom_menu_index + 1) % BOTTOM_MENU_IDS.size())
 
 
 func _on_bottom_menu_pressed() -> void:
-	_set_bottom_menu_expanded(not _bottom_menu_expanded)
+	if _bottom_menu_is_open(_bottom_menu_index):
+		_close_bottom_menu()
+	else:
+		_activate_bottom_menu(_bottom_menu_index)
 
 
-func _set_bottom_menu_expanded(expanded: bool) -> void:
-	_bottom_menu_expanded = expanded
-	_bottom_menu_button.tooltip_text = tr(
-		&"UI_BOTTOM_MENU_CLOSE" if expanded else &"UI_BOTTOM_MENU_OPEN")
-	for button: Button in [_jobs_button, _build_button, _hand_button, _library_button,
-			_control_button, _realm_button]:
-		button.visible = expanded
-	_powers.visible = not expanded and BOTTOM_MENU_IDS[_bottom_menu_index] == &"powers"
-
-
-func _activate_bottom_menu(index: int) -> void:
+func _select_bottom_menu(index: int) -> void:
 	if BOTTOM_MENU_IDS.is_empty():
 		return
+	_close_bottom_menu()
 	_bottom_menu_index = posmod(index, BOTTOM_MENU_IDS.size())
-	# Close every mutually exclusive surface through its normal handler, so paint,
-	# placement, management-pause ownership and Hand mode all clean up correctly.
+	var label := tr(BOTTOM_MENU_LABELS[_bottom_menu_index])
+	_bottom_menu_button.text = label
+	_bottom_menu_button.tooltip_text = L10n.t(&"UI_OPEN_SELECTED_MENU", [label])
+
+
+func _close_bottom_menu() -> void:
 	_jobs_button.set_pressed_no_signal(false)
 	_build_button.set_pressed_no_signal(false)
 	_hand_button.set_pressed_no_signal(false)
@@ -1227,6 +1212,27 @@ func _activate_bottom_menu(index: int) -> void:
 	_on_library_toggled(false)
 	_on_control_toggled(false)
 	_powers.visible = false
+
+
+func _bottom_menu_is_open(index: int) -> bool:
+	match BOTTOM_MENU_IDS[posmod(index, BOTTOM_MENU_IDS.size())]:
+		&"powers": return _powers.visible
+		&"jobs": return _job_panel.visible
+		&"build": return _build_panel.visible
+		&"hand": return _god_hand != null and _god_hand.hand_mode
+		&"library": return _library_panel.visible
+		&"control": return _control_panel.visible
+	return false
+
+
+func _activate_bottom_menu(index: int) -> void:
+	if BOTTOM_MENU_IDS.is_empty():
+		return
+	var next_index := posmod(index, BOTTOM_MENU_IDS.size())
+	_close_bottom_menu()
+	_bottom_menu_index = next_index
+	var label := tr(BOTTOM_MENU_LABELS[_bottom_menu_index])
+	_bottom_menu_button.text = label
 
 	match BOTTOM_MENU_IDS[_bottom_menu_index]:
 		&"powers":
@@ -1248,47 +1254,15 @@ func _activate_bottom_menu(index: int) -> void:
 			_on_control_toggled(true)
 		&"realm":
 			_on_realm()
-	_active_menu_label.text = tr(BOTTOM_MENU_LABELS[_bottom_menu_index])
-	_set_bottom_menu_expanded(false)
 
 
-## The phase clock is the game's spine, and at dusk it becomes the most important
-## thing on screen — the countdown is what turns "it is getting dark" into a
-## scramble.
+## Calendar only. Lighting, particles, and the world itself communicate phase and weather.
 func _refresh_phase() -> void:
-	var names: Array[StringName] = [&"PHASE_DAY", &"PHASE_DUSK", &"PHASE_NIGHT", &"PHASE_DAWN"]
-	var extra := ""
-	if Sim.phase == Sim.Phase.NIGHT and Threat.alive_count() > 0:
-		extra = L10n.t(&"HUD_HOSTILES", [Threat.alive_count()])
-	var forecast := Threat.next_night_forecast()
-	var risk_keys: Array[StringName] = [&"FORECAST_READY", &"FORECAST_CLOSE", &"FORECAST_DANGER"]
-	var monster_names: PackedStringArray = forecast["names"]
-	if Accessibility.compact_status_display:
-		var compact_hostiles := ""
-		if Sim.phase == Sim.Phase.NIGHT and Threat.alive_count() > 0:
-			compact_hostiles = "  !%d" % Threat.alive_count()
-		_phase_label.text = L10n.t(&"HUD_CLOCK_COMPACT", [Sim.day, tr(names[Sim.phase]),
-			int(Sim.seconds_remaining()), Climate.name_of_weather(), compact_hostiles])
-		_phase_label.add_theme_font_size_override("font_size", 8)
-	else:
-		_phase_label.text = L10n.t(&"HUD_CLOCK", [
-			Sim.day, tr(names[Sim.phase]), int(Sim.seconds_remaining()), extra])
-		_phase_label.text += "\n" + Climate.hud_text()
-		_phase_label.add_theme_font_size_override("font_size", 9)
-	var shown := PackedStringArray()
-	for i in mini(monster_names.size(), 3):
-		shown.append(monster_names[i])
-	if not Accessibility.compact_status_display:
-		_phase_label.text += "\n" + L10n.t(&"FORECAST_LINE", [
-			int(forecast["night"]), int(forecast["bodies"]),
-			", ".join(shown), tr(risk_keys[int(forecast["risk"])])])
-	_phase_label.tooltip_text = L10n.t(&"CLIMATE_TOOLTIP", [
-		Climate.name_of_season(), Climate.name_of_weather(),
-		int(round(Climate.farm_multiplier() * 100.0)),
-		int(round(Climate.gather_multiplier(Terrain.Feature.TREE) * 100.0)),
-	]) + "\n" + L10n.t(&"FORECAST_TOOLTIP", [
-		int(forecast["budget"]), int(forecast["readiness"]), ", ".join(monster_names)])
-	_phase_label.add_theme_color_override("font_color", UiPalette.phase_color(Sim.phase))
+	_phase_label.text = "%s · %s" % [
+		Climate.name_of_season(), L10n.t(&"HUD_DAY_MINIMAL", [Sim.day])]
+	_phase_label.tooltip_text = ""
+	_phase_label.add_theme_font_size_override("font_size", 9)
+	_phase_label.add_theme_color_override("font_color", UiPalette.TEXT)
 
 
 # --- Speed ----------------------------------------------------------------------------
@@ -1366,10 +1340,17 @@ func _on_migrants_resolved() -> void:
 
 
 func _on_pause_toggled(pressed: bool) -> void:
+	if _management_pause_owned and not pressed:
+		# Manual Resume wins until all management drawers have closed.
+		_management_pause_owned = false
+		_management_pause_suppressed = true
 	Sim.set_paused(pressed)
 
 
 func _on_speed_pressed() -> void:
+	if _management_pause_owned:
+		_management_pause_owned = false
+		_management_pause_suppressed = true
 	Sim.cycle_speed()
 
 
@@ -1382,6 +1363,11 @@ func _on_menu_pressed() -> void:
 ## Driven by the signal rather than by the button handlers, so the readout stays correct
 ## however the speed was changed — including from the debug keys.
 func _on_speed_changed(_scale: float, paused: bool) -> void:
+	# Resume can come from the pause menu, a speed hotkey, or another overlay. If an
+	# automatic management pause owned the clock, any explicit resume relinquishes it.
+	if _management_pause_owned and not paused:
+		_management_pause_owned = false
+		_management_pause_suppressed = true
 	_pause_button.set_pressed_no_signal(paused)
 	_pause_button.text = tr(&"UI_RESUME" if paused else &"UI_PAUSE")
 	_speed_button.text = L10n.t(&"UI_SPEED", [int(Sim.time_scale)])
@@ -1490,13 +1476,24 @@ func _action_panel_open() -> bool:
 
 
 func _sync_management_pause() -> void:
-	var should_pause := Accessibility.pause_while_managing and _action_panel_open()
-	if should_pause and not Sim.paused:
+	var panel_open := _action_panel_open()
+	if not panel_open:
+		if _management_pause_owned:
+			_management_pause_owned = false
+			Sim.set_paused(false)
+		_management_pause_suppressed = false
+		return
+	if not Accessibility.pause_while_managing:
+		if _management_pause_owned:
+			_management_pause_owned = false
+			Sim.set_paused(false)
+		_management_pause_suppressed = false
+		return
+	if _management_pause_suppressed:
+		return
+	if not Sim.paused:
 		_management_pause_owned = true
 		Sim.set_paused(true)
-	elif not should_pause and _management_pause_owned:
-		_management_pause_owned = false
-		Sim.set_paused(false)
 
 
 func _refresh() -> void:
@@ -1514,48 +1511,23 @@ func _on_resources_changed(_kind: StringName, _amount: int) -> void:
 	_refresh_resources()
 
 
-## The readout, one line per resource GROUP plus a line for the colony's condition.
-##
-## Built from Colony.KIND_GROUPS rather than from a format string per line. The old version named
-## wood, stone and food by hand in HUD_RESOURCES_TOP; the production chain took the list from three
-## kinds to six and will take it further, and hand-writing a key per row is how a readout ends up
-## silently missing the resource that was just added.
-##
-## Groups whose every stock is zero are HIDDEN. Day one shows one line — raw materials — and the
-## strip grows as the economy does, which keeps a phone screen readable and quietly teaches the
-## chain: a Processed row appearing the first time a sawmill produces a board is a better
-## explanation of the sawmill than any tooltip.
-##
-## Everything that moves on its own carries its SIGN. A bare "food 128" tells the player nothing
-## about whether they are about to starve; "food 128 -9/day" tells them everything, and tapping the
-## bar opens the arithmetic behind it (see RateLedger).
+## One flat, full-width material strip. Advanced materials appear once acquired; wood,
+## stone, and food remain visible at zero because their absence is critical information.
 func _refresh_resources() -> void:
-	var display_rows: Array = []
-
-	for group: Array in Colony.KIND_GROUPS:
-		var label: StringName = group[0]
-		var kinds: Array = group[1]
-		var entries: Array = []
-		var any := false
-		for kind: StringName in kinds:
-			var amount := Colony.amount_of(kind)
-			if amount > 0:
-				any = true
-			var rate := ""
-			# Food is the only stock with a measurable flow, so it is the only one that earns a
-			# rate. See Colony's note on why supply is measured and demand computed.
-			if kind == &"food":
-				rate = _per_day(Colony.food_net_per_second() * Sim.cycle_seconds())
-			var accessible := L10n.t(&"HUD_RESOURCE_ENTRY", [L10n.resource(kind), amount]) + rate
-			entries.append({
-				"kind": kind,
-				"text": "%s %d%s" % [L10n.resource(kind), amount, rate],
-				"accessible": accessible,
-			})
-		# The raw row always shows, even at zero: an empty larder is the most important number on
-		# the screen, and hiding it would be the one case where absence is not information.
-		if any or label == &"GROUP_RAW":
-			display_rows.append({"label": tr(label), "entries": entries})
+	var entries: Array = []
+	for kind: StringName in Colony.KINDS:
+		var amount := Colony.amount_of(kind)
+		if amount <= 0 and kind not in [&"wood", &"stone", &"food"]:
+			continue
+		var rate := ""
+		if kind == &"food":
+			rate = _per_day(Colony.food_net_per_second() * Sim.cycle_seconds())
+		var accessible := L10n.t(&"HUD_RESOURCE_ENTRY", [L10n.resource(kind), amount]) + rate
+		entries.append({
+			"kind": kind,
+			"text": "%s %d%s" % [L10n.resource(kind), amount, rate],
+			"accessible": accessible,
+		})
 
 	# Faith carries its ceiling: a reservoir that scales with population means "faith 91" says
 	# nothing without knowing whether that is nearly full or barely started. And its rate, because
@@ -1565,14 +1537,14 @@ func _refresh_resources() -> void:
 	var mood_text := "%d%s" % [int(Colony.average_mood()), _mood_sign()]
 	var faith_text := "%d/%d%s" % [int(Divine.faith), int(Divine.faith_max()),
 		_sign_of(RateLedger.faith().total)]
-	display_rows.append({"label": "", "entries": [
+	entries.append_array([
 		{"kind": &"population", "text": population_text,
 			"accessible": "population " + population_text},
 		{"kind": &"water", "text": water_text, "accessible": "water " + water_text},
 		{"kind": &"mood", "text": mood_text, "accessible": "mood " + mood_text},
 		{"kind": &"faith", "text": faith_text, "accessible": "faith " + faith_text},
-	]})
-	_resources.set_rows(display_rows)
+	])
+	_resources.set_rows([{"label": "", "entries": entries}])
 
 
 ## Mood's sign, with a deadband.

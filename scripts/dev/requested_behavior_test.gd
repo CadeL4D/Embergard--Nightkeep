@@ -18,7 +18,6 @@ func _ready() -> void:
 	_check_rest_and_night_recall()
 	_check_two_day_cycles()
 
-	Accessibility.set_compact_status_display(false)
 	RunSave.clear()
 	if _failures.is_empty():
 		print("requested behavior test: all checks passed")
@@ -40,33 +39,72 @@ func _check_hud(run: Node2D) -> void:
 	_expect(menu_button != null,
 		"the full bottom menu has its own button")
 	var starting_menu: int = hud._bottom_menu_index
-	var touch_down := InputEventScreenTouch.new()
-	touch_down.index = 17
-	touch_down.pressed = true
-	touch_down.position = cycle_button.global_position + cycle_button.size * 0.5
-	hud._on_menu_cycle_input(touch_down)
-	var touch_up := InputEventScreenTouch.new()
-	touch_up.index = touch_down.index
-	touch_up.pressed = false
-	touch_up.position = touch_down.position
-	hud._input(touch_up)
+	hud._on_menu_cycle_pressed()
 	_expect(hud._bottom_menu_index == (starting_menu + 1) % hud.BOTTOM_MENU_IDS.size(),
-		"tapping Cycle advances to the next menu")
+		"tapping Cycle chooses the next menu")
+	_expect(not hud._job_panel.visible,
+		"cycling to Jobs does not open it before the selected menu button is pressed")
+	_expect(menu_button.text == tr(hud.BOTTOM_MENU_LABELS[hud._bottom_menu_index]),
+		"the selected menu button is renamed to the cycled choice")
 	hud._on_bottom_menu_pressed()
-	_expect(hud._jobs_button.visible and hud._realm_button.visible,
-		"tapping Menu reveals the full menu list")
-	hud._activate_bottom_menu(0)
-	_expect(not hud._jobs_button.visible and not hud._realm_button.visible,
-		"choosing a menu item collapses the full list")
+	_expect(hud._job_panel.visible,
+		"pressing the Jobs menu button opens the job assignment panel")
+	hud._select_bottom_menu(0)
 	var readout: ResourceReadout = hud.get_node(
 		"SafeArea/Layout/TopRow/ResourceColumn/ResourceBar/Resources")
 	_expect(not readout._rows.is_empty(), "the material readout is populated with icon chips")
-	Accessibility.set_compact_status_display(true)
+	_expect(String(readout._rows[0].get("label", "")).is_empty(),
+		"the material strip has no raw category heading")
 	hud._refresh_phase()
 	var phase_label: Label = hud.get_node("SafeArea/Layout/TopRow/PhaseBar/Row/Phase")
-	_expect(not phase_label.text.contains("\n"), "compact day/weather mode uses one line")
-	Accessibility.set_compact_status_display(false)
-	hud._refresh_phase()
+	_expect(phase_label.text.begins_with(Climate.name_of_season()) \
+		and phase_label.text.contains("Day %d" % Sim.day) \
+		and not phase_label.text.contains("s") and not phase_label.text.contains("\n"),
+		"the status line contains only season then day")
+
+	var upgrade := Buildings.get_building(&"great_hall")
+	var unmet_requirements: String = hud._upgrade_requirements(upgrade)
+	_expect(unmet_requirements.contains("#%s" % UiPalette.DANGER.to_html(false)),
+		"unmet upgrade requirements are shown in red")
+	var saved_upgrade_stock := {}
+	for kind: StringName in upgrade.cost:
+		saved_upgrade_stock[kind] = Colony.stock.get(kind, 0)
+		Colony.stock[kind] = int(upgrade.cost[kind]) \
+			+ int(Colony.reserved.get(kind, 0)) + int(Colony.buffered.get(kind, 0))
+	var mixed_requirements: String = hud._upgrade_requirements(upgrade)
+	_expect(mixed_requirements.contains("#%s" % UiPalette.OK.to_html(false)) \
+		and mixed_requirements.contains("#%s" % UiPalette.DANGER.to_html(false)),
+		"met materials turn green while an unmet population gate stays red")
+	var center: Building = null
+	for building: Building in Colony.buildings:
+		if building.def.center_tier > 0:
+			center = building
+			break
+	if center != null:
+		hud._god_hand._select_building(center)
+		hud._refresh_building_card()
+	var upgrade_widgets: Dictionary = hud._upgrade_widgets.get(&"great_hall", {})
+	_expect(not upgrade_widgets.is_empty() \
+		and (upgrade_widgets.get("needs") as RichTextLabel).text == mixed_requirements,
+		"the colored requirements render directly beside the upgrade button")
+	hud._god_hand.clear_building_selection()
+	for kind: StringName in saved_upgrade_stock:
+		Colony.stock[kind] = int(saved_upgrade_stock[kind])
+
+	Accessibility.set_pause_while_managing(true)
+	hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(&"jobs"))
+	_expect(Sim.paused, "the optional management pause still pauses once on open")
+	Sim.set_paused(false)
+	hud._sync_management_pause()
+	_expect(not Sim.paused,
+		"Resume from the pause menu cannot be overridden while the drawer remains open")
+	hud._select_bottom_menu(0)
+	hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(&"jobs"))
+	hud._on_pause_toggled(false)
+	hud._sync_management_pause()
+	_expect(not Sim.paused, "the HUD Resume button cannot be overridden either")
+	hud._select_bottom_menu(0)
+	Accessibility.set_pause_while_managing(false)
 
 
 func _check_danger_reasons() -> void:

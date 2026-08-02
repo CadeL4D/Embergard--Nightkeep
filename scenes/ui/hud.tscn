@@ -1,10 +1,9 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://scripts/ui/notice_log.gd" id="2_notice"]
 [ext_resource type="Script" path="res://scripts/ui/breach_markers.gd" id="3_breach"]
 [ext_resource type="Script" path="res://scripts/ui/breakdown_panel.gd" id="4_breakdown"]
-[ext_resource type="Script" path="res://scripts/ui/menu_switcher.gd" id="5_switcher"]
 [ext_resource type="Script" path="res://scripts/ui/resource_readout.gd" id="6_resources"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar"]
@@ -70,7 +69,7 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 mouse_filter = 2
 
-[node name="TopRow" type="HBoxContainer" parent="SafeArea/Layout"]
+[node name="TopRow" type="VBoxContainer" parent="SafeArea/Layout"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -78,13 +77,13 @@ theme_override_constants/separation = 8
 
 [node name="ResourceColumn" type="VBoxContainer" parent="SafeArea/Layout/TopRow"]
 layout_mode = 2
-size_flags_horizontal = 0
+size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
 [node name="ResourceBar" type="PanelContainer" parent="SafeArea/Layout/TopRow/ResourceColumn"]
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
-size_flags_horizontal = 0
+size_flags_horizontal = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
 [node name="Resources" type="Control" parent="SafeArea/Layout/TopRow/ResourceColumn/ResourceBar"]
@@ -104,6 +103,7 @@ script = ExtResource("4_breakdown")
 custom_minimum_size = Vector2(300, 176)
 layout_mode = 2
 horizontal_scroll_mode = 0
+scroll_deadzone = 6
 
 [node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/TopRow/ResourceColumn/Breakdown/Scroll"]
 layout_mode = 2
@@ -111,13 +111,14 @@ size_flags_horizontal = 3
 theme_override_constants/separation = 1
 
 [node name="TopSpacer" type="Control" parent="SafeArea/Layout/TopRow"]
+visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
 [node name="PhaseBar" type="PanelContainer" parent="SafeArea/Layout/TopRow"]
 layout_mode = 2
-size_flags_horizontal = 8
+size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
@@ -234,6 +235,7 @@ text = "LIBRARY_AUTO"
 custom_minimum_size = Vector2(500, 178)
 layout_mode = 2
 horizontal_scroll_mode = 0
+scroll_deadzone = 6
 
 [node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Scroll"]
 layout_mode = 2
@@ -301,6 +303,7 @@ text = "UI_JOB_BOARD_HINT"
 custom_minimum_size = Vector2(274, 220)
 layout_mode = 2
 horizontal_scroll_mode = 0
+scroll_deadzone = 6
 
 [node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll"]
 layout_mode = 2
@@ -559,6 +562,7 @@ theme_override_constants/separation = 4
 custom_minimum_size = Vector2(390, 72)
 layout_mode = 2
 vertical_scroll_mode = 0
+scroll_deadzone = 6
 
 [node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout/CardsScroll"]
 layout_mode = 2
@@ -601,6 +605,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 horizontal_scroll_mode = 1
 vertical_scroll_mode = 0
+scroll_deadzone = 6
 
 [node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ButtonsClip"]
 layout_mode = 2
@@ -615,22 +620,15 @@ tooltip_text = "UI_BOTTOM_MENU_HINT"
 text = "UI_CYCLE"
 
 [node name="BottomMenuButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-custom_minimum_size = Vector2(52, 28)
+custom_minimum_size = Vector2(82, 28)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
 theme_override_font_sizes/font_size = 9
 tooltip_text = "UI_BOTTOM_MENU_OPEN"
-text = "UI_MENUS"
-
-[node name="ActiveMenu" type="Label" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-custom_minimum_size = Vector2(68, 28)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
-theme_override_font_sizes/font_size = 10
 text = "UI_POWER_UPS"
-vertical_alignment = 1
 
 [node name="Powers" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 6
 
@@ -683,11 +681,3 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
 theme_override_font_sizes/font_size = 10
 text = "UI_REALM"
-
-[node name="MenuSwitcher" type="Control" parent="."]
-visible = false
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-mouse_filter = 2
-script = ExtResource("5_switcher")
