@@ -20,6 +20,12 @@ extends Node2D
 ## Extra grace around the Ember specifically. It is the thing players reach for
 ## most, so it is the thing most worth making forgiving to grab.
 const EMBER_GRAB_PX := 64.0
+## Villagers used the full 44px accessibility target, which made a person win taps
+## several tiles away at wide zooms. A 26px target is still larger than the sprite
+## while leaving nearby buildings and ground selectable.
+const VILLAGER_SELECT_PX := 26.0
+## Stationary buildings get a little screen-space grace outside their footprint.
+const BUILDING_PICK_PADDING_PX := 14.0
 
 ## How far the finger must move before a touch that started on the Ember becomes a
 ## drag. Below this it stays a tap, so tapping a tile right next to the Ember sends
@@ -235,7 +241,7 @@ func _handle_tap(world_pos: Vector2) -> bool:
 		_select(null)
 		return true
 
-	var structure := _pick_building(cell)
+	var structure := _pick_building_near(world_pos)
 	if structure != null:
 		_select_building(structure)
 		return true
@@ -249,11 +255,11 @@ func _handle_tap(world_pos: Vector2) -> bool:
 ## actual pixels — a 12px figure is far below a usable touch target, and requiring
 ## precision on a moving unit would make the God Hand feel broken.
 func _pick_villager(world_pos: Vector2) -> Villager:
-	var radius := _world_radius(Accessibility.MIN_TOUCH_TARGET_PX)
+	var radius := _world_radius(VILLAGER_SELECT_PX)
 	var best: Villager = null
 	var best_dist := radius * radius
 	for v: Villager in Colony.villagers:
-		if not is_instance_valid(v) or not v.alive:
+		if not is_instance_valid(v) or not v.alive or v.is_sheltered():
 			continue
 		var d := v.position.distance_squared_to(world_pos)
 		if d <= best_dist:
@@ -287,7 +293,7 @@ func set_hand_mode(active: bool) -> void:
 
 func _handle_hand_tap(world_pos: Vector2) -> bool:
 	if held == null or not is_instance_valid(held):
-		var candidate: Agent = _pick_villager(world_pos)
+		var candidate: Agent = _pick_villager_for_hand(world_pos)
 		if candidate == null:
 			candidate = _pick_light_hostile(world_pos)
 		var picked: Node = candidate
@@ -346,6 +352,20 @@ func _pick_light_hostile(world_pos: Vector2) -> Agent:
 		if distance <= best_dist:
 			best_dist = distance
 			best = hostile
+	return best
+
+
+func _pick_villager_for_hand(world_pos: Vector2) -> Villager:
+	var radius := _world_radius(Accessibility.MIN_TOUCH_TARGET_PX)
+	var best: Villager = null
+	var best_dist := radius * radius
+	for villager: Villager in Colony.villagers:
+		if not is_instance_valid(villager) or not villager.alive or villager.is_sheltered():
+			continue
+		var distance := villager.position.distance_squared_to(world_pos)
+		if distance <= best_dist:
+			best_dist = distance
+			best = villager
 	return best
 
 
@@ -418,6 +438,25 @@ func _pick_building(cell: int) -> Building:
 	return node if node is Building else null
 
 
+func _pick_building_near(world_pos: Vector2) -> Building:
+	var exact := _pick_building(World.grid.to_cell_index(world_pos))
+	if exact != null:
+		return exact
+	var padding := _world_radius(BUILDING_PICK_PADDING_PX)
+	var best: Building = null
+	var best_distance := INF
+	for building: Building in Colony.buildings:
+		if not is_instance_valid(building):
+			continue
+		if not building.world_rect().grow(padding).has_point(world_pos):
+			continue
+		var distance := building.centre_position().distance_squared_to(world_pos)
+		if distance < best_distance:
+			best_distance = distance
+			best = building
+	return best
+
+
 func _select(v: Villager) -> void:
 	if selected != null and is_instance_valid(selected):
 		selected.selected = false
@@ -458,6 +497,9 @@ func _draw() -> void:
 		return
 	var def: BuildingDef = selected_building.def
 	var center := selected_building.centre_position()
+	var footprint := selected_building.world_rect().grow(2.0)
+	draw_rect(footprint, Color(1.0, 0.82, 0.44, 0.09), true)
+	draw_rect(footprint, Color(1.0, 0.82, 0.44, 0.92), false, 2.0)
 	if def.attack_damage > 0.0:
 		var radius := def.attack_range * Grid.TILE_SIZE
 		draw_circle(center, radius, Color(0.95, 0.52, 0.25, 0.07))

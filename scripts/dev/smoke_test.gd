@@ -51,6 +51,10 @@ func _ready() -> void:
 	# them for reasons that have nothing to do with the code under test.
 	Difficulties.select(TEST_DIFFICULTY)
 	print("difficulty: %s" % Difficulties.current_id())
+	if "--live-only" in OS.get_cmdline_user_args():
+		await _check_live_colony()
+		_report()
+		return
 	for s in SEEDS:
 		_run_seed(s)
 	print("\n-- localization --")
@@ -263,8 +267,23 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 	# --- The wave --------------------------------------------------------------------
 	if not Colony.villagers.is_empty():
 		Colony.villagers[0].set_job(&"warrior")
-	Sim.set_phase(Sim.Phase.NIGHT)
+	# Exercise the real civilian schedule rather than teleporting the clock from
+	# midday to midnight. Late dusk is their commute window; Night is when everyone
+	# should already have disappeared indoors.
+	Sim.set_phase(Sim.Phase.DUSK)
 	Sim.time_scale = 8.0
+	Sim.phase_elapsed = Difficulties.phase_duration(Sim.Phase.DUSK) * 0.61
+	for _i in 240:
+		await get_tree().process_frame
+		var commuting := false
+		for villager: Villager in Colony.villagers:
+			var job_def := Jobs.get_job(villager.job)
+			if (job_def == null or not job_def.defends) and not villager.is_sheltered():
+				commuting = true
+				break
+		if not commuting:
+			break
+	Sim.set_phase(Sim.Phase.NIGHT)
 	for _i in 400:
 		await get_tree().process_frame
 		if Threat.alive_count() > 0:
@@ -286,6 +305,17 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 				stayed_home = false
 	_expect(stayed_home, seed_value,
 		"first-night monsters remain territorial around their corrupt camp")
+	var civilians := 0
+	var sheltered := 0
+	for villager: Villager in Colony.villagers:
+		var job_def := Jobs.get_job(villager.job)
+		if job_def != null and job_def.defends:
+			continue
+		civilians += 1
+		if villager.is_sheltered():
+			sheltered += 1
+	_expect(civilians > 0 and sheltered == civilians, seed_value,
+		"civilian villagers are indoors for the night (%d/%d)" % [sheltered, civilians])
 	if Threat.alive_count() > 0:
 		Threat.monsters[0].on_damaged(0.0, null)
 
@@ -495,6 +525,10 @@ func _check_needs(seed_value: int, run: Node2D) -> void:
 ## raise it? Runs after the economy check so there are resources banked to pay for
 ## something.
 func _check_building(seed_value: int, run: Node2D) -> void:
+	# Construction is a daytime system now that civilians shelter for the whole
+	# NIGHT phase. Normalize this isolated check so it measures hauling and building,
+	# not how close an earlier economy check left the clock to shift change.
+	Sim.set_phase(Sim.Phase.DAY)
 	_expect(Buildings.all().size() > 0, seed_value,
 		"building catalog loaded (%d defs)" % Buildings.all().size())
 
@@ -520,6 +554,10 @@ func _check_building(seed_value: int, run: Node2D) -> void:
 	for v in Colony.villagers:
 		v.food = 100.0
 		v.water = 100.0
+		# The economy check is deliberately time-compressed and can leave the roster
+		# at the edge of its sleep threshold. Rest is a separate behavior; normalize it
+		# here so this assertion continues to isolate construction throughput.
+		v.rest = 100.0
 
 	# Place it on clear ground a few tiles from the keep.
 	var grid: Grid = World.grid
@@ -568,6 +606,20 @@ func _check_building(seed_value: int, run: Node2D) -> void:
 		if not site.is_site():
 			break
 	Sim.time_scale = previous_scale
+	if not materials_arrived:
+		print("   construction diagnostics: phase=%s elapsed=%.1f path_queue=%d" % [
+			Sim.Phase.keys()[Sim.phase], Sim.phase_elapsed, World.paths.last_queue_length])
+		var claim_owner: Variant = Colony._claims.get(site.anchor)
+		print("      site anchor=%d claimable=%s owner=%s supply=%s next=%s stock=%d available=%d work_allowed=%s" % [
+			site.anchor, Colony.is_claimable(site.anchor),
+			claim_owner.profile.display_name if is_instance_valid(claim_owner) and claim_owner is Villager else claim_owner,
+			Colony._can_supply(site), site.next_needed(), Colony.amount_of(site.next_needed()),
+			Colony.available(site.next_needed()), DefenseControl.allows_work(site.anchor)])
+		for v in Colony.villagers:
+			print("      %s job=%s state=%s shift=%s sheltered=%s waiting=%s rest=%.1f carry=%d site=%s" % [
+				v.profile.display_name, v.job, v.State.keys()[v.state], v._shift_sleep,
+				v.is_sheltered(), v._awaiting_path, v.rest, v.carry_amount,
+				is_instance_valid(v._site)])
 
 	# Measured on the SITE, not on the colony's stock. Gatherers are delivering wood
 	# throughout, so total stores actually RISE during the haul — the first version

@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/hut.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"warden_house"
+display_name = "BUILDING_WARDEN_HOUSE"
+description = "BUILDING_WARDEN_HOUSE_DESC"
+sprite = ExtResource("2_tex")
+category = &"housing"
+tier = 1
+footprint = Vector2i(3, 2)
+blocks_movement = true
+max_blight = 40
+cost = {
+&"stone": 16,
+&"wood": 12
+}
+build_work = 34.0
+max_hp = 320.0
+resistances = {&"crushing": 0.2, &"blight": 0.15}
+upgrades_from = &"hut"
+min_population = 6
+light_radius = 6
+is_stockpile = false
+influence_radius = 7
+sleep_slots = 6
+sleep_recovery_multiplier = 1.75
+worker_slots = 0
+order = 12
+color = Color(0.58, 0.68, 0.78, 1)

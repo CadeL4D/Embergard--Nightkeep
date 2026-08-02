@@ -142,6 +142,9 @@ extends Resource
 @export var tome_slots: int = 0
 ## Beds provided. Villagers recover rest far faster indoors.
 @export var sleep_slots: int = 0
+## Multiplier on indoor rest recovery. Housing branches can choose between more
+## beds and better beds without introducing a second sleeping system.
+@export_range(0.25, 3.0) var sleep_recovery_multiplier: float = 1.0
 ## How many villagers of a matching job may work here at once.
 @export var worker_slots: int = 0
 

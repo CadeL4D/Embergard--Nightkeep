@@ -10,6 +10,8 @@ UI_BACK,Back
 UI_CANCEL,Cancel
 UI_BUILD,Build
 UI_JOBS,Jobs
+UI_POWER_UPS,Powers
+UI_BOTTOM_MENU_HINT,Tap to cycle menus. Hold and drag to choose one.
 UI_ASCEND,Ascend
 UI_ASCEND_CONFIRM,Sure?
 UI_PAUSE,Pause
@@ -54,7 +56,7 @@ BLOCK_NO_WATER,no water
 BLOCK_LITTLE_FOOD,little food
 BLOCK_UNHAPPY,unhappy
 SELECT_SURVIVOR,Survivor
-SELECT_NEEDS,food {0}  water {1}  rest {2}  mood {3}
+SELECT_NEEDS,health {0}/{1}  food {2}  water {3}  rest {4}  mood {5}
 MIGRANTS_ASK,{0} survivors ask for shelter{1}
 MIGRANTS_ASK_ONE,{0} survivor asks for shelter{1}
 MIGRANTS_BEDS_WARNING,"  ·  only {0} beds"
@@ -242,6 +244,8 @@ GATE_NEEDS_CENTER,centre {0}
 GATE_NEEDS_POP,{0} souls
 UI_UPGRADE,improve
 UI_UPGRADE_TO,raise to {0}
+UI_VIEW,View
+BLD_HOUSING," · {0} beds · {1}% rest speed"
 UI_DEMOLISH,tear down
 UI_DEMOLISH_CONFIRM,sure?
 UPGRADE_NONE,nothing further to build here
@@ -275,6 +279,8 @@ BUILDING_STONE_KEEP,stone keep
 BUILDING_STONE_KEEP_DESC,"Walls, braziers and a barred gate. Tier 3, and the safest ground on the map."
 BUILDING_LONGHOUSE,longhouse
 BUILDING_LONGHOUSE_DESC,Nine beds under one roof. Beds are how a colony grows.
+BUILDING_WARDEN_HOUSE,Warden House
+BUILDING_WARDEN_HOUSE_DESC,Six deep-rest beds behind reinforced walls. Recovers rest 75% faster than a hut and is far harder for monsters to break.
 BUILDING_PATH,path
 BUILDING_PATH_DESC,Trodden earth. Quicker to walk — and quicker for whatever walks in.
 BUILDING_ROAD,road

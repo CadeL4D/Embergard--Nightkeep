@@ -68,6 +68,5 @@ func _cost_text(row: Dictionary) -> String:
 func _choose(choice_id: StringName) -> void:
 	if not Storyteller.resolve_event(choice_id):
 		return
-	Accessibility.pulse()
 	_dim.visible = false
 	Sim.set_paused(_was_paused)

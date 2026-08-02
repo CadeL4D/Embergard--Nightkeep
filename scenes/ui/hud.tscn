@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://scripts/ui/notice_log.gd" id="2_notice"]
 [ext_resource type="Script" path="res://scripts/ui/breach_markers.gd" id="3_breach"]
 [ext_resource type="Script" path="res://scripts/ui/breakdown_panel.gd" id="4_breakdown"]
+[ext_resource type="Script" path="res://scripts/ui/menu_switcher.gd" id="5_switcher"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar"]
 content_margin_left = 10.0
@@ -271,7 +272,7 @@ text = "idle"
 [node name="Needs" type="Label" parent="SafeArea/Layout/BottomRow/SelectionCard/Rows"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
-text = "food 80  rest 80  mood 70"
+text = "health 72/72  food 80  water 80  rest 80  mood 70"
 
 [node name="EquipmentPolicy" type="Button" parent="SafeArea/Layout/BottomRow/SelectionCard/Rows"]
 custom_minimum_size = Vector2(112, 24)
@@ -458,15 +459,19 @@ theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
 theme_override_font_sizes/font_size = 8
 text = ""
 
+[node name="UpgradeChoices" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
 [node name="Actions" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="UpgradeButton" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions"]
-custom_minimum_size = Vector2(78, 22)
+[node name="ViewButton" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions"]
+custom_minimum_size = Vector2(58, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
-text = "UI_UPGRADE"
+text = "UI_VIEW"
 
 [node name="DemolishButton" type="Button" parent="SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions"]
 custom_minimum_size = Vector2(78, 22)
@@ -601,11 +606,28 @@ vertical_scroll_mode = 0
 layout_mode = 2
 theme_override_constants/separation = 6
 
+[node name="MenuCycleButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+custom_minimum_size = Vector2(42, 28)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
+theme_override_font_sizes/font_size = 14
+tooltip_text = "UI_BOTTOM_MENU_HINT"
+text = "☰"
+
+[node name="ActiveMenu" type="Label" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+custom_minimum_size = Vector2(68, 28)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
+theme_override_font_sizes/font_size = 10
+text = "UI_POWER_UPS"
+vertical_alignment = 1
+
 [node name="Powers" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="JobsButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+visible = false
 custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
@@ -613,6 +635,7 @@ toggle_mode = true
 text = "UI_JOBS"
 
 [node name="BuildButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+visible = false
 custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
@@ -620,6 +643,7 @@ toggle_mode = true
 text = "UI_BUILD"
 
 [node name="HandButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+visible = false
 custom_minimum_size = Vector2(70, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
@@ -628,6 +652,7 @@ toggle_mode = true
 text = "UI_HAND"
 
 [node name="LibraryButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+visible = false
 custom_minimum_size = Vector2(72, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.811765, 0.745098, 1, 1)
@@ -636,6 +661,7 @@ toggle_mode = true
 text = "UI_LIBRARY"
 
 [node name="ControlButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+visible = false
 custom_minimum_size = Vector2(70, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
@@ -643,8 +669,17 @@ toggle_mode = true
 text = "UI_CONTROL"
 
 [node name="RealmButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
+visible = false
 custom_minimum_size = Vector2(62, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
 theme_override_font_sizes/font_size = 10
 text = "UI_REALM"
+
+[node name="MenuSwitcher" type="Control" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("5_switcher")

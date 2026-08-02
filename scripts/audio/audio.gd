@@ -156,7 +156,6 @@ func play_sfx(id: StringName, pitch_variance: float = 0.08,
 	# fastest way to make a soundscape grating.
 	p.pitch_scale = 1.0 + randf_range(-pitch_variance, pitch_variance)
 	p.play()
-	Accessibility.pulse(12, 0.32)
 
 
 ## Hook for the procedural music layer. No-ops until that exists, so the phase machine can
@@ -218,8 +217,13 @@ func _wire_events() -> void:
 	Events.tower_fired.connect(func(_tower: Node, _damage: float, _pos: Vector2) -> void:
 		play_sfx(&"tower_fire", 0.11)
 	)
-	Events.monster_attacked.connect(func(_monster: Node, _target: Node) -> void:
+	Events.monster_attacked.connect(func(_monster: Node, target: Node) -> void:
 		play_sfx(&"monster_attack", 0.13)
+		# Combat is the only event important enough to interrupt the player's hand.
+		# Keeping haptics here (rather than in generic SFX playback) prevents buttons,
+		# production ticks and ambient sounds from buzzing the device.
+		if target is Villager:
+			Accessibility.pulse(28, 0.72)
 	)
 	Events.production_completed.connect(func(_building: Node, _kind: StringName,
 			_amount: int) -> void: play_sfx(&"production", 0.06))

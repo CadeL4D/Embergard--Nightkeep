@@ -23,9 +23,13 @@ const EDGE_MARGIN := 18.0
 const MERGE_DISTANCE := 48.0
 
 const ARROW_SIZE := 7.0
+const VILLAGER_MARKER_LIFETIME := 2.4
 
 ## [{pos: Vector2 (world), age: float}]
 var _breaches: Array = []
+## instance id -> {villager: Villager, age: float}. One marker per person, refreshed
+## by each hit so a pack attack remains a steady warning rather than a strobe.
+var _villager_attacks: Dictionary = {}
 
 var _camera: Camera2D = null
 
@@ -33,7 +37,11 @@ var _camera: Camera2D = null
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Events.breach_detected.connect(_on_breach)
-	Events.run_started.connect(func(_s: int) -> void: _breaches.clear())
+	Events.monster_attacked.connect(_on_monster_attacked)
+	Events.run_started.connect(func(_s: int) -> void:
+		_breaches.clear()
+		_villager_attacks.clear()
+	)
 	_camera = get_node_or_null("../../CameraRig")
 	if _camera == null:
 		# Not fatal: the HUD is also dropped into UI-only test scenes with no world.
@@ -48,8 +56,15 @@ func _on_breach(world_pos: Vector2) -> void:
 	_breaches.append({"pos": world_pos, "age": 0.0})
 
 
+func _on_monster_attacked(_monster: Node, target: Node) -> void:
+	if not target is Villager:
+		return
+	var villager := target as Villager
+	_villager_attacks[villager.get_instance_id()] = {"villager": villager, "age": 0.0}
+
+
 func _process(delta: float) -> void:
-	if _breaches.is_empty():
+	if _breaches.is_empty() and _villager_attacks.is_empty():
 		return
 	var kept: Array = []
 	for b in _breaches:
@@ -57,11 +72,23 @@ func _process(delta: float) -> void:
 		if b["age"] < MARKER_LIFETIME:
 			kept.append(b)
 	_breaches = kept
+	for id in _villager_attacks.keys():
+		var warning: Dictionary = _villager_attacks[id]
+		var raw_villager: Variant = warning.get("villager")
+		if not is_instance_valid(raw_villager):
+			_villager_attacks.erase(id)
+			continue
+		var villager := raw_villager as Villager
+		warning["age"] = float(warning["age"]) + delta
+		if not villager.alive or float(warning["age"]) >= VILLAGER_MARKER_LIFETIME:
+			_villager_attacks.erase(id)
+		else:
+			_villager_attacks[id] = warning
 	queue_redraw()
 
 
 func _draw() -> void:
-	if _breaches.is_empty() or _camera == null:
+	if (_breaches.is_empty() and _villager_attacks.is_empty()) or _camera == null:
 		return
 
 	var view := get_viewport_rect().size
@@ -95,6 +122,28 @@ func _draw() -> void:
 		var fade: float = 1.0 - (b["age"] / MARKER_LIFETIME)
 		_draw_arrow(at, offset.angle(), UiPalette.DANGER * Color(1, 1, 1, fade))
 
+	# A person under attack always gets an exclamation arrow. On-screen it floats
+	# above and points down at the villager; off-screen it clamps to the edge and
+	# points toward them, using the same geometry as a structural breach.
+	for warning: Dictionary in _villager_attacks.values():
+		var raw_villager: Variant = warning.get("villager")
+		if not is_instance_valid(raw_villager):
+			continue
+		var villager := raw_villager as Villager
+		var screen: Vector2 = xform * villager.global_position
+		var offset := screen - centre
+		var fade: float = 1.0 - float(warning["age"]) / VILLAGER_MARKER_LIFETIME
+		var color := UiPalette.DANGER * Color(1, 1, 1, fade)
+		if absf(offset.x) < half.x and absf(offset.y) < half.y:
+			_draw_alert_arrow(screen - Vector2(0, 24), PI * 0.5, color)
+		else:
+			var k := 1.0
+			if absf(offset.x) > 0.001:
+				k = minf(k, half.x / absf(offset.x))
+			if absf(offset.y) > 0.001:
+				k = minf(k, half.y / absf(offset.y))
+			_draw_alert_arrow(centre + offset * k, offset.angle(), color)
+
 
 func _draw_arrow(at: Vector2, angle: float, color: Color) -> void:
 	var forward := Vector2.RIGHT.rotated(angle)
@@ -109,3 +158,10 @@ func _draw_arrow(at: Vector2, angle: float, color: Color) -> void:
 	draw_polyline(
 		PackedVector2Array([points[0], points[1], points[2], points[0]]),
 		Color(UiPalette.BG_DEEP, color.a * 0.9), 1.0)
+
+
+func _draw_alert_arrow(at: Vector2, angle: float, color: Color) -> void:
+	_draw_arrow(at, angle, color)
+	var label_at := at - Vector2(7, 10)
+	draw_string(ThemeDB.fallback_font, label_at, "!", HORIZONTAL_ALIGNMENT_CENTER,
+		14.0, 14, Color(1.0, 0.94, 0.78, color.a))

@@ -1187,7 +1187,7 @@ func temple_tier() -> int:
 ## Split out from doing it so the selection card can show the cost and the reason greyed out.
 ## A button that is disabled with no explanation is indistinguishable from a broken one — the
 ## same rule the power bar already follows.
-func upgrade_check(b: Node) -> Dictionary:
+func upgrade_check(b: Node, next_id: StringName = &"") -> Dictionary:
 	var result := {"ok": false, "reason": "", "def": null}
 	if b == null or not is_instance_valid(b) or b.is_site():
 		result["reason"] = tr(&"UPGRADE_NONE")
@@ -1196,7 +1196,11 @@ func upgrade_check(b: Node) -> Dictionary:
 	# Pulled into a typed local first. `b` is a plain Node, so `b.def` arrives as a Variant and
 	# every field read off it goes unchecked — the same trap that bit take_salvage_load.
 	var current: BuildingDef = b.def
-	var next := Buildings.upgrade_for(current.id)
+	var next: BuildingDef = null
+	for option: BuildingDef in Buildings.upgrades_for(current.id):
+		if next_id.is_empty() or option.id == next_id:
+			next = option
+			break
 	if next == null:
 		result["reason"] = tr(&"UPGRADE_NONE")
 		return result
@@ -1232,10 +1236,22 @@ func upgrade_check(b: Node) -> Dictionary:
 	return result
 
 
+## Choice-aware form used by the building card. Each branch preserves its own
+## unlock, population and affordability reason.
+func upgrade_checks(b: Node) -> Array[Dictionary]:
+	var checks: Array[Dictionary] = []
+	if b == null or not is_instance_valid(b) or b.is_site():
+		return checks
+	var current: BuildingDef = b.def
+	for option: BuildingDef in Buildings.upgrades_for(current.id):
+		checks.append(upgrade_check(b, option.id))
+	return checks
+
+
 ## Begin an in-place upgrade. The cost is RESERVED, not spent, exactly as a fresh placement is —
 ## builders then haul it out to the building, which is why upgrading a remote outpost is slow.
-func upgrade_building(b: Node) -> bool:
-	var check := upgrade_check(b)
+func upgrade_building(b: Node, next_id: StringName = &"") -> bool:
+	var check := upgrade_check(b, next_id)
 	if not check["ok"]:
 		return false
 	var next: BuildingDef = check["def"]
@@ -1621,6 +1637,22 @@ func nearest_workplace(building_id: StringName, from: int) -> Node:
 		var score: int = d - (b.production_priority - 1) * 400
 		if score < best_dist:
 			best_dist = score
+			best = b
+	return best
+
+
+## Nearest completed house regardless of whether every formal bed is occupied.
+## Used for phase sheltering: overcrowded villagers may recover slowly, but they do
+## not stand outside the door and offer themselves to monsters.
+func nearest_shelter(from: int) -> Node:
+	var best: Node = null
+	var best_dist := 0x7FFFFFFF
+	for b in buildings:
+		if not is_instance_valid(b) or b.is_site() or b.def.sleep_slots <= 0:
+			continue
+		var d := World.grid.dist_sq(from, b.anchor)
+		if d < best_dist:
+			best_dist = d
 			best = b
 	return best
 

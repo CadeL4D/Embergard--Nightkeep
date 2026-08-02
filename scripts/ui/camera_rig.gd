@@ -36,6 +36,7 @@ var _touch_start_time: float = 0.0
 var _velocity: Vector2 = Vector2.ZERO
 var _pinch_prev_dist: float = 0.0
 var _snap_tween: Tween
+var _focus_tween: Tween
 var _shake_time: float = 0.0
 var _shake_duration: float = 0.0
 var _shake_strength: float = 0.0
@@ -280,3 +281,21 @@ func center_on_cell(cell: int) -> void:
 		return
 	position = World.grid.to_world_index(cell)
 	_clamp_position()
+
+
+## Bring a selected building into a comfortable inspection view. Kept as an
+## explicit card action so ordinary world taps never unexpectedly move the camera.
+func focus_on_rect(world_rect: Rect2) -> void:
+	if world_rect.size.x <= 0.0 or world_rect.size.y <= 0.0:
+		return
+	_velocity = Vector2.ZERO
+	var target_zoom := 2.0
+	var target_position := world_rect.get_center()
+	if _focus_tween and _focus_tween.is_valid():
+		_focus_tween.kill()
+	_focus_tween = create_tween().set_parallel(true)
+	_focus_tween.tween_property(self, "position", target_position,
+		Accessibility.motion_duration(0.18)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_focus_tween.tween_property(self, "zoom", Vector2.ONE * target_zoom,
+		Accessibility.motion_duration(0.18)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_focus_tween.chain().tween_callback(_clamp_position)

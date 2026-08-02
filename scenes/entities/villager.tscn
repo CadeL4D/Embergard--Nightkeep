@@ -7,6 +7,7 @@
 
 [node name="Villager" type="Node2D"]
 script = ExtResource("1_villager")
+max_health = 72.0
 
 [node name="SelectionRing" type="Sprite2D" parent="."]
 visible = false

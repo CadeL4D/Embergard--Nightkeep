@@ -13,6 +13,13 @@ extends CanvasLayer
 
 const JOB_ROW := preload("res://scenes/ui/job_row.tscn")
 const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
+const BOTTOM_MENU_IDS: Array[StringName] = [
+	&"powers", &"jobs", &"build", &"hand", &"library", &"control", &"realm",
+]
+const BOTTOM_MENU_LABELS: Array[StringName] = [
+	&"UI_POWER_UPS", &"UI_JOBS", &"UI_BUILD", &"UI_HAND", &"UI_LIBRARY",
+	&"UI_CONTROL", &"UI_REALM",
+]
 
 @onready var _safe_area: MarginContainer = $SafeArea
 @onready var _resources: Label = $SafeArea/Layout/TopRow/ResourceColumn/ResourceBar/Resources
@@ -65,8 +72,10 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _building_card: PanelContainer = $SafeArea/Layout/BottomRow/BuildingCard
 @onready var _bld_what: Label = $SafeArea/Layout/BottomRow/BuildingCard/Rows/What
 @onready var _bld_detail: Label = $SafeArea/Layout/BottomRow/BuildingCard/Rows/Detail
-@onready var _upgrade_button: Button = \
-	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/UpgradeButton
+@onready var _upgrade_choices: HBoxContainer = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/UpgradeChoices
+@onready var _view_button: Button = \
+	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/ViewButton
 @onready var _demolish_button: Button = \
 	$SafeArea/Layout/BottomRow/BuildingCard/Rows/Actions/DemolishButton
 @onready var _storage_filter: Button = \
@@ -95,6 +104,11 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 @onready var _cancel_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/CancelButton
 @onready var _powers: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/Powers
 @onready var _bottom_buttons: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons
+@onready var _menu_cycle_button: Button = \
+	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton
+@onready var _active_menu_label: Label = \
+	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/ActiveMenu
+@onready var _menu_switcher: MenuSwitcher = $MenuSwitcher
 @onready var _phase_label: Label = $SafeArea/Layout/TopRow/PhaseBar/Row/Phase
 @onready var _pause_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/PauseButton
 @onready var _speed_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/SpeedButton
@@ -133,6 +147,13 @@ var _tap_frame: int = -1
 var _demolish_armed: bool = false
 var _demolish_timer: float = 0.0
 var _management_pause_owned: bool = false
+var _upgrade_widgets: Dictionary = {}
+var _upgrade_key: String = ""
+var _bottom_menu_index: int = 0
+var _menu_touch_index: int = -1
+var _menu_touch_elapsed: float = 0.0
+var _menu_touch_position: Vector2 = Vector2.ZERO
+var _menu_switcher_open: bool = false
 
 
 func _ready() -> void:
@@ -148,6 +169,7 @@ func _ready() -> void:
 	_library_auto.toggled.connect(Divine.set_library_auto_manage)
 	_control_button.toggled.connect(_on_control_toggled)
 	_realm_button.pressed.connect(_on_realm)
+	_menu_cycle_button.gui_input.connect(_on_menu_cycle_input)
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(_on_cancel)
 	Events.resources_changed.connect(_on_resources_changed)
@@ -187,7 +209,7 @@ func _ready() -> void:
 	_menu_button.pressed.connect(_on_menu_pressed)
 	Events.speed_changed.connect(_on_speed_changed)
 
-	_upgrade_button.pressed.connect(_on_upgrade)
+	_view_button.pressed.connect(_on_view_building)
 	_demolish_button.pressed.connect(_on_demolish)
 	_storage_filter.pressed.connect(_on_storage_filter)
 	_storage_priority.pressed.connect(_on_storage_priority)
@@ -234,6 +256,7 @@ func _ready() -> void:
 	_build_powers()
 	_rebuild_library()
 	_refresh()
+	_activate_bottom_menu(0)
 
 
 # --- Layout ------------------------------------------------------------------------
@@ -252,17 +275,13 @@ func _on_accessibility_changed(kind: StringName) -> void:
 func _apply_handedness() -> void:
 	if _bottom_buttons == null:
 		return
-	var right_handed: Array[Control] = [
-		_powers, _jobs_button, _build_button, _hand_button, _library_button,
-		_control_button, _realm_button,
+	# The launcher is intentionally fixed in the bottom-left corner. Handedness still
+	# applies to world gestures, but moving the one persistent navigation anchor
+	# would make the tap/hold interaction impossible to learn by muscle memory.
+	var order: Array[Control] = [
+		_menu_cycle_button, _active_menu_label, _powers, _jobs_button, _build_button,
+		_hand_button, _library_button, _control_button, _realm_button,
 	]
-	var left_handed: Array[Control] = [
-		_realm_button, _control_button, _library_button, _hand_button, _build_button,
-		_jobs_button, _powers,
-	]
-	var order := left_handed \
-		if Accessibility.handedness == Accessibility.Handedness.LEFT \
-		else right_handed
 	for index in order.size():
 		_bottom_buttons.move_child(order[index], index)
 
@@ -503,11 +522,11 @@ func _on_roster_changed(_arg: Variant = null) -> void:
 # Where upgrading and demolishing live, because there is nowhere else they could: both are verbs
 # aimed at one specific structure, and the build menu is for things that do not exist yet.
 
-func _on_upgrade() -> void:
+func _on_upgrade_to(next_id: StringName) -> void:
 	var b: Building = _god_hand.selected_building if _god_hand != null else null
 	if b == null or not is_instance_valid(b):
 		return
-	if Colony.upgrade_building(b):
+	if Colony.upgrade_building(b, next_id):
 		# The building is a construction site now, not something with actions on it. Dropping the
 		# selection also closes the card, which is the honest thing to do — leaving an Upgrade
 		# button live over a half-built Great Hall invites a second press that cannot work.
@@ -535,6 +554,15 @@ func _on_demolish() -> void:
 	if Colony.demolish_building(b):
 		_god_hand.clear_building_selection()
 	_refresh_building_card()
+
+
+func _on_view_building() -> void:
+	var b: Building = _god_hand.selected_building if _god_hand != null else null
+	if b == null or not is_instance_valid(b):
+		return
+	var camera := get_node_or_null("../CameraRig")
+	if camera != null and camera.has_method("focus_on_rect"):
+		camera.focus_on_rect(b.world_rect())
 
 
 func _refresh_building_card() -> void:
@@ -596,19 +624,11 @@ func _refresh_building_card() -> void:
 				L10n.resource(def.ammo_kind)])
 		if def.faith_upkeep > 0.0:
 			_bld_detail.text += L10n.t(&"BLD_FAITH_UPKEEP", [def.faith_upkeep])
+		if def.sleep_slots > 0:
+			_bld_detail.text += L10n.t(&"BLD_HOUSING", [def.sleep_slots,
+				int(round(def.sleep_recovery_multiplier * 100.0))])
 
-	var check := Colony.upgrade_check(b)
-	var next: BuildingDef = check["def"]
-	_upgrade_button.visible = next != null
-	if next != null:
-		_upgrade_button.disabled = not check["ok"]
-		_upgrade_button.text = L10n.t(&"UI_UPGRADE_TO", [tr(next.display_name)])
-		# The REASON goes in the tooltip and, when it is the blocker, into the detail line — a
-		# disabled button that will not say why is the thing this codebase already refuses to ship
-		# in the power bar.
-		_upgrade_button.tooltip_text = check["reason"]
-		if not check["ok"] and not b.is_site():
-			_bld_detail.text = check["reason"]
+	_refresh_upgrade_choices(b)
 
 	# Nothing to tear down on a site that is already coming apart, and never on the Village Center —
 	# see Colony.can_demolish.
@@ -617,6 +637,42 @@ func _refresh_building_card() -> void:
 		_demolish_button.text = tr(&"UI_DISMISS_CONFIRM" if _demolish_armed else &"UI_DISMISS")
 	else:
 		_demolish_button.text = tr(&"UI_DEMOLISH_CONFIRM" if _demolish_armed else &"UI_DEMOLISH")
+
+
+func _refresh_upgrade_choices(b: Building) -> void:
+	var checks := Colony.upgrade_checks(b)
+	var ids := PackedStringArray()
+	for check: Dictionary in checks:
+		var option: BuildingDef = check["def"]
+		if option != null:
+			ids.append(String(option.id))
+	var key := ",".join(ids)
+	if key != _upgrade_key:
+		_upgrade_key = key
+		for child in _upgrade_choices.get_children():
+			_upgrade_choices.remove_child(child)
+			child.queue_free()
+		_upgrade_widgets.clear()
+		for check: Dictionary in checks:
+			var option: BuildingDef = check["def"]
+			if option == null:
+				continue
+			var button := Button.new()
+			button.custom_minimum_size = Vector2(112, 24)
+			button.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
+			button.pressed.connect(_on_upgrade_to.bind(option.id))
+			_upgrade_choices.add_child(button)
+			_upgrade_widgets[option.id] = button
+
+	_upgrade_choices.visible = not checks.is_empty()
+	for check: Dictionary in checks:
+		var option: BuildingDef = check["def"]
+		if option == null or not _upgrade_widgets.has(option.id):
+			continue
+		var button: Button = _upgrade_widgets[option.id]
+		button.disabled = not bool(check["ok"])
+		button.text = L10n.t(&"UI_UPGRADE_TO", [tr(option.display_name)])
+		button.tooltip_text = "%s\n%s" % [tr(option.description), String(check["reason"])]
 
 
 func _on_storage_filter() -> void:
@@ -1042,6 +1098,16 @@ func _process(delta: float) -> void:
 	# 4 Hz, not per frame. A per-frame rebuild of these strings shows up in the
 	# profiler as the UI's own cost while you are trying to profile the sim.
 
+	if _menu_touch_index != -1 and not _menu_switcher_open:
+		_menu_touch_elapsed += delta
+		if _menu_touch_elapsed >= Accessibility.hold_duration:
+			_menu_switcher_open = true
+			var labels := PackedStringArray()
+			for key: StringName in BOTTOM_MENU_LABELS:
+				labels.append(tr(key))
+			_menu_switcher.open(labels, _menu_cycle_button.get_global_rect().get_center())
+			_menu_switcher.update_pointer(_menu_touch_position)
+
 	if _demolish_armed:
 		_demolish_timer -= delta
 		if _demolish_timer <= 0.0:
@@ -1077,6 +1143,85 @@ func _process(delta: float) -> void:
 			Divine.tome_capacity()])
 
 
+func _on_menu_cycle_input(event: InputEvent) -> void:
+	if not event is InputEventScreenTouch:
+		return
+	var touch := event as InputEventScreenTouch
+	if not touch.pressed or _menu_touch_index != -1:
+		return
+	_menu_touch_index = touch.index
+	_menu_touch_elapsed = 0.0
+	_menu_touch_position = touch.position
+	_menu_switcher_open = false
+	_menu_cycle_button.accept_event()
+
+
+func _input(event: InputEvent) -> void:
+	if _menu_touch_index == -1:
+		return
+	if event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if drag.index != _menu_touch_index:
+			return
+		_menu_touch_position = drag.position
+		if _menu_switcher_open:
+			_menu_switcher.update_pointer(drag.position)
+	elif event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.index != _menu_touch_index or touch.pressed:
+			return
+		_menu_touch_position = touch.position
+		if _menu_switcher_open:
+			_menu_switcher.update_pointer(touch.position)
+			var picked := _menu_switcher.finish()
+			if picked >= 0:
+				_activate_bottom_menu(picked)
+		else:
+			_activate_bottom_menu((_bottom_menu_index + 1) % BOTTOM_MENU_IDS.size())
+		_menu_touch_index = -1
+		_menu_touch_elapsed = 0.0
+		_menu_switcher_open = false
+
+
+func _activate_bottom_menu(index: int) -> void:
+	if BOTTOM_MENU_IDS.is_empty():
+		return
+	_bottom_menu_index = posmod(index, BOTTOM_MENU_IDS.size())
+	# Close every mutually exclusive surface through its normal handler, so paint,
+	# placement, management-pause ownership and Hand mode all clean up correctly.
+	_jobs_button.set_pressed_no_signal(false)
+	_build_button.set_pressed_no_signal(false)
+	_hand_button.set_pressed_no_signal(false)
+	_library_button.set_pressed_no_signal(false)
+	_control_button.set_pressed_no_signal(false)
+	_on_jobs_toggled(false)
+	_on_build_toggled(false)
+	_on_hand_toggled(false)
+	_on_library_toggled(false)
+	_on_control_toggled(false)
+	_powers.visible = false
+
+	match BOTTOM_MENU_IDS[_bottom_menu_index]:
+		&"powers":
+			_powers.visible = true
+		&"jobs":
+			_jobs_button.set_pressed_no_signal(true)
+			_on_jobs_toggled(true)
+		&"build":
+			_build_button.set_pressed_no_signal(true)
+			_on_build_toggled(true)
+		&"hand":
+			_hand_button.set_pressed_no_signal(true)
+			_on_hand_toggled(true)
+		&"library":
+			_library_button.set_pressed_no_signal(true)
+			_on_library_toggled(true)
+		&"control":
+			_control_button.set_pressed_no_signal(true)
+			_on_control_toggled(true)
+		&"realm":
+			_on_realm()
+	_active_menu_label.text = tr(BOTTOM_MENU_LABELS[_bottom_menu_index])
 ## The phase clock is the game's spine, and at dusk it becomes the most important
 ## thing on screen — the countdown is what turns "it is getting dark" into a
 ## scramble.
@@ -1213,21 +1358,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed(&"game_speed"):
 		Sim.cycle_speed()
 	elif event.is_action_pressed(&"game_jobs"):
-		_jobs_button.button_pressed = not _jobs_button.button_pressed
+		_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"jobs"))
 	elif event.is_action_pressed(&"game_build"):
-		_build_button.button_pressed = not _build_button.button_pressed
+		_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"build"))
 	elif event.is_action_pressed(&"game_realm"):
-		_on_realm()
+		_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"realm"))
 	elif event.is_action_pressed(&"game_cancel"):
 		if _placement != null and _placement.active:
 			_placement.cancel()
 		elif DefenseControl.gather_job != &"":
 			DefenseControl.cancel_gather_paint()
 		else:
-			_jobs_button.button_pressed = false
-			_build_button.button_pressed = false
-			_control_button.button_pressed = false
 			_breakdown.visible = false
+			_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"powers"))
 	else:
 		return
 	get_viewport().set_input_as_handled()
@@ -1266,7 +1409,8 @@ func _refresh_selection() -> void:
 	if not gear.is_empty():
 		_sel_doing.text += L10n.t(&"SELECT_EQUIPMENT", [", ".join(gear)])
 	_sel_needs.text = L10n.t(&"SELECT_NEEDS",
-		[int(who.food), int(who.water), int(who.rest), int(who.mood)])
+		[int(who.health), int(who.max_health), int(who.food), int(who.water),
+			int(who.rest), int(who.mood)])
 	_equipment_policy.visible = who.is_adult()
 	_equipment_policy.text = tr({
 		&"best_available": &"EQUIP_BEST",
@@ -1275,7 +1419,8 @@ func _refresh_selection() -> void:
 	}.get(who.profile.equipment_policy, &"EQUIP_BEST"))
 	# Colour the needs line by its worst value, so a starving villager is visible without
 	# the player having to read four numbers.
-	var worst: float = minf(minf(who.food, who.water), who.rest)
+	var health_percent := who.health / maxf(who.max_health, 1.0) * 100.0
+	var worst: float = minf(minf(minf(who.food, who.water), who.rest), health_percent)
 	var tint := UiPalette.TEXT_DIM
 	if worst <= Villager.HUNGER_URGENT:
 		tint = UiPalette.DANGER if worst <= 15.0 else UiPalette.WARN

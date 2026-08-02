@@ -18,6 +18,8 @@ func _ready() -> void:
 	Sim.set_paused(true)
 	_test_camera(run.get_node("CameraRig"))
 	_test_drawer_exclusivity(run.get_node("Hud"))
+	_test_bottom_menu(run.get_node("Hud"))
+	_test_house_branches()
 	_test_hand(run.get_node("GodHand"))
 	_test_line_placement(run.get_node("PlacementController"))
 	_test_accessibility()
@@ -85,6 +87,43 @@ func _test_drawer_exclusivity(hud: CanvasLayer) -> void:
 	_expect(build_panel.visible and not job_panel.visible,
 		"opening one thumb drawer closes the previous drawer")
 	build.button_pressed = false
+
+
+func _test_bottom_menu(hud: CanvasLayer) -> void:
+	hud._activate_bottom_menu(0)
+	var launcher: Button = hud.get_node(
+		"SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton")
+	var start := launcher.get_global_rect().get_center()
+	hud._on_menu_cycle_input(_touch(7, start, true))
+	hud._input(_touch(7, start, false))
+	_expect(hud._bottom_menu_index == 1 \
+		and hud.get_node("SafeArea/Layout/BottomRow/JobPanel").visible,
+		"tapping the bottom-left launcher cycles to the next menu")
+
+	hud._activate_bottom_menu(0)
+	hud._on_menu_cycle_input(_touch(8, start, true))
+	hud._menu_touch_elapsed = Accessibility.hold_duration
+	hud._process(0.01)
+	var switcher: MenuSwitcher = hud.get_node("MenuSwitcher")
+	var library_index: int = hud.BOTTOM_MENU_IDS.find(&"library")
+	var target: Vector2 = switcher._rects[library_index].get_center()
+	hud._input(_drag(8, target, target - start))
+	hud._input(_touch(8, target, false))
+	_expect(hud._bottom_menu_index == library_index \
+		and hud.get_node("SafeArea/Layout/BottomRow/LibraryPanel").visible,
+		"holding and dragging the launcher opens the chosen menu")
+	hud._activate_bottom_menu(0)
+
+
+func _test_house_branches() -> void:
+	var options := Buildings.upgrades_for(&"hut")
+	var longhouse := Buildings.get_building(&"longhouse")
+	var warden := Buildings.get_building(&"warden_house")
+	_expect(options.size() >= 2 and longhouse in options and warden in options,
+		"a hut exposes both housing upgrade branches")
+	_expect(longhouse.sleep_slots > warden.sleep_slots \
+		and warden.sleep_recovery_multiplier > longhouse.sleep_recovery_multiplier,
+		"housing branches trade more capacity for faster rest recovery")
 
 
 func _test_hand(hand: Node) -> void:

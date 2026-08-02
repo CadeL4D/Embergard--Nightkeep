@@ -63,16 +63,23 @@ static func unlocked_in_run(def: BuildingDef) -> bool:
 	return def.tier <= Colony.center_tier() and def.min_population <= Colony.population()
 
 
-## The definition that upgrades in place from `id`, or null. At most one per building by
-## convention — a branching upgrade tree would need the player to choose, which is a whole
-## second UI for very little.
-static func upgrade_for(id: StringName) -> BuildingDef:
+## Every definition that upgrades in place from `id`, kept in authored menu order.
+## Housing uses this to offer capacity and recovery branches from the same hut.
+static func upgrades_for(id: StringName) -> Array[BuildingDef]:
+	var out: Array[BuildingDef] = []
 	if id.is_empty():
-		return null
+		return out
 	for def: BuildingDef in all():
 		if def.upgrades_from == id:
-			return def
-	return null
+			out.append(def)
+	return out
+
+
+## Compatibility helper for systems that only need to know whether any next tier
+## exists. Choice-aware callers should use upgrades_for().
+static func upgrade_for(id: StringName) -> BuildingDef:
+	var options := upgrades_for(id)
+	return options[0] if not options.is_empty() else null
 
 
 ## Tab names in menu order, derived from the content rather than declared.

@@ -430,6 +430,14 @@ func centre_position() -> Vector2:
 	return World.grid.to_world_index(centre_cell())
 
 
+## Exact world-space footprint. Shared by forgiving touch picking, the selection
+## outline and the camera's inspect action so all three agree on what the player
+## is looking at.
+func world_rect() -> Rect2:
+	var top_left := World.grid.to_world_index(anchor) - Vector2.ONE * Grid.TILE_SIZE * 0.5
+	return Rect2(top_left, Vector2(def.tile_size()))
+
+
 # --- Physical inventory -----------------------------------------------------------------
 
 func inventory_used() -> int:

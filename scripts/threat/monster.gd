@@ -222,7 +222,7 @@ func _find_target() -> Node:
 	var best: Node = null
 	var best_dist := reach_sq
 	for v in Colony.villagers:
-		if not is_instance_valid(v) or not v.alive:
+		if not is_instance_valid(v) or not v.alive or v.is_sheltered():
 			continue
 		var d := position.distance_squared_to(v.position)
 		if d <= best_dist:
