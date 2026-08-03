@@ -48,6 +48,15 @@ var _shake_phase: float = 0.0
 func _ready() -> void:
 	zoom = Vector2(DEFAULT_ZOOM, DEFAULT_ZOOM)
 	make_current()
+	# A tool can be closed by Done, another menu, or a keyboard shortcut while one
+	# or both map fingers are still down. Those releases then belong to the Control
+	# that replaced the tool and never reach this node, leaving ghost touches which
+	# poison every later pan and pinch. Tool boundaries are gesture boundaries.
+	DefenseControl.gather_mode_changed.connect(
+		func(_job: StringName, _erasing: bool, _radius: int) -> void:
+			_reset_touch_gesture())
+	DefenseControl.paint_mode_changed.connect(
+		func(_mode: int) -> void: _reset_touch_gesture())
 	Events.breach_detected.connect(func(_where: Vector2) -> void: shake(3.0, 0.22))
 	Events.building_destroyed.connect(func(_building: Node) -> void: shake(5.0, 0.34))
 	Events.monster_spawned.connect(func(monster: Node) -> void:
@@ -141,6 +150,7 @@ func _handle_wheel(event: InputEventMouseButton) -> void:
 
 func _handle_touch(event: InputEventScreenTouch) -> void:
 	if event.pressed:
+		_begin_direct_gesture()
 		_touches[event.index] = event.position
 		if _touches.size() == 1:
 			_touch_start = event.position
@@ -207,6 +217,7 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 ## a second finger arrives.
 func _handle_paint_touch(event: InputEventScreenTouch) -> void:
 	if event.pressed:
+		_begin_direct_gesture()
 		_touches[event.index] = event.position
 		_velocity = Vector2.ZERO
 		if _touches.size() >= 2:
@@ -267,6 +278,29 @@ func _apply_pinch() -> void:
 	var world_after := _screen_to_world(midpoint)
 	position += world_before - world_after
 	_clamp_position()
+
+
+## A fresh physical gesture owns the camera immediately. In particular, a zoom
+## snap or building-focus tween from the previous action must not keep writing the
+## same properties while the player's fingers are trying to move them.
+func _begin_direct_gesture() -> void:
+	if _snap_tween and _snap_tween.is_valid():
+		_snap_tween.kill()
+	if _focus_tween and _focus_tween.is_valid():
+		_focus_tween.kill()
+
+
+func _reset_touch_gesture() -> void:
+	_touches.clear()
+	_state = State.NONE
+	_velocity = Vector2.ZERO
+	_pinch_prev_dist = 0.0
+	_pinch_prev_midpoint = Vector2.ZERO
+	_paint_navigation = false
+	_touch_start = Vector2.ZERO
+	_touch_start_time = 0.0
+	if _snap_tween and _snap_tween.is_valid():
+		_snap_tween.kill()
 
 
 ## Snap to a curated set of zooms on release, tweened. Whole numbers made the

@@ -16,7 +16,9 @@ func _ready() -> void:
 	for _frame in 5:
 		await get_tree().process_frame
 	Sim.set_paused(true)
-	_test_camera(run.get_node("CameraRig"))
+	var camera: Camera2D = run.get_node("CameraRig")
+	_test_camera(camera)
+	await _test_camera_input_route(camera)
 	_test_drawer_exclusivity(run.get_node("Hud"))
 	_test_bottom_menu(run.get_node("Hud"))
 	_test_house_branches()
@@ -89,6 +91,63 @@ func _test_camera(camera: Camera2D) -> void:
 	camera._handle_paint_touch(_touch(3, Vector2(380, 170), false))
 	camera._handle_paint_touch(_touch(2, Vector2(350, 190), false))
 	DefenseControl.cancel_gather_paint()
+
+	# Closing a brush can route the physical releases into the newly exposed UI.
+	# The next ordinary gesture must not inherit those ghost fingers.
+	DefenseControl.select_gather_mode(&"woodcutting")
+	camera._handle_paint_touch(_touch(4, Vector2(280, 170), true))
+	camera._handle_paint_touch(_touch(5, Vector2(380, 170), true))
+	DefenseControl.cancel_gather_paint()
+	_expect(camera._touches.is_empty() and camera._state == camera.State.NONE,
+		"closing territory mode clears an interrupted two-finger gesture")
+	var recovered_start := camera.position
+	camera._handle_touch(_touch(6, Vector2(300, 180), true))
+	camera._handle_drag(_drag(6, Vector2(350, 180), Vector2(50, 0)))
+	camera._handle_touch(_touch(6, Vector2(350, 180), false))
+	_expect(not camera.position.is_equal_approx(recovered_start),
+		"ordinary map pan recovers immediately after territory mode closes")
+
+
+## Exercise the Viewport route as well as the handler methods above. A Control or
+## another world-input node can consume a real gesture before CameraRig sees it,
+## which direct method calls cannot detect.
+func _test_camera_input_route(camera: Camera2D) -> void:
+	DefenseControl.cancel_gather_paint()
+	DefenseControl.cancel_paint()
+	camera._touches.clear()
+	camera._state = camera.State.NONE
+	camera.center_on_cell(World.keep_cell)
+	var pan_before := camera.position
+	Input.parse_input_event(_touch(10, Vector2(400, 180), true))
+	Input.parse_input_event(_drag(10, Vector2(460, 180), Vector2(60, 0)))
+	Input.parse_input_event(_touch(10, Vector2(460, 180), false))
+	await get_tree().process_frame
+	_expect(not camera.position.is_equal_approx(pan_before),
+		"a real routed one-finger gesture reaches the camera")
+
+	camera._touches.clear()
+	camera._state = camera.State.NONE
+	camera.zoom = Vector2.ONE
+	var zoom_before := camera.zoom.x
+	Input.parse_input_event(_touch(11, Vector2(340, 180), true))
+	Input.parse_input_event(_touch(12, Vector2(460, 180), true))
+	Input.parse_input_event(_drag(12, Vector2(520, 180), Vector2(60, 0)))
+	Input.parse_input_event(_touch(12, Vector2(520, 180), false))
+	Input.parse_input_event(_touch(11, Vector2(340, 180), false))
+	await get_tree().process_frame
+	_expect(not is_equal_approx(camera.zoom.x, zoom_before),
+		"a real routed two-finger gesture reaches the camera")
+
+	camera._touches.clear()
+	camera._state = camera.State.NONE
+	camera.center_on_cell(World.keep_cell)
+	pan_before = camera.position
+	Input.parse_input_event(_mouse_button(Vector2(400, 180), true))
+	Input.parse_input_event(_mouse_motion(Vector2(460, 180), Vector2(60, 0)))
+	Input.parse_input_event(_mouse_button(Vector2(460, 180), false))
+	await get_tree().process_frame
+	_expect(not camera.position.is_equal_approx(pan_before),
+		"a real routed desktop drag pans the camera")
 
 
 func _test_drawer_exclusivity(hud: CanvasLayer) -> void:
@@ -182,6 +241,23 @@ func _drag(index: int, position: Vector2, relative: Vector2) -> InputEventScreen
 	event.position = position
 	event.relative = relative
 	event.velocity = relative * 30.0
+	return event
+
+
+func _mouse_button(position: Vector2, pressed: bool) -> InputEventMouseButton:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = position
+	event.pressed = pressed
+	return event
+
+
+func _mouse_motion(position: Vector2, relative: Vector2) -> InputEventMouseMotion:
+	var event := InputEventMouseMotion.new()
+	event.position = position
+	event.relative = relative
+	event.velocity = relative * 30.0
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT
 	return event
 
 
