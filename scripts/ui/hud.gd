@@ -55,10 +55,18 @@ const BOTTOM_MENU_LABELS: Array[StringName] = [
 @onready var _cleanse_button: Button = \
 	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Cleanse
 @onready var _job_panel: PanelContainer = $SafeArea/Layout/BottomRow/JobPanel
+@onready var _job_hint: Label = $SafeArea/Layout/BottomRow/JobPanel/Layout/Hint
+@onready var _harvest_areas: Button = \
+	$SafeArea/Layout/BottomRow/JobPanel/Layout/Header/HarvestAreas
+@onready var _workers_available: Label = \
+	$SafeArea/Layout/BottomRow/JobPanel/Layout/Header/Workers
 @onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll/Rows
 @onready var _gather_bar: PanelContainer = $SafeArea/Layout/BottomRow/GatherBar
 @onready var _gather_done: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/DoneButton
 @onready var _gather_status: Label = $SafeArea/Layout/BottomRow/GatherBar/Row/Status
+@onready var _gather_wood: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/WoodButton
+@onready var _gather_stone: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/StoneButton
+@onready var _gather_berries: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/BerriesButton
 @onready var _gather_radius_minus: Button = \
 	$SafeArea/Layout/BottomRow/GatherBar/Row/RadiusMinus
 @onready var _gather_radius_label: Label = $SafeArea/Layout/BottomRow/GatherBar/Row/Radius
@@ -109,8 +117,8 @@ const BOTTOM_MENU_LABELS: Array[StringName] = [
 	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton
 @onready var _bottom_menu_button: Button = \
 	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BottomMenuButton
+@onready var _menu_switcher: MenuSwitcher = $MenuSwitcher
 @onready var _phase_label: Label = $SafeArea/Layout/TopRow/PhaseBar/Row/Phase
-@onready var _pause_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/PauseButton
 @onready var _speed_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/SpeedButton
 @onready var _menu_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/MenuButton
 @onready var _migrant_prompt: PanelContainer = $SafeArea/Layout/MigrantPrompt
@@ -151,10 +159,29 @@ var _management_pause_suppressed: bool = false
 var _upgrade_widgets: Dictionary = {}
 var _upgrade_key: String = ""
 var _bottom_menu_index: int = 0
+var _menu_touch_index: int = -1
+var _menu_touch_elapsed: float = 0.0
+var _menu_touch_position: Vector2 = Vector2.ZERO
+var _menu_switcher_open: bool = false
+var _power_hold_button: Button = null
+var _power_hold_def: PowerDef = null
+var _power_hold_elapsed: float = 0.0
+var _power_hold_shown: bool = false
+var _power_hold_suppressed: Button = null
+var _status_sample_tick: int = -1
+var _last_water_sample: float = 0.0
+var _last_mood_sample: float = 0.0
+var _water_rate: float = 0.0
+var _mood_rate: float = 0.0
 
 
 func _ready() -> void:
 	_apply_safe_area()
+	_harvest_areas.text = tr(&"GATHER_AREAS")
+	_gather_wood.text = tr(&"GATHER_WOOD")
+	_gather_stone.text = tr(&"GATHER_STONE")
+	_gather_berries.text = tr(&"GATHER_BERRIES")
+	_gather_erase.text = tr(&"GATHER_REMOVE")
 	get_tree().root.size_changed.connect(_apply_safe_area)
 	Accessibility.changed.connect(_on_accessibility_changed)
 	_apply_handedness()
@@ -166,7 +193,7 @@ func _ready() -> void:
 	_library_auto.toggled.connect(Divine.set_library_auto_manage)
 	_control_button.toggled.connect(_on_control_toggled)
 	_realm_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"realm")))
-	_menu_cycle_button.pressed.connect(_on_menu_cycle_pressed)
+	_menu_cycle_button.gui_input.connect(_on_menu_cycle_input)
 	_bottom_menu_button.pressed.connect(_on_bottom_menu_pressed)
 	_jobs_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"jobs")))
 	_build_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"build")))
@@ -207,7 +234,6 @@ func _ready() -> void:
 	Events.migrants_arrived.connect(_on_migrants_arrived)
 	Events.migrants_resolved.connect(_on_migrants_resolved)
 
-	_pause_button.toggled.connect(_on_pause_toggled)
 	_speed_button.pressed.connect(_on_speed_pressed)
 	_menu_button.pressed.connect(_on_menu_pressed)
 	Events.speed_changed.connect(_on_speed_changed)
@@ -234,6 +260,10 @@ func _ready() -> void:
 	_dusk_button.pressed.connect(DefenseControl.toggle_dusk_lock)
 	_cleanse_button.pressed.connect(DefenseControl.start_cleanse)
 	_gather_done.pressed.connect(DefenseControl.cancel_gather_paint)
+	_harvest_areas.pressed.connect(_on_harvest_areas)
+	_gather_wood.pressed.connect(_select_harvest_job.bind(&"woodcutting"))
+	_gather_stone.pressed.connect(_select_harvest_job.bind(&"quarrying"))
+	_gather_berries.pressed.connect(_select_harvest_job.bind(&"foraging"))
 	_gather_radius_minus.pressed.connect(DefenseControl.adjust_gather_radius.bind(-1))
 	_gather_radius_plus.pressed.connect(DefenseControl.adjust_gather_radius.bind(1))
 	_gather_paint.pressed.connect(DefenseControl.set_gather_erasing.bind(false))
@@ -336,10 +366,10 @@ func _build_rows() -> void:
 		swatch.color = job.color
 		name_label.text = tr(job.display_name)
 		name_label.add_theme_color_override("font_color", job.color)
-		area_button.visible = not job.target_features.is_empty()
-		area_button.tooltip_text = L10n.t(&"GATHER_AREA_TOOLTIP", [tr(job.display_name)])
-		if area_button.visible:
-			area_button.pressed.connect(_on_gather_area.bind(job.id))
+		# Harvest designations now have one clear entry point at the top of the
+		# board. Per-row Area buttons made basic and advanced jobs look like they
+		# owned unrelated territories even when they harvested the same resource.
+		area_button.visible = false
 		slider.value = Colony.quota_of(job.id)
 		slider.value_changed.connect(_on_slider_changed.bind(job.id))
 		minus_button.pressed.connect(_nudge_job.bind(job.id, -1))
@@ -388,6 +418,17 @@ func _on_gather_area(job_id: StringName) -> void:
 	DefenseControl.set_gather_mode(job_id)
 
 
+func _on_harvest_areas() -> void:
+	DefenseControl.select_gather_mode(&"woodcutting")
+
+
+func _select_harvest_job(job_id: StringName) -> void:
+	if DefenseControl.gather_job == job_id:
+		DefenseControl.set_gather_erasing(false)
+	else:
+		DefenseControl.select_gather_mode(job_id)
+
+
 func _on_gather_mode_changed(job_id: StringName, erasing: bool, radius: int) -> void:
 	if not is_node_ready():
 		return
@@ -416,6 +457,9 @@ func _on_gather_mode_changed(job_id: StringName, erasing: bool, radius: int) -> 
 	_gather_radius_plus.disabled = radius >= DefenseControl.GATHER_RADIUS_MAX
 	_gather_paint.set_pressed_no_signal(not erasing)
 	_gather_erase.set_pressed_no_signal(erasing)
+	_gather_wood.set_pressed_no_signal(job_id == &"woodcutting" and not erasing)
+	_gather_stone.set_pressed_no_signal(job_id == &"quarrying" and not erasing)
+	_gather_berries.set_pressed_no_signal(job_id == &"foraging" and not erasing)
 
 
 # --- Build menu ------------------------------------------------------------------------
@@ -1040,13 +1084,46 @@ func _build_powers() -> void:
 		button.tooltip_text = tr(def.description)
 		button.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
 		button.add_theme_color_override("font_color", def.color)
-		button.pressed.connect(_on_power_pressed.bind(def))
+		button.button_down.connect(_on_power_hold_started.bind(def, button))
+		button.button_up.connect(_on_power_hold_released.bind(button))
+		button.pressed.connect(_on_power_pressed.bind(def, button))
 		_powers.add_child(button)
 		_power_widgets[def.id] = button
 
 
-func _on_power_pressed(def: PowerDef) -> void:
+func _on_power_hold_started(def: PowerDef, button: Button) -> void:
+	_power_hold_button = button
+	_power_hold_def = def
+	_power_hold_elapsed = 0.0
+	_power_hold_shown = false
+	_power_hold_suppressed = null
+
+
+func _on_power_hold_released(button: Button) -> void:
+	if _power_hold_button != button:
+		return
+	_power_hold_button = null
+	_power_hold_def = null
+	_power_hold_elapsed = 0.0
+
+
+func _on_power_pressed(def: PowerDef, button: Button = null) -> void:
+	if button != null and _power_hold_suppressed == button:
+		_power_hold_suppressed = null
+		_power_hold_shown = false
+		return
 	if _god_hand == null:
+		return
+	if not Divine.power_active(def):
+		Events.notice.emit(L10n.t(&"POWER_NO_TEMPLE", [tr(def.display_name)]), 1)
+		return
+	var cooldown := Divine.cooldown_of(def.id)
+	if cooldown > 0.0:
+		Events.notice.emit(L10n.t(&"POWER_ON_COOLDOWN", [
+			tr(def.display_name), int(ceilf(cooldown))]), 1)
+		return
+	if Divine.faith < def.faith_cost:
+		Events.notice.emit(L10n.t(&"POWER_NEED_FAITH", [int(def.faith_cost)]), 1)
 		return
 	# Arming a power closes the build and job panels: all three want the bottom of
 	# the screen, and the tap that arms a power must not also land on a menu.
@@ -1076,13 +1153,17 @@ func _refresh_powers() -> void:
 			# Taken up, but its Temple has fallen. Said plainly rather than left greyed: the player
 			# needs to know their Sanctum going down is why Dawnbreak stopped working.
 			button.text = L10n.t(&"POWER_NO_TEMPLE", [tr(def.display_name)])
-			button.disabled = true
+			button.disabled = false
+			button.modulate = Color(1, 1, 1, 0.55)
 		elif cd > 0.0:
 			button.text = L10n.t(&"POWER_ON_COOLDOWN", [tr(def.display_name), int(ceilf(cd))])
-			button.disabled = true
+			button.disabled = false
+			button.modulate = Color(1, 1, 1, 0.55)
 		else:
 			button.text = L10n.t(&"POWER_COST", [tr(def.display_name), int(def.faith_cost)])
-			button.disabled = Divine.faith < def.faith_cost
+			button.disabled = false
+			button.modulate = Color.WHITE if Divine.faith >= def.faith_cost \
+				else Color(1, 1, 1, 0.55)
 
 
 ## Grey out anything the colony cannot currently pay for. Showing the card but
@@ -1145,6 +1226,23 @@ func _process(delta: float) -> void:
 	# 4 Hz, not per frame. A per-frame rebuild of these strings shows up in the
 	# profiler as the UI's own cost while you are trying to profile the sim.
 
+	if _menu_touch_index != -1 and not _menu_switcher_open:
+		_menu_touch_elapsed += delta
+		if _menu_touch_elapsed >= Accessibility.hold_duration:
+			_menu_switcher_open = true
+			var labels := PackedStringArray()
+			for key in BOTTOM_MENU_LABELS:
+				labels.append(tr(key))
+			_menu_switcher.open(labels, _menu_cycle_button.get_global_rect().get_center())
+			_menu_switcher.update_pointer(_menu_touch_position)
+	if _power_hold_button != null and not _power_hold_shown:
+		_power_hold_elapsed += delta
+		if _power_hold_elapsed >= Accessibility.hold_duration:
+			_power_hold_shown = true
+			_power_hold_suppressed = _power_hold_button
+			Events.notice.emit("%s — %s" % [
+				tr(_power_hold_def.display_name), tr(_power_hold_def.description)], 0)
+
 	if _demolish_armed:
 		_demolish_timer -= delta
 		if _demolish_timer <= 0.0:
@@ -1181,6 +1279,71 @@ func _process(delta: float) -> void:
 
 func _on_menu_cycle_pressed() -> void:
 	_select_bottom_menu((_bottom_menu_index + 1) % BOTTOM_MENU_IDS.size())
+
+
+func _on_menu_cycle_input(event: InputEvent) -> void:
+	var pressed := false
+	var released := false
+	var index := -1
+	var point := Vector2.ZERO
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		pressed = touch.pressed
+		released = not touch.pressed
+		index = touch.index
+		point = touch.position
+	elif event is InputEventMouseButton:
+		var mouse := event as InputEventMouseButton
+		if mouse.button_index != MOUSE_BUTTON_LEFT:
+			return
+		pressed = mouse.pressed
+		released = not mouse.pressed
+		index = -2
+		point = mouse.position
+	else:
+		return
+	if pressed and _menu_touch_index == -1:
+		_menu_touch_index = index
+		_menu_touch_elapsed = 0.0
+		_menu_touch_position = point
+		_menu_switcher_open = false
+		_menu_cycle_button.accept_event()
+	elif released and index == _menu_touch_index:
+		_finish_menu_gesture(point)
+
+
+func _input(event: InputEvent) -> void:
+	if _menu_touch_index == -1:
+		return
+	if event is InputEventScreenDrag and (event as InputEventScreenDrag).index == _menu_touch_index:
+		_menu_touch_position = (event as InputEventScreenDrag).position
+		if _menu_switcher_open:
+			_menu_switcher.update_pointer(_menu_touch_position)
+	elif event is InputEventMouseMotion and _menu_touch_index == -2:
+		_menu_touch_position = (event as InputEventMouseMotion).position
+		if _menu_switcher_open:
+			_menu_switcher.update_pointer(_menu_touch_position)
+	elif event is InputEventScreenTouch and not (event as InputEventScreenTouch).pressed \
+			and (event as InputEventScreenTouch).index == _menu_touch_index:
+		_finish_menu_gesture((event as InputEventScreenTouch).position)
+	elif event is InputEventMouseButton and _menu_touch_index == -2 \
+			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
+			and not (event as InputEventMouseButton).pressed:
+		_finish_menu_gesture((event as InputEventMouseButton).position)
+
+
+func _finish_menu_gesture(point: Vector2) -> void:
+	_menu_touch_position = point
+	if _menu_switcher_open:
+		_menu_switcher.update_pointer(point)
+		var picked := _menu_switcher.finish()
+		if picked >= 0:
+			_activate_bottom_menu(picked)
+	else:
+		_on_menu_cycle_pressed()
+	_menu_touch_index = -1
+	_menu_touch_elapsed = 0.0
+	_menu_switcher_open = false
 
 
 func _on_bottom_menu_pressed() -> void:
@@ -1368,9 +1531,7 @@ func _on_speed_changed(_scale: float, paused: bool) -> void:
 	if _management_pause_owned and not paused:
 		_management_pause_owned = false
 		_management_pause_suppressed = true
-	_pause_button.set_pressed_no_signal(paused)
-	_pause_button.text = tr(&"UI_RESUME" if paused else &"UI_PAUSE")
-	_speed_button.text = L10n.t(&"UI_SPEED", [int(Sim.time_scale)])
+	_speed_button.text = L10n.t(&"UI_SPEED", [0 if paused else int(Sim.time_scale)])
 
 
 # --- Desktop hotkeys ------------------------------------------------------------------
@@ -1514,6 +1675,7 @@ func _on_resources_changed(_kind: StringName, _amount: int) -> void:
 ## One flat, full-width material strip. Advanced materials appear once acquired; wood,
 ## stone, and food remain visible at zero because their absence is critical information.
 func _refresh_resources() -> void:
+	_sample_status_rates()
 	var entries: Array = []
 	for kind: StringName in Colony.KINDS:
 		var amount := Colony.amount_of(kind)
@@ -1528,15 +1690,23 @@ func _refresh_resources() -> void:
 			"text": "%s %d%s" % [L10n.resource(kind), amount, rate],
 			"accessible": accessible,
 		})
+	var waterskins := Colony.item_count(&"waterskin")
+	var bottling := Jobs.get_job(&"bottling")
+	if waterskins > 0 or (bottling != null and Jobs.has_workplace(bottling)):
+		entries.append({
+			"kind": &"bottled_water",
+			"text": L10n.t(&"HUD_BOTTLED_WATER", [waterskins]),
+			"accessible": L10n.t(&"HUD_BOTTLED_WATER_ACCESSIBLE", [waterskins]),
+		})
 
 	# Faith carries its ceiling: a reservoir that scales with population means "faith 91" says
 	# nothing without knowing whether that is nearly full or barely started. And its rate, because
 	# a number that silently depends on morale is indistinguishable from a broken one.
 	var population_text := "%d%s" % [Colony.population(), _growth_text()]
-	var water_text := "%d%s" % [int(_average_water()), _sign_of(_water_trend())]
-	var mood_text := "%d%s" % [int(Colony.average_mood()), _mood_sign()]
+	var water_text := "%d%s" % [int(_average_water()), _rate_per_second(_water_rate)]
+	var mood_text := "%d%s" % [int(Colony.average_mood()), _rate_per_second(_mood_rate)]
 	var faith_text := "%d/%d%s" % [int(Divine.faith), int(Divine.faith_max()),
-		_sign_of(RateLedger.faith().total)]
+		_rate_per_second(RateLedger.faith().total)]
 	entries.append_array([
 		{"kind": &"population", "text": population_text,
 			"accessible": "population " + population_text},
@@ -1571,6 +1741,44 @@ static func _sign_of(delta: float) -> String:
 	if absf(delta) < 0.01:
 		return ""
 	return "+" if delta > 0.0 else "-"
+
+
+static func _rate_per_second(delta: float) -> String:
+	if absf(delta) < 0.05:
+		return ""
+	return " %+.1f/s" % delta
+
+
+func _sample_status_rates() -> void:
+	var now_tick := Sim.tick
+	var water_now := _average_water()
+	var mood_now := Colony.average_mood()
+	if _status_sample_tick < 0 or now_tick < _status_sample_tick:
+		_status_sample_tick = now_tick
+		_last_water_sample = water_now
+		_last_mood_sample = mood_now
+		_water_rate = 0.0
+		_mood_rate = 0.0
+		return
+	var ticks_elapsed := now_tick - _status_sample_tick
+	if ticks_elapsed < 30:
+		return
+	var seconds := float(ticks_elapsed) * Sim.TICK_DT
+	# Drinking and scripted phase changes happen in large, instant steps.  Feeding those
+	# steps straight into the readout made it jump by several points per second even
+	# though the underlying need decay is deliberately slow.  Winsorise each sample to
+	# the real continuous drift range, then ease it so the top bar reads as a trend.
+	var measured_water := clampf(
+		(water_now - _last_water_sample) / maxf(seconds, 0.01), -1.0, 1.0)
+	var measured_mood := clampf(
+		(mood_now - _last_mood_sample) / maxf(seconds, 0.01),
+		-Villager.MOOD_DRIFT * Villager.MOOD_FALL_SCALE,
+		Villager.MOOD_DRIFT)
+	_water_rate = lerpf(_water_rate, measured_water, 0.15)
+	_mood_rate = lerpf(_mood_rate, measured_mood, 0.15)
+	_last_water_sample = water_now
+	_last_mood_sample = mood_now
+	_status_sample_tick = now_tick
 
 
 func _average_water() -> float:
@@ -1612,7 +1820,10 @@ func _refresh_counts() -> void:
 	# track is the whole track. A fixed max of 20 with six survivors squeezed every
 	# meaningful value into the first tenth of the slider, which on a phone is
 	# roughly one thumb-width for the entire decision.
-	var slider_max := maxf(float(Colony.population()) + 2.0, 4.0)
+	var workers := Colony.worker_count()
+	var slider_max := maxf(float(workers) + 2.0, 4.0)
+	_workers_available.text = L10n.t(&"UI_WORKERS_AVAILABLE", [workers, Colony.population()])
+	_job_hint.text = tr(&"UI_JOB_BOARD_HINT")
 
 	for id in _row_widgets:
 		var w: Dictionary = _row_widgets[id]

@@ -10,6 +10,9 @@ var zoomed_in: bool = false
 var _hovered_id: StringName = &""
 var _preview_texture: ImageTexture
 var _zoom_tween: Tween
+## Mouse clicks are emulated as touch presses on desktop. Remember the frame so
+## the touch twin cannot immediately hit the newly-open preview's Back field.
+var _press_frame: int = -1
 var _zoom_progress := 0.0:
 	set(value):
 		_zoom_progress = value
@@ -56,10 +59,9 @@ func zoom_to(id: StringName) -> void:
 	selected_id = id
 	_preview_texture = Realm.build_region_preview(id)
 	zoomed_in = true
-	_zoom_progress = 0.0
-	_zoom_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_zoom_tween.tween_property(self, "_zoom_progress", 1.0,
-		Accessibility.motion_duration(0.24))
+	# Region inspection is navigation, not decoration. It should answer the tap on
+	# the same frame instead of making the player wait through a camera flourish.
+	_zoom_progress = 1.0
 	site_selected.emit(id)
 	zoom_changed.emit(true)
 
@@ -69,10 +71,8 @@ func zoom_out() -> void:
 		return
 	if _zoom_tween != null:
 		_zoom_tween.kill()
-	_zoom_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-	_zoom_tween.tween_property(self, "_zoom_progress", 0.0,
-		Accessibility.motion_duration(0.20))
-	_zoom_tween.tween_callback(_finish_zoom_out)
+	_zoom_progress = 0.0
+	_finish_zoom_out()
 
 
 func _finish_zoom_out() -> void:
@@ -84,6 +84,16 @@ func _finish_zoom_out() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	var primary_press := (event is InputEventMouseButton \
+		and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
+		and (event as InputEventMouseButton).pressed) \
+		or (event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed)
+	if primary_press:
+		var frame := Engine.get_process_frames()
+		if frame == _press_frame:
+			accept_event()
+			return
+		_press_frame = frame
 	if zoomed_in:
 		# The local preview is intentionally smaller than this control on wide screens.
 		# Treat its surrounding field as a generous Back target for mouse and touch.

@@ -169,6 +169,21 @@ func set_gather_mode(job_id: StringName) -> void:
 	changed.emit()
 
 
+## Select a harvest brush without toggle-to-close semantics. The consolidated
+## Wood/Stone/Berries bar uses this while Done remains the one explicit exit.
+func select_gather_mode(job_id: StringName) -> void:
+	var job := Jobs.get_job(job_id)
+	if job == null or job.target_features.is_empty():
+		return
+	if paint_mode != PaintMode.NONE:
+		paint_mode = PaintMode.NONE
+		paint_mode_changed.emit(paint_mode)
+	gather_job = job_id
+	gather_erasing = false
+	gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
+	changed.emit()
+
+
 func cancel_gather_paint() -> void:
 	if gather_job == &"":
 		return
@@ -203,33 +218,51 @@ func paint_gather(center_cell: int, erase_override: int = -1) -> bool:
 	var job := Jobs.get_job(gather_job)
 	if job == null:
 		return false
-	var mask: PackedByteArray = gather_designations.get(gather_job, PackedByteArray())
-	if mask.size() != World.grid.cell_count:
-		mask.resize(World.grid.cell_count)
 	var erasing := gather_erasing if erase_override < 0 else erase_override != 0
 	var center := World.grid.coord(center_cell)
 	var changed_any := false
-	for dy in range(-gather_radius, gather_radius + 1):
-		for dx in range(-gather_radius, gather_radius + 1):
-			if dx * dx + dy * dy > gather_radius * gather_radius:
-				continue
-			var point := center + Vector2i(dx, dy)
-			if not World.grid.is_valid_v(point):
-				continue
-			var cell := World.grid.index_v(point)
-			var next := 0 if erasing else (
-				1 if job.harvests(World.feature_at(cell)) else int(mask[cell]))
-			if int(mask[cell]) == next:
-				continue
-			mask[cell] = next
-			changed_any = true
-	gather_designations[gather_job] = mask
+	# A resource category is one player order even when both the basic and advanced
+	# versions of a job can work it. Mirror the brush into every job sharing a
+	# target feature so a Lumberer never ignores an area marked for Woodcutters.
+	for related_job: JobDef in _related_gather_jobs(job):
+		var mask: PackedByteArray = gather_designations.get(
+			related_job.id, PackedByteArray())
+		if mask.size() != World.grid.cell_count:
+			mask.resize(World.grid.cell_count)
+		for dy in range(-gather_radius, gather_radius + 1):
+			for dx in range(-gather_radius, gather_radius + 1):
+				if dx * dx + dy * dy > gather_radius * gather_radius:
+					continue
+				var point := center + Vector2i(dx, dy)
+				if not World.grid.is_valid_v(point):
+					continue
+				var cell := World.grid.index_v(point)
+				var next := 0 if erasing else (
+					1 if related_job.harvests(World.feature_at(cell)) else int(mask[cell]))
+				if int(mask[cell]) == next:
+					continue
+				mask[cell] = next
+				changed_any = true
+		gather_designations[related_job.id] = mask
 	if changed_any:
 		for villager in Colony.villagers:
-			if is_instance_valid(villager) and villager.job == gather_job:
+			if is_instance_valid(villager) \
+					and villager.job in gather_designations:
 				villager.think_urgent = true
 		changed.emit()
 	return changed_any
+
+
+func _related_gather_jobs(active: JobDef) -> Array[JobDef]:
+	var related: Array[JobDef] = []
+	for candidate: JobDef in Jobs.all():
+		if candidate.target_features.is_empty():
+			continue
+		for feature in active.target_features:
+			if feature in candidate.target_features:
+				related.append(candidate)
+				break
+	return related
 
 
 func gathering_is_designated(job_id: StringName, cell: int) -> bool:

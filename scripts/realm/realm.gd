@@ -40,6 +40,7 @@ var global_corruption: float = 0.0
 var blight_heart_health: int = BLIGHT_HEART_MAX
 var complete: bool = false
 var macro_texture: ImageTexture
+var _region_preview_cache: Dictionary = {}
 var corruption_sources: Array[Vector2i] = []
 var routes: Array[TradeRoute] = []
 var selected_doctrines: Array[StringName] = []
@@ -67,6 +68,7 @@ func _ready() -> void:
 
 func start_new(seed_value: int) -> void:
 	world_seed = seed_value
+	_region_preview_cache.clear()
 	Climate.reset(seed_value)
 	Storyteller.reset(seed_value)
 	sites.clear()
@@ -644,6 +646,10 @@ func _macro_near_boundary(values: PackedByteArray, x: int, y: int, width: int, h
 func build_region_preview(site_id: StringName) -> ImageTexture:
 	if not sites.has(site_id):
 		return null
+	# Unsettled terrain is seed-stable. Reopening the same region should never run
+	# map generation again under the player's finger.
+	if _region_preview_cache.has(site_id) and colony(site_id) == null:
+		return _region_preview_cache[site_id]
 	var row: Dictionary = sites[site_id]
 	if StringName(row.get("biome", &"ocean")) == &"ocean":
 		var water_image := Image.create(World.MAP_WIDTH, World.MAP_HEIGHT, false,
@@ -653,7 +659,9 @@ func build_region_preview(site_id: StringName) -> ImageTexture:
 				var wave := absi(x * 37 + y * 71 + int(row["seed"])) % 43
 				water_image.set_pixel(x, y,
 					Color("176681") if y % 6 == 0 and wave < 9 else Color("0a3d59"))
-		return ImageTexture.create_from_image(water_image)
+		var water_texture := ImageTexture.create_from_image(water_image)
+		_region_preview_cache[site_id] = water_texture
+		return water_texture
 	var preview_grid := Grid.new(World.MAP_WIDTH, World.MAP_HEIGHT)
 	var terrain := PackedByteArray()
 	var features := PackedByteArray()
@@ -705,7 +713,10 @@ func build_region_preview(site_id: StringName) -> ImageTexture:
 		var building_color := Color("ffc66f") if bool(packed.get("complete", false)) \
 			else Color("a7794d")
 		image.fill_rect(Rect2i(coord, footprint), building_color)
-	return ImageTexture.create_from_image(image)
+	var texture := ImageTexture.create_from_image(image)
+	if ledger == null:
+		_region_preview_cache[site_id] = texture
+	return texture
 
 
 func _preview_terrain_color(terrain_type: int) -> Color:

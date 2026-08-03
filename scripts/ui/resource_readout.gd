@@ -134,7 +134,7 @@ func _draw_icon(kind: StringName, centre: Vector2) -> void:
 		&"population":
 			draw_circle(centre + Vector2(0, -2), 2.4, color)
 			draw_circle(centre + Vector2(0, 4), 4.0, color)
-		&"water":
+		&"water", &"bottled_water":
 			draw_colored_polygon(PackedVector2Array([centre + Vector2(0, -5),
 				centre + Vector2(4, 2), centre + Vector2(2, 5), centre + Vector2(-2, 5),
 				centre + Vector2(-4, 2)]), color)
@@ -188,5 +188,6 @@ static func _icon_color(kind: StringName) -> Color:
 		&"medicine": Color("75e0b6"), &"tools": Color("f0c95b"),
 		&"arrows": Color("e5d8ac"), &"bolts": Color("d58fda"),
 		&"population": Color("f0d39a"), &"water": Color("64bde8"),
+		&"bottled_water": Color("8bd7f5"),
 		&"mood": Color("efb45a"), &"faith": Color("c6a5ff"),
 	}.get(kind, Color.WHITE)

@@ -192,6 +192,8 @@ var _command_timer: float = 0.0
 var _anim_time: float = 0.0
 var _awaiting_path: bool = false
 var _path_request_serial: int = 0
+var _path_requested_tick: int = 0
+var _drink_from_store: bool = false
 var _tint_timer: float = 0.0
 var _presentation_accum: float = 0.0
 var _last_damage_reason: StringName = &""
@@ -431,6 +433,25 @@ func think(delta: float) -> void:
 		return
 	_decay_needs(delta)
 
+	# A queued solve is allowed a few seconds, then the villager resets their task
+	# themselves. Picking somebody up happened to cancel the stale request, which
+	# is why the Hand appeared to be the only way to wake a stuck tired/thirsty
+	# villager.
+	if _awaiting_path and Sim.tick - _path_requested_tick \
+			> PathService.MAX_AGE_TICKS + Sim.BUCKETS:
+		_recover_stalled_path()
+
+	# Thirst outranks shifts and sleep. A sleeper wakes, gives back the bed, and
+	# walks to a stored waterskin first; only then do wells and river shores serve
+	# as the fallback. This must run before _tick_shift_sleep.
+	if water <= THIRST_URGENT:
+		if state == State.DRINKING:
+			if not _awaiting_path:
+				_tick_drinking()
+			return
+		if _begin_drink():
+			return
+
 	# The settlement has real shifts. Every civilian job stops after dark and heads
 	# indoors; guards cover the night and sleep through daylight. The emergency
 	# shelter order uses the same reliable house path instead of stopping people a
@@ -462,9 +483,6 @@ func think(delta: float) -> void:
 		# guard duty when it has become genuinely lethal — otherwise they hold the line and
 		# drink at first light. Food does not need this guard: meals come from a stockpile,
 		# which is by definition inside the colony.
-		if water <= THIRST_URGENT and (not Sim.is_dark() or water <= THIRST_DESPERATE):
-			_begin_drink()
-			return
 		if food <= HUNGER_URGENT and Colony.has_food():
 			_begin_eat()
 			return
@@ -762,23 +780,40 @@ func _guard_post() -> int:
 ## Unlike eating, this cannot be refused for lack of stock — there is no water resource to run
 ## out of. It can only fail because there is nowhere to drink, which on a normal map means the
 ## player has walled themselves off from the water without sinking a well.
-func _begin_drink() -> void:
-	var source := Colony.nearest_water_source(cell())
+func _begin_drink() -> bool:
+	var source := Colony.nearest_item_source(cell(), &"waterskin")
+	_drink_from_store = source != -1
 	if source == -1:
-		return
+		source = Colony.nearest_water_source(cell())
+	if source == -1:
+		_drink_from_store = false
+		return false
+	if _shift_sleep:
+		_shift_sleep = false
+	_set_sheltered(false)
+	_release_bed()
 	stop()
 	_release_target()
 	_target_cell = source
 	_request_path(source, State.DRINKING)
+	return true
 
 
 func _tick_drinking() -> void:
 	if is_moving():
 		return
 	if _target_cell == -1 or not _within_reach(_target_cell):
+		_drink_from_store = false
 		state = State.IDLE
 		return
-	water = minf(water + DRINK_RESTORE, NEED_MAX)
+	if _drink_from_store:
+		if Colony.consume_item_at(_target_cell, &"waterskin"):
+			water = minf(water + 35.0, NEED_MAX)
+		else:
+			think_urgent = true
+	else:
+		water = minf(water + DRINK_RESTORE, NEED_MAX)
+	_drink_from_store = false
 	_target_cell = -1
 	state = State.IDLE
 
@@ -1432,6 +1467,9 @@ func _tick_workplace(def: JobDef, delta: float) -> void:
 		_release_workplace()
 		state = State.IDLE
 		return
+	if def.requires_water_access and not Colony.has_water_access():
+		_work_progress = 0.0
+		return
 	if is_moving():
 		return
 	if not _within_reach(_workplace.work_cell()):
@@ -1585,6 +1623,11 @@ func _decay_needs(delta: float) -> void:
 		if not alive:
 			return
 	if water <= 0.0:
+		# Bottled water already in the colony is an active rescue task, not a
+		# condition somebody should die through while their path request is queued.
+		if Colony.has_stored_water():
+			think_urgent = true
+			return
 		var dehydration := DEHYDRATE_DAMAGE * delta
 		_last_damage_reason = &"dehydration"
 		_damage_reason_timer = 4.0
@@ -1662,6 +1705,7 @@ func _request_path(dest: int, next_state: State) -> void:
 		think_urgent = true
 		return
 	_awaiting_path = true
+	_path_requested_tick = Sim.tick
 	var request_serial := _path_request_serial
 	World.paths.request(cell(), dest, func(path: PackedInt32Array) -> void:
 		if request_serial != _path_request_serial:
@@ -1678,22 +1722,40 @@ func _request_path(dest: int, next_state: State) -> void:
 					State.BUILDING, State.HAULING]:
 				_release_target()
 			state = State.IDLE
+			_drink_from_store = false
+			think_urgent = true
 			return
 		var def := Jobs.get_job(job)
 		var is_guard := def != null and def.defends
 		# Going home must remain legal after darkness falls. The old check only
 		# exempted FLEEING, so a sleeper whose route crossed one unlit tile had the
 		# route rejected and appeared to pause forever outside the village.
-		var returning_to_safety := next_state in [State.FLEEING, State.SLEEPING]
+		var returning_to_safety := next_state in [
+			State.FLEEING, State.SLEEPING, State.DRINKING]
 		if not DefenseControl.path_allowed(path, is_guard, returning_to_safety):
 			if next_state in [State.SEEKING, State.FETCHING, State.DELIVERING,
 					State.BUILDING, State.HAULING]:
 				_release_target()
 			state = State.IDLE
+			_drink_from_store = false
+			think_urgent = true
 			return
 		follow_path(path)
 		state = next_state
-	)
+	, next_state == State.DRINKING)
+
+
+func _recover_stalled_path() -> void:
+	_cancel_path_request()
+	_set_sheltered(false)
+	_shift_sleep = false
+	_release_bed()
+	_release_target()
+	_release_workplace()
+	_drink_from_store = false
+	stop()
+	state = State.IDLE
+	think_urgent = true
 
 
 func _cancel_path_request() -> void:

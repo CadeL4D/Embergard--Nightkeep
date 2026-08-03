@@ -1,10 +1,11 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://scripts/ui/notice_log.gd" id="2_notice"]
 [ext_resource type="Script" path="res://scripts/ui/breach_markers.gd" id="3_breach"]
 [ext_resource type="Script" path="res://scripts/ui/breakdown_panel.gd" id="4_breakdown"]
 [ext_resource type="Script" path="res://scripts/ui/resource_readout.gd" id="6_resources"]
+[ext_resource type="Script" path="res://scripts/ui/menu_switcher.gd" id="7_switcher"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar"]
 content_margin_left = 10.0
@@ -54,6 +55,14 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("3_breach")
+
+[node name="MenuSwitcher" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+z_index = 100
+mouse_filter = 2
+script = ExtResource("7_switcher")
 
 [node name="SafeArea" type="MarginContainer" parent="."]
 anchors_preset = 15
@@ -133,15 +142,8 @@ text = "PHASE_DAY"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="PauseButton" type="Button" parent="SafeArea/Layout/TopRow/PhaseBar/Row"]
-custom_minimum_size = Vector2(42, 20)
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-toggle_mode = true
-text = "UI_PAUSE"
-
 [node name="SpeedButton" type="Button" parent="SafeArea/Layout/TopRow/PhaseBar/Row"]
-custom_minimum_size = Vector2(30, 20)
+custom_minimum_size = Vector2(34, 20)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "1x"
@@ -299,6 +301,25 @@ theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
 theme_override_font_sizes/font_size = 8
 text = "UI_JOB_BOARD_HINT"
 
+[node name="Header" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/JobPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HarvestAreas" type="Button" parent="SafeArea/Layout/BottomRow/JobPanel/Layout/Header"]
+custom_minimum_size = Vector2(112, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "GATHER_AREAS"
+
+[node name="Workers" type="Label" parent="SafeArea/Layout/BottomRow/JobPanel/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.72, 0.76, 0.82, 1)
+theme_override_font_sizes/font_size = 8
+text = "UI_WORKERS_AVAILABLE"
+horizontal_alignment = 2
+vertical_alignment = 1
+
 [node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/BottomRow/JobPanel/Layout"]
 custom_minimum_size = Vector2(274, 220)
 layout_mode = 2
@@ -327,19 +348,42 @@ theme_override_font_sizes/font_size = 9
 text = "UI_DONE"
 
 [node name="Status" type="Label" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
-custom_minimum_size = Vector2(130, 0)
+custom_minimum_size = Vector2(116, 0)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "GATHER_BRUSH_HINT"
 vertical_alignment = 1
 
+[node name="WoodButton" type="Button" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
+custom_minimum_size = Vector2(62, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "GATHER_WOOD"
+
+[node name="StoneButton" type="Button" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
+custom_minimum_size = Vector2(62, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "GATHER_STONE"
+
+[node name="BerriesButton" type="Button" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
+custom_minimum_size = Vector2(62, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "GATHER_BERRIES"
+
 [node name="RadiusMinus" type="Button" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
+visible = false
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "−"
 
 [node name="Radius" type="Label" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
+visible = false
 custom_minimum_size = Vector2(56, 0)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
@@ -348,12 +392,14 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="RadiusPlus" type="Button" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
+visible = false
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "+"
 
 [node name="PaintButton" type="Button" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
+visible = false
 custom_minimum_size = Vector2(56, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
@@ -361,11 +407,11 @@ toggle_mode = true
 text = "GATHER_PAINT"
 
 [node name="EraseButton" type="Button" parent="SafeArea/Layout/BottomRow/GatherBar/Row"]
-custom_minimum_size = Vector2(56, 28)
+custom_minimum_size = Vector2(76, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
 toggle_mode = true
-text = "GATHER_ERASE"
+text = "GATHER_REMOVE"
 
 [node name="ControlPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false

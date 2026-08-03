@@ -41,6 +41,9 @@ extends Resource
 ## eaten the materials, and reserving them up front would mean tracking a second reservation
 ## ledger alongside the one construction already uses.
 @export var cycle_cost: Dictionary = {}
+## This workplace draws from any reachable well or river before completing a
+## cycle. Used by bottling so stocked water still depends on actual water access.
+@export var requires_water_access: bool = false
 
 ## Villager-seconds per cycle.
 @export var cycle_work: float = 8.0

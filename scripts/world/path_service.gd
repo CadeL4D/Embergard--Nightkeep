@@ -71,8 +71,12 @@ func mark_dirty() -> void:
 ## Queue a path solve. `callback` receives a PackedInt32Array of cell indices —
 ## empty when no route exists, so callers must handle "unreachable" rather than
 ## assuming success.
-func request(from: int, to: int, callback: Callable) -> void:
-	_queue.append(Request.new(from, to, callback, _world.tick_hint()))
+func request(from: int, to: int, callback: Callable, urgent: bool = false) -> void:
+	var row := Request.new(from, to, callback, _world.tick_hint())
+	if urgent:
+		_queue.push_front(row)
+	else:
+		_queue.append(row)
 
 
 ## Drop any queued request belonging to a caller that no longer wants one (a

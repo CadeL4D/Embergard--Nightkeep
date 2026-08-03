@@ -30,7 +30,7 @@ const KIND_GROUPS: Array = [
 ## How often the labour reconciler runs, in seconds. Quotas are a coarse control;
 ## re-deriving assignments every tick would thrash villagers between jobs faster
 ## than they could walk anywhere.
-const REBALANCE_INTERVAL := 1.0
+const REBALANCE_INTERVAL := 3.0
 
 const VILLAGER_SCENE := preload("res://scenes/entities/villager.tscn")
 
@@ -254,7 +254,10 @@ func food_measured_net() -> float:
 	var total := 0.0
 	for v in _food_history:
 		total += v
-	return total / float(_food_history.size())
+	# A fixed denominator makes the estimate settle gradually during a new run.
+	# Dividing by the number of samples so far made the first berry delivery look
+	# like a huge economy swing, then jump again on every early sample.
+	return total / float(FLOW_SAMPLES)
 
 
 ## What the colony's FARMS produce per second. Computed, not measured.
@@ -318,15 +321,15 @@ func _step_migration(delta: float) -> void:
 ## player controls, and the HUD names whichever one is failing.
 func birth_blocker() -> String:
 	if beds_free() <= 0:
-		return "no beds"
+		return "BLOCK_NO_BEDS"
 	if not has_water_access():
-		return "no water"
+		return "BLOCK_NO_WATER"
 	if food_days() < BIRTH_MIN_FOOD_DAYS:
-		return "little food"
+		return "BLOCK_LITTLE_FOOD"
 	if average_mood() < BIRTH_MIN_MOOD:
-		return "unhappy"
+		return "BLOCK_UNHAPPY"
 	if _eligible_birth_pair().is_empty():
-		return "no household"
+		return "BLOCK_NO_HOUSEHOLD"
 	return ""
 
 
@@ -968,6 +971,7 @@ func create_item(def_id: StringName, preferred_cell: int = -1) -> ItemRecord:
 	_next_item_serial += 1
 	var record := ItemRecord.create(item_def, uid)
 	store_item(record, preferred_cell)
+	Events.resources_changed.emit(def_id, item_count(def_id))
 	return record
 
 
@@ -1005,6 +1009,56 @@ func item_count(def_id: StringName = &"") -> int:
 		if def_id.is_empty() or StringName(row.get("def", &"")) == def_id:
 			total += 1
 	return total
+
+
+func nearest_item_source(from: int, def_id: StringName) -> int:
+	var best := -1
+	var best_dist := 0x7FFFFFFF
+	for candidate in buildings:
+		var b := candidate as Building
+		if b == null or not is_instance_valid(b) or b.is_site():
+			continue
+		for row: Dictionary in b.item_inventory:
+			if StringName(row.get("def", &"")) != def_id:
+				continue
+			var distance := World.grid.dist_sq(from, b.centre_cell())
+			if distance < best_dist:
+				best_dist = distance
+				best = b.centre_cell()
+			break
+	if not overflow_items.is_empty() and World.grid.is_valid_index(overflow_cell()):
+		for row: Dictionary in overflow_items:
+			if StringName(row.get("def", &"")) == def_id:
+				var distance := World.grid.dist_sq(from, overflow_cell())
+				if distance < best_dist:
+					best = overflow_cell()
+				break
+	return best
+
+
+func consume_item_at(cell: int, def_id: StringName) -> bool:
+	for candidate in buildings:
+		var b := candidate as Building
+		if b == null or not is_instance_valid(b) or b.is_site() \
+				or b.centre_cell() != cell:
+			continue
+		for index in b.item_inventory.size():
+			if StringName(b.item_inventory[index].get("def", &"")) == def_id:
+				b.item_inventory.remove_at(index)
+				b.queue_redraw()
+				Events.resources_changed.emit(def_id, item_count(def_id))
+				return true
+	if cell == overflow_cell():
+		for index in overflow_items.size():
+			if StringName(overflow_items[index].get("def", &"")) == def_id:
+				overflow_items.remove_at(index)
+				Events.resources_changed.emit(def_id, item_count(def_id))
+				return true
+	return false
+
+
+func has_stored_water() -> bool:
+	return item_count(&"waterskin") > 0
 
 
 func total_item_count(def_id: StringName = &"") -> int:
@@ -1801,6 +1855,14 @@ func population() -> int:
 	return living
 
 
+func worker_count() -> int:
+	var adults := 0
+	for villager in villagers:
+		if is_instance_valid(villager) and villager.alive and villager.is_adult():
+			adults += 1
+	return adults
+
+
 ## Reconcile the roster against the player's quotas.
 ##
 ## Walks jobs in priority order and staffs each up to its quota, drawing first from
@@ -1838,6 +1900,7 @@ func rebalance() -> void:
 		if held != null and not Jobs.has_workplace(held):
 			v.set_job(&"")
 
+	var anchor := _job_anchor()
 	for job: JobDef in jobs:
 		# Nothing to staff a job that has nowhere to be worked. Skipped rather than zeroed, so the
 		# player's slider setting survives losing the building and comes back with it.
@@ -1866,8 +1929,8 @@ func rebalance() -> void:
 		# work" without running a search per candidate.
 		var needed := want - have
 		candidates.sort_custom(func(a, b) -> bool:
-			return a.position.distance_squared_to(_job_anchor()) < \
-				b.position.distance_squared_to(_job_anchor()))
+			return a.position.distance_squared_to(anchor) < \
+				b.position.distance_squared_to(anchor))
 		for i in mini(needed, candidates.size()):
 			candidates[i].set_job(job.id)
 

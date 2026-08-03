@@ -40,6 +40,24 @@ func _ready() -> void:
 				exact_region_hits = false
 	_expect(exact_region_hits,
 		"every visible overview region opens the same local region at its centre")
+	# Desktop delivers one physical click as a mouse press and an emulated touch.
+	# The second event used to hit Back on the newly-open preview and make it flash.
+	await get_tree().process_frame
+	var edge_region := Realm.region_id(Vector2i(0, 0))
+	var edge_point := first_canvas._region_rect(edge_region).get_center()
+	var mouse_click := InputEventMouseButton.new()
+	mouse_click.button_index = MOUSE_BUTTON_LEFT
+	mouse_click.pressed = true
+	mouse_click.position = edge_point
+	first_canvas._gui_input(mouse_click)
+	var touch_twin := InputEventScreenTouch.new()
+	touch_twin.index = 0
+	touch_twin.pressed = true
+	touch_twin.position = edge_point
+	first_canvas._gui_input(touch_twin)
+	_expect(first_canvas.zoomed_in and is_equal_approx(first_canvas._zoom_progress, 1.0),
+		"a mouse/touch twin opens the local map once and does not flash back out")
+	first_canvas.reset_view()
 	_expect(Realm.corruption_sources.size() >= 3,
 		"latent local corruption is distributed across multiple hidden places")
 	var latent_before := float(Realm.site(picked_region)["corruption"])

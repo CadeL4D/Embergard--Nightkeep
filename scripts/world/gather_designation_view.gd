@@ -10,6 +10,8 @@ var _finger := -1
 var _last_cell := -1
 var _cursor_cell := -1
 var _mouse_erasing := false
+var _touch_positions: Dictionary = {}
+var _navigating := false
 
 @onready var _camera: Camera2D = get_node("../../CameraRig")
 
@@ -21,6 +23,8 @@ func _ready() -> void:
 			_painting = false
 			_finger = -1
 			_last_cell = -1
+			_touch_positions.clear()
+			_navigating = false
 			queue_redraw()
 	)
 
@@ -100,11 +104,33 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			_touch_positions[touch.index] = touch.position
+		else:
+			_touch_positions.erase(touch.index)
+		if _navigating:
+			if _touch_positions.is_empty():
+				_navigating = false
+			return
 		if touch.pressed and not _painting:
 			_painting = true
 			_finger = touch.index
 			_last_cell = -1
 			_paint_at(touch.position, DefenseControl.gather_erasing)
+		elif touch.pressed and touch.index != _finger:
+			# Promote the gesture from painting to navigation. CameraRig never saw
+			# the first press because the brush consumed it, so seed that touch once;
+			# the live second press and all following drags then pass through normally.
+			_navigating = true
+			_painting = false
+			_last_cell = -1
+			if not _camera._touches.has(_finger):
+				var first := InputEventScreenTouch.new()
+				first.index = _finger
+				first.position = Vector2(_touch_positions.get(_finger, touch.position))
+				first.pressed = true
+				_camera._handle_paint_touch(first)
+			return
 		elif not touch.pressed and touch.index == _finger:
 			_painting = false
 			_finger = -1
@@ -115,6 +141,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		var drag := event as InputEventScreenDrag
+		_touch_positions[drag.index] = drag.position
+		if _navigating:
+			return
 		if _painting and drag.index == _finger:
 			_paint_at(drag.position, DefenseControl.gather_erasing)
 			get_viewport().set_input_as_handled()

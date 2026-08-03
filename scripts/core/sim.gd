@@ -195,9 +195,16 @@ func toggle_pause() -> void:
 ## while paused means "get going", and making them press two buttons for that is friction
 ## for no reason.
 func cycle_speed() -> void:
+	if paused:
+		paused = false
+		time_scale = SPEEDS[0]
+		Events.speed_changed.emit(speed_scale(), paused)
+		return
 	var i := SPEEDS.find(time_scale)
-	time_scale = SPEEDS[(i + 1) % SPEEDS.size()] if i != -1 else SPEEDS[0]
-	paused = false
+	if i == SPEEDS.size() - 1:
+		paused = true
+	else:
+		time_scale = SPEEDS[i + 1] if i >= 0 else SPEEDS[0]
 	Events.speed_changed.emit(speed_scale(), paused)
 
 

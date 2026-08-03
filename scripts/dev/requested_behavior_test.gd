@@ -16,6 +16,7 @@ func _ready() -> void:
 	_check_hud(run)
 	_check_danger_reasons()
 	_check_rest_and_night_recall()
+	_check_stored_water()
 	_check_two_day_cycles()
 
 	RunSave.clear()
@@ -50,6 +51,49 @@ func _check_hud(run: Node2D) -> void:
 	_expect(hud._job_panel.visible,
 		"pressing the Jobs menu button opens the job assignment panel")
 	hud._select_bottom_menu(0)
+	var harvest: Button = hud.get_node(
+		"SafeArea/Layout/BottomRow/JobPanel/Layout/Header/HarvestAreas")
+	_expect(harvest != null and harvest.text == tr(&"GATHER_AREAS"),
+		"the Job Board has one top-level harvest territory button")
+	var per_row_areas_hidden := true
+	for widgets: Dictionary in hud._row_widgets.values():
+		if (widgets.get("area") as Button).visible:
+			per_row_areas_hidden = false
+	_expect(per_row_areas_hidden, "harvest territories are no longer split across job rows")
+
+	# 3x advances to 0x (pause), then the same control resumes at 1x.
+	Sim.set_paused(false)
+	Sim.time_scale = 3.0
+	Sim.cycle_speed()
+	_expect(Sim.paused and hud._speed_button.text == "0x",
+		"the speed control folds pause into 0x")
+	Sim.cycle_speed()
+	_expect(not Sim.paused and is_equal_approx(Sim.time_scale, 1.0),
+		"tapping 0x resumes at 1x")
+
+	# Hold opens every menu and releasing over one opens that choice.
+	hud._menu_touch_index = 9
+	hud._menu_touch_position = cycle_button.get_global_rect().get_center()
+	hud._process(Accessibility.hold_duration + 0.01)
+	_expect(hud._menu_switcher_open and hud._menu_switcher.visible,
+		"holding Cycle opens the drag menu switcher")
+	var build_index: int = hud.BOTTOM_MENU_IDS.find(&"build")
+	hud._finish_menu_gesture(hud._menu_switcher._rects[build_index].get_center())
+	_expect(hud._bottom_menu_index == build_index and hud._build_panel.visible,
+		"releasing on a held menu opens that menu")
+	hud._select_bottom_menu(0)
+	var sample_power: PowerDef = Powers.all()[0]
+	var sample_power_button := Button.new()
+	hud.add_child(sample_power_button)
+	hud._on_power_hold_started(sample_power, sample_power_button)
+	hud._process(Accessibility.hold_duration + 0.01)
+	_expect(hud._power_hold_shown and hud._power_hold_suppressed == sample_power_button,
+		"holding a power displays its description and suppresses casting")
+	hud._on_power_hold_released(sample_power_button)
+	hud._on_power_pressed(sample_power, sample_power_button)
+	_expect(hud._god_hand.armed != sample_power,
+		"releasing a described power does not cast or arm it")
+	sample_power_button.queue_free()
 	var readout: ResourceReadout = hud.get_node(
 		"SafeArea/Layout/TopRow/ResourceColumn/ResourceBar/Resources")
 	_expect(not readout._rows.is_empty(), "the material readout is populated with icon chips")
@@ -177,6 +221,38 @@ func _check_rest_and_night_recall() -> void:
 		"all tired civilians walked home and sheltered (%d/%d)" % [sheltered, civilians])
 	_expect(working == 0, "no civilian job continues at night")
 	_expect(guards_active > 0, "a guard remains active at night")
+
+
+func _check_stored_water() -> void:
+	if Colony.villagers.is_empty():
+		_expect(false, "a villager exists for stored-water checks")
+		return
+	var villager: Villager = Colony.villagers[0]
+	villager._release_target()
+	villager._release_bed()
+	var before := Colony.item_count(&"waterskin")
+	Colony.create_item(&"waterskin", World.keep_cell)
+	var source := Colony.nearest_item_source(villager.cell(), &"waterskin")
+	_expect(source != -1, "a filled waterskin is a reachable stored-water source")
+	if source == -1:
+		return
+	villager.position = World.grid.to_world_index(source)
+	villager.water = 0.0
+	villager.health = villager.max_health
+	villager.state = Villager.State.SLEEPING
+	villager._shift_sleep = true
+	villager._set_sheltered(true)
+	villager.think(0.1)
+	villager.think(0.1)
+	_expect(villager.water > 0.0 and villager.visible and not villager._shift_sleep,
+		"a thirsty sleeper wakes and drinks stored water without the Hand")
+	_expect(Colony.item_count(&"waterskin") == before,
+		"drinking consumes exactly one stocked waterskin")
+	var bottling := Jobs.get_job(&"bottling")
+	var bottler := Buildings.get_building(&"bottler")
+	_expect(bottling.requires_water_access and bottler.is_stockpile \
+		and &"consumable" in bottler.storage_tags and not bottler.provides_water,
+		"Bottlers fill storage from reachable wells or rivers instead of acting as a free well")
 
 
 func _check_two_day_cycles() -> void:

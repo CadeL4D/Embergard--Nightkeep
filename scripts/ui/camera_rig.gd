@@ -35,6 +35,8 @@ var _touch_start: Vector2 = Vector2.ZERO
 var _touch_start_time: float = 0.0
 var _velocity: Vector2 = Vector2.ZERO
 var _pinch_prev_dist: float = 0.0
+var _pinch_prev_midpoint: Vector2 = Vector2.ZERO
+var _paint_navigation: bool = false
 var _snap_tween: Tween
 var _focus_tween: Tween
 var _shake_time: float = 0.0
@@ -90,11 +92,18 @@ func _tick_shake(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Painted orders own drag input while active. Desktop wheel zoom remains
-	# available because it does not compete with a brush stroke.
+	# Painted orders own one-finger drags. Their paint surfaces consume that first
+	# finger, but deliberately pass a two-finger gesture through for map navigation.
+	# Desktop wheel zoom also remains available.
 	if DefenseControl.gather_job != &"" \
 			or DefenseControl.paint_mode != DefenseControl.PaintMode.NONE:
-		if not (event is InputEventMouseButton) \
+		if event is InputEventScreenTouch:
+			_handle_paint_touch(event as InputEventScreenTouch)
+			return
+		elif event is InputEventScreenDrag:
+			_handle_paint_drag(event as InputEventScreenDrag)
+			return
+		elif not (event is InputEventMouseButton) \
 				or (event as InputEventMouseButton).button_index not in [
 					MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 			return
@@ -141,6 +150,7 @@ func _handle_touch(event: InputEventScreenTouch) -> void:
 		elif _touches.size() == 2:
 			_state = State.PINCHING
 			_pinch_prev_dist = _touch_distance()
+			_pinch_prev_midpoint = _touch_midpoint()
 		return
 
 	# Release. A short, small movement with one finger is a tap, and taps are the
@@ -191,6 +201,45 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 		_clamp_position()
 
 
+## During an order brush, one finger belongs to painting and two fingers belong
+## to the camera. CameraRig receives unhandled input before the world paint node,
+## so it must track the first finger without moving on it, then promote only when
+## a second finger arrives.
+func _handle_paint_touch(event: InputEventScreenTouch) -> void:
+	if event.pressed:
+		_touches[event.index] = event.position
+		_velocity = Vector2.ZERO
+		if _touches.size() >= 2:
+			_paint_navigation = true
+			_state = State.PINCHING
+			_pinch_prev_dist = _touch_distance()
+			_pinch_prev_midpoint = _touch_midpoint()
+		else:
+			_state = State.NONE
+		return
+	var was_navigation := _paint_navigation
+	_touches.erase(event.index)
+	if _touches.is_empty():
+		_paint_navigation = false
+		_state = State.NONE
+		if was_navigation:
+			_snap_zoom()
+	else:
+		# Releasing either finger ends navigation; the remaining finger stays a
+		# brush contact until it too is lifted.
+		_paint_navigation = false
+		_state = State.NONE
+
+
+func _handle_paint_drag(event: InputEventScreenDrag) -> void:
+	if not _touches.has(event.index):
+		return
+	_touches[event.index] = event.position
+	if _paint_navigation and _touches.size() >= 2:
+		_state = State.PINCHING
+		_apply_pinch()
+
+
 # --- Pinch ---------------------------------------------------------------------------
 
 ## Anchored at the two-finger midpoint: we record the world point under the midpoint,
@@ -204,12 +253,16 @@ func _apply_pinch() -> void:
 		return
 
 	var midpoint := _touch_midpoint()
+	if _pinch_prev_midpoint != Vector2.ZERO:
+		position -= (midpoint - _pinch_prev_midpoint) / zoom.x
+		_clamp_position()
 	var world_before := _screen_to_world(midpoint)
 
 	var factor := dist / _pinch_prev_dist
 	var new_zoom := clampf(zoom.x * factor, ZOOM_MIN, ZOOM_MAX)
 	zoom = Vector2(new_zoom, new_zoom)
 	_pinch_prev_dist = dist
+	_pinch_prev_midpoint = midpoint
 
 	var world_after := _screen_to_world(midpoint)
 	position += world_before - world_after

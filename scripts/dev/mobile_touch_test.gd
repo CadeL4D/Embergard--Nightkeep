@@ -76,6 +76,20 @@ func _test_camera(camera: Camera2D) -> void:
 		and camera.zoom.x >= camera.ZOOM_MIN and camera.zoom.x <= camera.ZOOM_MAX,
 		"two-finger pinch changes zoom inside mobile limits")
 
+	DefenseControl.select_gather_mode(&"woodcutting")
+	var paint_start := camera.position
+	camera._handle_paint_touch(_touch(2, Vector2(280, 170), true))
+	camera._handle_paint_drag(_drag(2, Vector2(330, 170), Vector2(50, 0)))
+	_expect(camera.position.is_equal_approx(paint_start),
+		"one finger remains reserved for painting in harvest mode")
+	camera._handle_paint_touch(_touch(3, Vector2(380, 170), true))
+	camera._handle_paint_drag(_drag(2, Vector2(350, 190), Vector2(20, 20)))
+	_expect(not camera.position.is_equal_approx(paint_start),
+		"two fingers pan the map while harvest marking is active")
+	camera._handle_paint_touch(_touch(3, Vector2(380, 170), false))
+	camera._handle_paint_touch(_touch(2, Vector2(350, 190), false))
+	DefenseControl.cancel_gather_paint()
+
 
 func _test_drawer_exclusivity(hud: CanvasLayer) -> void:
 	var jobs: Button = hud.get_node("SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton")

@@ -22,7 +22,7 @@ func _ready() -> void:
 	$Center/Card/Views/Root/Settings.pressed.connect(_show_settings)
 	$Center/Card/Views/Root/Codex.pressed.connect(_show_codex)
 	$Center/Card/Views/Root/MainMenu.pressed.connect(_save_and_main_menu)
-	$Center/Card/Views/Settings/Back.pressed.connect(_show_root)
+	$Center/Card/Views/Settings/Back.pressed.connect(_save_settings_and_show_root)
 	$Center/Card/Views/Codex/Back.pressed.connect(_show_root)
 	_codex_search.text_changed.connect(_filter_codex)
 	_codex_topics.item_selected.connect(_select_codex)
@@ -40,7 +40,6 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
-	_settings.save()
 	visible = false
 	# This button is labelled Resume, so it must always resume. Preserving a pause that
 	# happened before the menu opened made Continue appear to do nothing.
@@ -57,6 +56,14 @@ func _show_settings() -> void:
 	_root_view.visible = false
 	_settings_view.visible = true
 	_codex_view.visible = false
+
+
+func _save_settings_and_show_root() -> void:
+	# Disk writes belong to the explicit Settings Back action. Resume is the most
+	# common button in this menu and must return to play without a synchronous
+	# ConfigFile save on its input frame.
+	_settings.save()
+	_show_root()
 
 
 func _show_codex(topic: StringName = &"") -> void:
@@ -118,7 +125,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event.is_action_pressed(&"game_cancel") or event.is_action_pressed(&"game_pause"):
-		if _settings_view.visible or _codex_view.visible:
+		if _settings_view.visible:
+			_save_settings_and_show_root()
+		elif _codex_view.visible:
 			_show_root()
 		else:
 			close()

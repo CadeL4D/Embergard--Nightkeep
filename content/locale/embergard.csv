@@ -31,7 +31,8 @@ UI_MASTER,Master
 UI_MUSIC,Music
 UI_SOUND,Sound
 UI_AUDIO_PENDING,Sound design is not in yet — these are wired and waiting.
-UI_JOB_BOARD_HINT,assign survivors · Area marks resources they may gather
+UI_JOB_BOARD_HINT,assign workers · children cannot take jobs yet
+UI_WORKERS_AVAILABLE,{0} workers · {1} people
 UI_PLACEMENT_HINT,drag to move · tap to build
 UI_PLACEMENT_TAP_TO_BUILD,{0} · tap to build
 UI_SPEED,{0}x
@@ -61,11 +62,15 @@ HUD_PER_DAY,{0}/day
 HUD_HEADCOUNT,{0}/{1}
 POWER_ON_COOLDOWN,{0} {1}s
 POWER_COST,"{0}  {1}"
+POWER_NEED_FAITH,This power needs {0} Faith.
 HUD_GROWTH_BLOCKED," ({0})"
 BLOCK_NO_BEDS,no beds
 BLOCK_NO_WATER,no water
 BLOCK_LITTLE_FOOD,little food
 BLOCK_UNHAPPY,unhappy
+BLOCK_NO_HOUSEHOLD,needs two partnered adults
+HUD_BOTTLED_WATER,bottled water {0}
+HUD_BOTTLED_WATER_ACCESSIBLE,{0} filled waterskins in storage
 SELECT_SURVIVOR,Survivor
 SELECT_NEEDS,health {0}/{1}  food {2}  water {3}  rest {4}  mood {5}
 SELECT_DANGER,"Warning: {0}"
@@ -684,6 +689,11 @@ SUMMARY_NO_SURVIVORS,Game over · no survivors
 SUMMARY_NO_SURVIVORS_BODY,The last villager has fallen. This run has ended and its active save has been retired.
 UI_MARK_AREA,Area
 UI_DONE,Done
+GATHER_AREAS,Harvest areas
+GATHER_WOOD,Wood
+GATHER_STONE,Stone
+GATHER_BERRIES,Berries
+GATHER_REMOVE,Remove
 GATHER_PAINT,Mark
 GATHER_ERASE,Erase
 GATHER_RADIUS,Radius {0}
@@ -758,7 +768,7 @@ BUILDING_FORGE_DESC,An alternate tool chain using boards and ingots instead of c
 BUILDING_ARMORY,Armory
 BUILDING_ARMORY_DESC,Manufactures heavy ballista bolts now and will outfit defenders as equipment comes online.
 BUILDING_BOTTLER,Bottler
-BUILDING_BOTTLER_DESC,A protected water point prepared to fill reusable waterskins when equipment comes online.
+BUILDING_BOTTLER_DESC,Workers draw from any reachable well or river and stock reusable waterskins here.
 JOB_REPAIRING,Repairing
 JOB_COOKING,Cooking
 JOB_MEDICINE_MAKING,Medicine making
