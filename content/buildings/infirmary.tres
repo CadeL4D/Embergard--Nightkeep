@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/stonecutter.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"infirmary"
+display_name = "BUILDING_INFIRMARY"
+description = "BUILDING_INFIRMARY_DESC"
+sprite = ExtResource("2_tex")
+category = &"community"
+tier = 3
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"boards": 14, &"cut_stone": 10, &"medicine": 4}
+build_work = 44.0
+max_hp = 240.0
+repair_cost = {&"boards": 1, &"cut_stone": 1}
+upgrades_from = &"clinic"
+influence_radius = 7
+light_radius = 3
+worker_slots = 4
+workplace_role = &"clinic"
+input_capacity = 80
+order = 31
+color = Color(0.7, 0.86, 0.76, 1)

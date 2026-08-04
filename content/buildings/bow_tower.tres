@@ -21,6 +21,7 @@ cost = {
 }
 build_work = 28.0
 max_hp = 170.0
+upgrades_from = &"watchtower"
 repair_cost = {&"boards": 2}
 repair_work = 4.0
 repair_amount = 45.0

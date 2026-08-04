@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/farm.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"plantation"
+display_name = "BUILDING_PLANTATION"
+description = "BUILDING_PLANTATION_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 2
+footprint = Vector2i(4, 2)
+blocks_movement = false
+max_blight = 20
+cost = {&"boards": 8, &"wood": 14}
+build_work = 26.0
+max_hp = 150.0
+repair_cost = {&"boards": 1}
+upgrades_from = &"farm"
+is_stockpile = true
+inventory_capacity = 180
+storage_tags = Array[StringName]([&"food", &"rations"])
+influence_radius = 6
+worker_slots = 5
+workplace_role = &"farm"
+output_capacity = 120
+order = 20
+color = Color(0.6, 0.78, 0.38, 1)

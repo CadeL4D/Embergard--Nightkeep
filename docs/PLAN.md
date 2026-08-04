@@ -942,6 +942,122 @@ excluded.
 
 ---
 
+## Building roster and Village Center pass — 2026-08-04
+
+The one progression dial the design leans on (`BuildingDef.tier` against `Colony.center_tier()`)
+was barely turning, and the build menu was showing the player a list of things they could not do.
+
+**What was wrong**
+
+- **23 of 51 buildings sat at tier 1.** A first-day colony was handed almost the entire early
+  game at once — every gathering camp, every processing chain, walls, towers, a shrine and three
+  housing branches — across six tabs. There was nothing to work toward and far too much to read.
+- **The Great Hall's cost was downstream of buildings that were already free.** Centre 2 asked
+  for 12 boards and 8 cut stone, both produced by tier-1 workshops, so "raise the centre" meant
+  "build the sawmill and stonecutter you were going to build anyway, then wait for ten souls".
+  The upgrade cost nothing the player had not already decided to do.
+- **Tier 2 was a dumping ground** of sixteen buildings from a Road to a Catapult, and tier 3 held
+  four, three of them defence. The curve was a confetti cannon followed by a damp squib.
+- **The Village Center was invisible in the build menu.** `in_menu()` filters out the founding
+  centre and every upgrade target, so the single most important progression lever in the game
+  appeared nowhere in the menu that exists to teach progression — you had to already know to tap
+  the Hearth on the map.
+
+**The tiers now mean something**
+
+| Tier | Centre | Identity | Contains |
+|---|---|---|---|
+| 1 | Hearth | **survive** | stockpile, granary, well, path, bridge, hut, lumber lodge, mining camp, farm, palisade, gate, watchtower, spike barricade, barracks, shrine |
+| 2 | Great Hall | **refine** | every processing chain — sawmill, stonecutter, kitchen, apothecary, bowyer, toolsmith, bottler — plus warehouse, road, maintenance yard, ammo store, stone wall, reinforced gate, cinder trap, ranger lodge, clinic, temple |
+| 3 | Stone Keep | **master** | smelter, forge, armory, ballista, catapult, ember beacon, ember rampart, banish spire, storm rod, sanctum |
+
+**Tier 1 is now self-sufficient in wood and stone alone.** Nothing placeable at Centre 1 asks for
+a processed good, which is what makes the tier a coherent stage rather than a partial list. The
+Great Hall's cost therefore had to change — it now costs 60 wood and 45 stone, payable by a colony
+of pure gatherers, and what it BUYS is the processing chain everything above it depends on. That
+inverts the old relationship: the centre used to be a receipt for work already done, and is now
+the gate that work has to pass through.
+
+**Hiding, not disabling**
+
+Tier-locked cards are no longer shown greyed out (`Buildings.revealed`). A menu whose cards are
+mostly dead reads as a list of refusals. Population gates are still shown and disabled, because
+that number is one the player watches climb. Empty tabs disappear with their contents.
+
+That trade only works if something carries the promise the grey cards used to, so the build panel
+gained a **Village Center row** above the tabs: the next tier by name, what it costs, how many
+buildings arrive with it, and a button that raises it in place. Raising goes through
+`Colony.upgrade_building` exactly as the selection card does — one upgrade path, two entrances —
+and the camera focuses the centre so the player sees where their materials went.
+
+**Every early building now has somewhere to go**
+
+Upgrade chains use the existing in-place upgrade (footprints must match, `workplace_role` keeps
+the job attached across the chain):
+
+| From | To | What changes |
+|---|---|---|
+| granary | **silo** | 240 → 720 capacity, spoilage 0.25 → 0.08 |
+| well | **cistern** | 90 → 220 HP, influence 3 → 6 |
+| lumber lodge | **forester's hall** | 3 → 5 cutters, 80 → 220 yard |
+| mining camp | **deep mine** | 3 → 5 miners, 90 → 240 store |
+| farm | **plantation** | 3 → 5 farmers, and it stores its own harvest |
+| clinic | **infirmary** | 2 → 4 healers, 30 → 80 medicine buffer (tier 3) |
+| watchtower | **bow tower** | existing card re-parented; towers improve rather than being replaced |
+
+**Still open**
+
+- Barracks stayed at tier 1 deliberately: warriors are the mechanism that lets the rest of the
+  colony keep working at night, and moving them behind Centre 2 would put the first two nights
+  back to "everybody huddles in the light". Worth re-checking once the tier-1 night is played.
+- Silo, cistern, forester's hall, deep mine, plantation and infirmary reuse existing sprites.
+  They read correctly at 1x but none of them has its own silhouette yet.
+
+---
+
+## HUD pass: one top bar, one menu dock — 2026-08-04
+
+**The top bar is now one strip.** Resources, then season and day, speed and the pause menu, all on
+the same row. `TopRow` became an HBox and the resource breakdown moved out from under it, which
+buys back the second line the menu dock below now uses.
+
+**Every menu moved to a dropdown in the top-left corner.** The bottom launcher strip is gone. What
+it used to be was three overlapping mechanisms reaching the same seven panels:
+
+- a toggle button per menu, in a nine-item horizontally-scrolling strip
+- a **Cycle** button that chose which menu a separate *open* button would open — two presses and a
+  memory test to reach anything
+- a hold-drag radial switcher over Cycle, which was the only fast route and was invisible unless
+  you already knew to hold
+
+Each had its own idea of what "open" meant, and mutual exclusion was enforced by every panel
+explicitly un-pressing the other four — O(n²) bookkeeping that a tab strip gets for free.
+
+**The model is now one value:** `_menu_tab`, plus whether `MenuPanel` is visible. `Menus` opens the
+dropdown on the tab you last used; the tab strip switches between menus in one press; the panel
+stays up until `Menus` is pressed again. Nothing else closes it except the three things that own
+the whole screen — a harvest brush, the survivor prompt, and the resource breakdown.
+
+Two menus are not panels and are handled as such:
+
+- **Hand** is a world tool. Its tab carries its own status text, since there is no body to show it.
+- **Realm** is a full screen. Selecting it closes the dropdown and hands over, and `_menu_tab` is
+  deliberately left alone so reopening returns you to the menu you were actually working in.
+
+**Sizing.** `_fit_drawers` still shrinks whichever body is open until the column fits the viewport —
+the failure it guards against now pushes the bottom cards off screen rather than the button row,
+but it is the same measurement. `_fit_menu_tabs` is new: a ScrollContainer reports zero minimum
+width, so the panel was sized purely by the open body and the narrow Job Board clipped the last tab
+in half. The strip now widens the panel to hold all seven tabs, up to what the screen can take,
+with the scroll surviving underneath for a screen genuinely too narrow.
+
+**Handedness** now mirrors which corner the dock hangs from rather than reordering a bottom strip
+that no longer exists.
+
+`scripts/ui/menu_switcher.gd` was deleted with the gesture it served.
+
+---
+
 ## Reference
 - [World Map — Rise to Ruins Wiki](https://rise-to-ruins.fandom.com/wiki/World_Map)
 - [Corruption Threat — Rise to Ruins Wiki](https://rise-to-ruins.fandom.com/wiki/Global_Corruption_Power)

@@ -20,7 +20,9 @@ func _ready() -> void:
 	_test_camera(camera)
 	await _test_camera_input_route(camera)
 	_test_drawer_exclusivity(run.get_node("Hud"))
-	_test_bottom_menu(run.get_node("Hud"))
+	await _test_drawer_fits_on_screen(run.get_node("Hud"))
+	_test_menu_dropdown(run.get_node("Hud"))
+	_test_center_progression(run.get_node("Hud"))
 	_test_house_branches()
 	_test_hand(run.get_node("GodHand"))
 	_test_line_placement(run.get_node("PlacementController"))
@@ -149,32 +151,125 @@ func _test_camera_input_route(camera: Camera2D) -> void:
 	_expect(not camera.position.is_equal_approx(pan_before),
 		"a real routed desktop drag pans the camera")
 
+	# The brush owns the left button and erasing owns the right, so on a desktop this
+	# is the ONLY way to move the map without first closing the tool. Routed through
+	# the viewport rather than called directly, because the whole failure mode was the
+	# paint surface swallowing the event before the camera ever saw it.
+	DefenseControl.select_gather_mode(&"woodcutting")
+	camera.center_on_cell(World.keep_cell)
+	pan_before = camera.position
+	Input.parse_input_event(_pan_button(Vector2(400, 180), true))
+	Input.parse_input_event(_pan_motion(Vector2(460, 180), Vector2(60, 0)))
+	Input.parse_input_event(_pan_button(Vector2(460, 180), false))
+	await get_tree().process_frame
+	_expect(not camera.position.is_equal_approx(pan_before),
+		"middle-drag pans the map while a harvest brush is open")
+	DefenseControl.cancel_gather_paint()
+
 
 func _test_drawer_exclusivity(hud: CanvasLayer) -> void:
-	var jobs: Button = hud.get_node("SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton")
-	var build: Button = hud.get_node("SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BuildButton")
-	jobs.button_pressed = true
-	build.button_pressed = true
-	var job_panel: Control = hud.get_node("SafeArea/Layout/BottomRow/JobPanel")
-	var build_panel: Control = hud.get_node("SafeArea/Layout/BottomRow/BuildPanel")
+	var job_panel: Control = hud.get_node(
+		"SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel")
+	var build_panel: Control = hud.get_node(
+		"SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel")
+	hud._select_menu_tab(&"jobs")
+	hud._select_menu_tab(&"build")
 	_expect(build_panel.visible and not job_panel.visible,
-		"opening one thumb drawer closes the previous drawer")
-	build.button_pressed = false
+		"one open tab means one open menu")
+	hud._close_menus()
 
 
-func _test_bottom_menu(hud: CanvasLayer) -> void:
-	hud._select_bottom_menu(0)
-	var selected: Button = hud.get_node(
-		"SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BottomMenuButton")
-	hud._on_menu_cycle_pressed()
-	_expect(hud._bottom_menu_index == 1 \
-		and not hud.get_node("SafeArea/Layout/BottomRow/JobPanel").visible \
-		and selected.text == tr(hud.BOTTOM_MENU_LABELS[1]),
-		"Cycle chooses Jobs and renames the selected menu action without opening it")
-	hud._on_bottom_menu_pressed()
-	_expect(hud.get_node("SafeArea/Layout/BottomRow/JobPanel").visible,
-		"pressing the selected Jobs action opens job assignment")
-	hud._select_bottom_menu(0)
+## Both ends of the column have to survive an open menu: the dropdown hangs from the top-left
+## and the world-context cards sit at the bottom, so a menu body that is too tall pushes the
+## cards off the screen. The original form of this bug took the ONLY way out of a drawer with it.
+func _test_drawer_fits_on_screen(hud: CanvasLayer) -> void:
+	var root := hud.get_tree().root
+	var restore := root.size
+	# Pin the shipping viewport for the duration. A headless run gets an 800x800 window
+	# and everything fits there; the overflow only exists on the 360-tall layout the
+	# game is actually authored for, so testing at whatever size the harness happens to
+	# have would quietly assert nothing.
+	root.size = Vector2i(800, 360)
+	await hud.get_tree().process_frame
+
+	var dock: Control = hud.get_node("SafeArea/Layout/MenuDock")
+	for tab in [&"jobs", &"build", &"library", &"control"]:
+		hud._select_menu_tab(tab)
+		hud._fit_drawers()
+		await hud.get_tree().process_frame
+		_expect(dock.global_position.y + dock.size.y <= root.get_visible_rect().size.y,
+			"the %s menu fits on screen with room below it" % tab)
+	hud._close_menus()
+
+	root.size = restore
+	await hud.get_tree().process_frame
+
+
+## The dropdown is the one way into every menu now, so its open/close contract is load-bearing:
+## it must stay up while the player works, and close only on the button that opened it.
+func _test_menu_dropdown(hud: CanvasLayer) -> void:
+	var menus: Button = hud.get_node("SafeArea/Layout/MenuDock/MenusButton")
+	var panel: Control = hud.get_node("SafeArea/Layout/MenuDock/MenuPanel")
+	var tabs: HBoxContainer = hud.get_node(
+		"SafeArea/Layout/MenuDock/MenuPanel/Layout/TabsClip/Tabs")
+	hud._close_menus()
+	_expect(not panel.visible, "the dropdown starts closed")
+	menus.button_pressed = true
+	_expect(panel.visible and tabs.get_child_count() == hud.MENU_IDS.size(),
+		"Menus drops down one tab per menu (%d)" % tabs.get_child_count())
+
+	for tab in [&"jobs", &"build", &"control", &"library", &"powers"]:
+		hud._select_menu_tab(tab)
+		_expect(panel.visible, "switching to %s leaves the dropdown open" % tab)
+
+	# The Realm map is a whole screen, so it is the one tab that closes the dropdown behind it.
+	var realm_map: CanvasLayer = hud.get_node("../RealmMap")
+	hud._select_menu_tab(&"realm")
+	_expect(not panel.visible and realm_map.visible,
+		"the Realm tab hands over to the full-screen map instead of stacking under it")
+	realm_map.visible = false
+
+	menus.button_pressed = true
+	_expect(panel.visible and hud._menu_tab == &"powers",
+		"reopening returns to the last tab the player used, not the Realm")
+	menus.button_pressed = false
+	_expect(not panel.visible, "pressing Menus again is what closes it")
+
+
+## With tier-locked cards hidden, the Village Center row is the only thing left telling the player
+## that the rest of the game exists. If that row ever goes quiet, hiding the cards turns a
+## progression system into a missing one.
+func _test_center_progression(hud: CanvasLayer) -> void:
+	var revealed := Buildings.revealed()
+	var leaked := 0
+	for def: BuildingDef in revealed:
+		if def.tier > Colony.center_tier():
+			leaked += 1
+	_expect(leaked == 0 and revealed.size() < Buildings.in_menu().size(),
+		"the build menu hides what the Village Center has not unlocked (%d of %d shown)"
+			% [revealed.size(), Buildings.in_menu().size()])
+	_expect(Buildings.revealed_by_next_center() > 0,
+		"the next Village Center tier has buildings to promise (%d)"
+			% Buildings.revealed_by_next_center())
+
+	hud._refresh_center_row()
+	_expect(hud._center_raise.visible and not hud._center_status.text.is_empty(),
+		"the build menu advertises the next Village Center tier")
+
+	# A tier whose own contents cannot pay for the next centre gates itself. Everything visible
+	# at Centre 1, and the Great Hall that leaves it, must be payable in raw wood and stone —
+	# boards and cut stone are what raising the centre BUYS.
+	var raw: Array[StringName] = [&"wood", &"stone"]
+	var processed := PackedStringArray()
+	var checked := revealed.duplicate()
+	checked.append(Buildings.get_building(&"great_hall"))
+	for def: BuildingDef in checked:
+		for kind: StringName in def.cost:
+			if not kind in raw:
+				processed.append("%s:%s" % [def.id, kind])
+	_expect(processed.is_empty(),
+		"the first tier and the Great Hall are payable by a colony that only gathers (%s)"
+			% ", ".join(processed))
 
 
 func _test_house_branches() -> void:
@@ -225,6 +320,23 @@ func _test_accessibility() -> void:
 		"hold duration is adjustable for motor accessibility")
 	_expect(Accessibility.SCREEN_SHAKE_LEVELS[0] == 0.0,
 		"screen shake can be disabled completely")
+
+
+func _pan_button(position: Vector2, pressed: bool) -> InputEventMouseButton:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_MIDDLE
+	event.position = position
+	event.pressed = pressed
+	return event
+
+
+func _pan_motion(position: Vector2, relative: Vector2) -> InputEventMouseMotion:
+	var event := InputEventMouseMotion.new()
+	event.position = position
+	event.relative = relative
+	event.velocity = relative * 30.0
+	event.button_mask = MOUSE_BUTTON_MASK_MIDDLE
+	return event
 
 
 func _touch(index: int, position: Vector2, pressed: bool) -> InputEventScreenTouch:

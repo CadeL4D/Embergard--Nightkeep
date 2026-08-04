@@ -136,6 +136,21 @@ const COMMAND_HOLD := 30.0
 ## at all while looking perfectly busy.
 const REACH_SQ := 700.0
 
+## How long a villager may stand on one tile while a need is already at zero before
+## their entire task state is torn down and they are made to walk somewhere else.
+##
+## Dying where you stand is never a legitimate steady state. Every `_begin_*` helper on
+## this class can fail — no reachable well, food that exists only inside a workshop's
+## buffer, a route a control zone forbids, a stockpile with no room — and a villager
+## whose chosen answer keeps failing simply asks the same question again on the next
+## think, from the same tile, and gets the same answer. That reads to the player as
+## "the villagers stopped moving and starved", which is the worst-presenting bug the
+## colony can have.
+##
+## Walking is the escape, not a retry: every nearest_* query is a distance query, so a
+## source that is unreachable from this cell very often is reachable from the next one.
+const STALL_LIMIT := 10.0
+
 var job: StringName = &""
 var state: State = State.IDLE
 
@@ -194,6 +209,10 @@ var _awaiting_path: bool = false
 var _path_request_serial: int = 0
 var _path_requested_tick: int = 0
 var _drink_from_store: bool = false
+## Cell the stall watchdog last saw this villager on, and how long they have been
+## there with a need at zero. See STALL_LIMIT.
+var _stall_cell: int = -1
+var _stall_time: float = 0.0
 var _tint_timer: float = 0.0
 var _presentation_accum: float = 0.0
 var _last_damage_reason: StringName = &""
@@ -432,6 +451,9 @@ func think(delta: float) -> void:
 	if not alive:
 		return
 	_decay_needs(delta)
+	if not alive:
+		return
+	_tick_stall_watchdog(delta)
 
 	# A queued solve is allowed a few seconds, then the villager resets their task
 	# themselves. Picking somebody up happened to cancel the stale request, which
@@ -483,8 +505,13 @@ func think(delta: float) -> void:
 		# guard duty when it has become genuinely lethal — otherwise they hold the line and
 		# drink at first light. Food does not need this guard: meals come from a stockpile,
 		# which is by definition inside the colony.
-		if food <= HUNGER_URGENT and Colony.has_food():
-			_begin_eat()
+		# Gated on _begin_eat() reporting success rather than on Colony.has_food().
+		# has_food() reads the aggregate stock, which counts food sitting inside farm
+		# and kitchen buffers; nearest_food_source() only finds shelves a villager can
+		# actually walk up to and take a meal from. When those two disagreed this
+		# branch returned unconditionally, so a hungry villager stopped drinking,
+		# sleeping and working as well and simply stood still until they died.
+		if food <= HUNGER_URGENT and _begin_eat():
 			return
 		if rest <= REST_URGENT:
 			_begin_sleep()
@@ -820,14 +847,31 @@ func _tick_drinking() -> void:
 
 # --- Eating and sleeping ------------------------------------------------------------------
 
-func _begin_eat() -> void:
+## Head for the nearest shelf that a meal can be taken off. False means there is
+## nowhere to eat, which the caller must treat as "carry on with something else"
+## rather than as a reason to stop thinking.
+func _begin_eat() -> bool:
+	# Eat the load in your arms first. A gatherer holding berries they cannot deliver —
+	# because every stockpile is full, or the one they were walking to burned down —
+	# should not starve to death standing on top of a meal.
+	if carry_amount > 0 and carry_kind in [&"food", &"rations"]:
+		var per_unit := 2.0 if carry_kind == &"rations" else 1.0
+		var eaten := mini(carry_amount, ceili(float(MEAL_COST) / per_unit))
+		carry_amount -= eaten
+		food = minf(food + MEAL_RESTORE * (float(eaten) * per_unit / float(MEAL_COST)),
+			NEED_MAX)
+		if carry_amount <= 0:
+			carry_kind = &""
+		return true
+
 	var source := Colony.nearest_food_source(cell())
 	if source == -1:
-		return
+		return false
 	stop()
 	_release_target()
 	_target_cell = source
 	_request_path(source, State.EATING)
+	return true
 
 
 func _tick_eating() -> void:
@@ -905,11 +949,16 @@ func _seek_work() -> void:
 	# a harvest interrupted by nightfall. Get rid of it before taking new work, or
 	# the load is carried around forever and quietly lost when the villager dies.
 	if carry_amount > 0:
-		_begin_haul()
+		# A colony with every shelf full is a situation the player has to be able to
+		# SEE. Wandering keeps the carrier visibly alive and re-asks the question from
+		# a different tile, instead of freezing a line of porters mid-stride.
+		if not _begin_haul():
+			_wander()
 		return
 	if not pending_loads.is_empty():
 		_take_next_pending_load()
-		_begin_haul()
+		if not _begin_haul():
+			_wander()
 		return
 	if not is_adult():
 		_wander()
@@ -1547,16 +1596,20 @@ func _take_next_pending_load() -> bool:
 	return carry_amount > 0
 
 
-func _begin_haul() -> void:
+## False when there is nothing to carry or nowhere with room to put it. The load is
+## kept either way — dropping it would destroy resources — but the caller must not
+## treat a full colony as a reason to stand still.
+func _begin_haul() -> bool:
 	if carry_amount <= 0:
 		state = State.IDLE
-		return
+		return false
 	var drop := Colony.nearest_storage_destination(cell(), carry_kind)
 	if drop == -1:
 		state = State.IDLE
-		return
+		return false
 	_target_cell = drop
 	_request_path(drop, State.HAULING)
+	return true
 
 
 func _tick_hauling() -> void:
@@ -1730,8 +1783,16 @@ func _request_path(dest: int, next_state: State) -> void:
 		# Going home must remain legal after darkness falls. The old check only
 		# exempted FLEEING, so a sleeper whose route crossed one unlit tile had the
 		# route rejected and appeared to pause forever outside the village.
-		var returning_to_safety := next_state in [
-			State.FLEEING, State.SLEEPING, State.DRINKING]
+		#
+		# Walking to the granary belongs on that list for the same reason walking to the
+		# well does: both are trips INTO the settlement to answer a need, and a dusk lock
+		# that refuses them is telling a hungry villager to stand outside in the dark and
+		# starve. An empty canteen or an empty belly overrides the lock outright — nobody
+		# should die of a rule that exists to keep them alive. Forbidden zones are still
+		# honoured, because those are the player saying "never here" rather than "not now".
+		var desperate := water <= 0.0 or food <= 0.0
+		var returning_to_safety := desperate or next_state in [
+			State.FLEEING, State.SLEEPING, State.DRINKING, State.EATING]
 		if not DefenseControl.path_allowed(path, is_guard, returning_to_safety):
 			if next_state in [State.SEEKING, State.FETCHING, State.DELIVERING,
 					State.BUILDING, State.HAULING]:
@@ -1743,6 +1804,48 @@ func _request_path(dest: int, next_state: State) -> void:
 		follow_path(path)
 		state = next_state
 	, next_state == State.DRINKING)
+
+
+## Catch a villager who is dying on the spot and force them to move.
+##
+## Scoped deliberately tight: it only ever fires while food or water is already at
+## ZERO, which means the villager is taking damage. Standing still is legitimate for
+## most of this class — farming, sleeping, holding a guard post — but standing still
+## while a need is empty is not, whatever state the machine believes it is in.
+##
+## The specific failures this used to catch are fixed above where they happen; this is
+## the floor under all of them, including the ones nobody has hit yet. See STALL_LIMIT.
+func _tick_stall_watchdog(delta: float) -> void:
+	var here := cell()
+	if here != _stall_cell or is_moving() or (food > 0.0 and water > 0.0):
+		_stall_cell = here
+		_stall_time = 0.0
+		return
+	_stall_time += delta
+	if _stall_time < STALL_LIMIT:
+		return
+	_stall_time = 0.0
+	_break_deadlock()
+
+
+## Drop every claim, every route and every shift, then walk off this tile.
+##
+## The walk is the point rather than the reset: nearest_food_source, nearest_bed and
+## nearest_water_source are all distance queries answered from the villager's own cell,
+## so the reset alone would produce the same failing answer a second time.
+func _break_deadlock() -> void:
+	_recover_stalled_path()
+	var grid: Grid = World.grid
+	var here := grid.coord(cell())
+	for attempt in 8:
+		var point := Vector2i(here.x + randi_range(-6, 6), here.y + randi_range(-6, 6))
+		if not grid.is_valid_v(point):
+			continue
+		var dest := grid.index_v(point)
+		if dest == cell() or not World.is_walkable(dest):
+			continue
+		_request_path(dest, State.IDLE)
+		return
 
 
 func _recover_stalled_path() -> void:

@@ -300,9 +300,9 @@ NOTICE_TOME_CRUMBLED,{0} falls to dust.
 NOTICE_TEMPLE_RAISED,The temple stands. Tier {0} rites are open to you.
 JOB_WORKER,workers
 JOB_PRIEST,priests
-BUILDING_GREAT_HALL,great hall
+BUILDING_GREAT_HALL,Great Hall
 BUILDING_GREAT_HALL_DESC,"The heart of the colony, raised. Tier 2: opens the upper half of the build list."
-BUILDING_STONE_KEEP,stone keep
+BUILDING_STONE_KEEP,Stone Keep
 BUILDING_STONE_KEEP_DESC,"Walls, braziers and a barred gate. Tier 3, and the safest ground on the map."
 BUILDING_LONGHOUSE,longhouse
 BUILDING_LONGHOUSE_DESC,Nine beds under one roof. Beds are how a colony grows.
@@ -920,3 +920,19 @@ LIBRARY_NO_SLOT,No free Tome slot. Shelve another book or expand the Temple.
 LIBRARY_COMBINE_NEEDS,Merge needs three unlocked shelved Tomes of the same tier.
 UI_DISMISS,Dismiss
 UI_DISMISS_CONFIRM,Sure? Dismiss
+CENTER_ROW_NEXT,"Next: {0} — opens {1} buildings. Needs {2}."
+CENTER_ROW_MAX,"Your centre is fully raised."
+BUILDING_SILO,Silo
+BUILDING_SILO_DESC,A sealed granary. Holds three times as much and loses almost none of it.
+BUILDING_CISTERN,Cistern
+BUILDING_CISTERN_DESC,A covered reservoir. Drinkable like a well, far harder to break, and it pushes the settlement's reach further out.
+BUILDING_FORESTERS_HALL,Forester's Hall
+BUILDING_FORESTERS_HALL_DESC,A managed woodland office. Five cutters instead of three, and a far larger timber yard.
+BUILDING_DEEP_MINE,Deep Mine
+BUILDING_DEEP_MINE_DESC,Shafts sunk under the outcrop. Five miners instead of three, and room for everything they bring up.
+BUILDING_PLANTATION,Plantation
+BUILDING_PLANTATION_DESC,Worked fields with a barn attached. Five farmers instead of three, and the harvest is stored where it grows.
+BUILDING_INFIRMARY,Infirmary
+BUILDING_INFIRMARY_DESC,A staffed ward. Four healers instead of two, and enough medicine kept to hand for a bad night.
+UI_MENUS,Menus
+UI_MENUS_HINT,"Open every colony menu. Tap again to close."

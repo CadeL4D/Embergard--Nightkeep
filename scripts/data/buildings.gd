@@ -44,9 +44,39 @@ static func in_menu() -> Array[BuildingDef]:
 	return out
 
 
+## The cards a player may actually SEE right now.
+##
+## The Village Center tier HIDES rather than disables. Showing every future building did teach
+## the player that a Smelter exists, but it also opened a first-day build menu onto forty cards
+## across six tabs with most of them dead — the menu read as a list of things you cannot do. One
+## Village Center card now carries that job instead: it names the next tier, what it costs, and
+## how many buildings come with it, which is a promise rather than a wall of grey.
+##
+## Population gates are deliberately NOT hidden. That number is one the player watches climb, so
+## a Longhouse reading "8 souls" is a goal; a card that silently appears is a surprise.
+static func revealed() -> Array[BuildingDef]:
+	var out: Array[BuildingDef] = []
+	for def: BuildingDef in in_menu():
+		if def.tier > Colony.center_tier():
+			continue
+		out.append(def)
+	return out
+
+
+## How many hidden cards the NEXT Village Center tier would reveal. The promise on the Center
+## card, and the reason hiding the list does not simply make the game look smaller.
+static func revealed_by_next_center() -> int:
+	var next_tier := Colony.center_tier() + 1
+	var count := 0
+	for def: BuildingDef in in_menu():
+		if def.tier == next_tier:
+			count += 1
+	return count
+
+
 ## Buildings the player may place right now — the menu list, minus anything the colony has not
-## yet earned. Kept separate from in_menu() because a locked-by-tier card is still SHOWN, just
-## disabled: a player has to be able to see that a Smelter exists and what it needs.
+## yet earned. Kept separate from revealed() because a card can be visible and still refused:
+## population gates show as a disabled card with the number it is waiting on.
 static func placeable() -> Array[BuildingDef]:
 	var out: Array[BuildingDef] = []
 	for def: BuildingDef in in_menu():
@@ -87,10 +117,12 @@ static func upgrade_for(id: StringName) -> BuildingDef:
 ## Ordered by the lowest `order` in each category, so the same single number that sorts cards
 ## inside a tab also sorts the tabs themselves. Nothing to keep in step, and dropping in a
 ## building with a new category grows the tab strip on its own.
+## Built from revealed(), not in_menu(): a tab whose every card is still behind a Village Center
+## tier is a tab that opens onto nothing, and an empty tab is worse than an absent one.
 static func categories() -> Array[StringName]:
 	var first: Dictionary = {}
 	var out: Array[StringName] = []
-	for def: BuildingDef in in_menu():
+	for def: BuildingDef in revealed():
 		var key := def.category if not def.category.is_empty() else &"logistics"
 		if not first.has(key):
 			first[key] = def.order
@@ -104,7 +136,7 @@ static func categories() -> Array[StringName]:
 
 static func in_category(category: StringName) -> Array[BuildingDef]:
 	var out: Array[BuildingDef] = []
-	for def: BuildingDef in in_menu():
+	for def: BuildingDef in revealed():
 		var key := def.category if not def.category.is_empty() else &"logistics"
 		if key == category:
 			out.append(def)

@@ -37,6 +37,7 @@ var _velocity: Vector2 = Vector2.ZERO
 var _pinch_prev_dist: float = 0.0
 var _pinch_prev_midpoint: Vector2 = Vector2.ZERO
 var _paint_navigation: bool = false
+var _mouse_panning: bool = false
 var _snap_tween: Tween
 var _focus_tween: Tween
 var _shake_time: float = 0.0
@@ -66,6 +67,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_tick_keyboard_pan(delta)
 	if _state == State.NONE:
 		if _velocity.length() <= INERTIA_CUTOFF:
 			_velocity = Vector2.ZERO
@@ -74,6 +76,30 @@ func _process(delta: float) -> void:
 			_velocity = _velocity.lerp(Vector2.ZERO, clampf(INERTIA_DECAY * delta, 0.0, 1.0))
 			_clamp_position()
 	_tick_shake(delta)
+
+
+## WASD panning, as the no-hardware-required companion to the middle-drag above.
+##
+## Read straight off the keyboard rather than through an input action: this is desktop
+## comfort, not a bound verb, and adding four actions to project.godot for it would put
+## them in the rebinding surface of a game whose real input is a touchscreen. WASD
+## specifically, not the arrow keys — arrows already nudge a focused job slider, and a
+## camera that also slid sideways while the player adjusted a quota is a worse bug than
+## the one this fixes.
+const KEYBOARD_PAN_SPEED := 420.0        ## screen px/s at 1x zoom
+
+func _tick_keyboard_pan(delta: float) -> void:
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return
+	var move := Vector2(
+		float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A)),
+		float(Input.is_key_pressed(KEY_S)) - float(Input.is_key_pressed(KEY_W)))
+	if move == Vector2.ZERO:
+		return
+	_velocity = Vector2.ZERO
+	position += move.normalized() * KEYBOARD_PAN_SPEED * delta / zoom.x
+	_clamp_position()
 
 
 func shake(strength: float, duration: float) -> void:
@@ -101,6 +127,15 @@ func _tick_shake(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Middle-drag is the one camera gesture that survives every tool, and it is checked
+	# before anything else for exactly that reason. A brush owns the left button and
+	# erasing owns the right, so while a harvest or zone tool was open there was no way
+	# at all to move the map on desktop — the two-finger escape hatch below only exists
+	# on a touchscreen. Panning has to work while painting: marking a forest you cannot
+	# scroll to is not a workflow.
+	if _handle_pan_button(event):
+		return
+
 	# Painted orders own one-finger drags. Their paint surfaces consume that first
 	# finger, but deliberately pass a two-finger gesture through for map navigation.
 	# Desktop wheel zoom also remains available.
@@ -122,6 +157,31 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_drag(event)
 	elif event is InputEventMouseButton:
 		_handle_wheel(event)
+
+
+## Middle-button drag pan. Returns true when the event belonged to the camera.
+##
+## Deliberately NOT routed through the touch state machine: `emulate_touch_from_mouse`
+## only mirrors the LEFT button, so a middle drag never produces a phantom finger, and
+## keeping it separate means a pan started during a brush stroke cannot corrupt the
+## pinch bookkeeping when the stroke ends.
+func _handle_pan_button(event: InputEvent) -> bool:
+	if event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+		if button.button_index != MOUSE_BUTTON_MIDDLE:
+			return false
+		_mouse_panning = button.pressed
+		if _mouse_panning:
+			_begin_direct_gesture()
+			_velocity = Vector2.ZERO
+		get_viewport().set_input_as_handled()
+		return true
+	if _mouse_panning and event is InputEventMouseMotion:
+		position -= (event as InputEventMouseMotion).relative / zoom.x
+		_clamp_position()
+		get_viewport().set_input_as_handled()
+		return true
+	return false
 
 
 ## Desktop convenience only. There is no pinch gesture on a PC, so the wheel stands
@@ -297,6 +357,7 @@ func _reset_touch_gesture() -> void:
 	_pinch_prev_dist = 0.0
 	_pinch_prev_midpoint = Vector2.ZERO
 	_paint_navigation = false
+	_mouse_panning = false
 	_touch_start = Vector2.ZERO
 	_touch_start_time = 0.0
 	if _snap_tween and _snap_tween.is_valid():

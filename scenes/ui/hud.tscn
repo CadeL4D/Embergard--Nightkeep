@@ -1,11 +1,10 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://scripts/ui/notice_log.gd" id="2_notice"]
 [ext_resource type="Script" path="res://scripts/ui/breach_markers.gd" id="3_breach"]
 [ext_resource type="Script" path="res://scripts/ui/breakdown_panel.gd" id="4_breakdown"]
 [ext_resource type="Script" path="res://scripts/ui/resource_readout.gd" id="6_resources"]
-[ext_resource type="Script" path="res://scripts/ui/menu_switcher.gd" id="7_switcher"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar"]
 content_margin_left = 10.0
@@ -56,14 +55,6 @@ anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("3_breach")
 
-[node name="MenuSwitcher" type="Control" parent="."]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-z_index = 100
-mouse_filter = 2
-script = ExtResource("7_switcher")
-
 [node name="SafeArea" type="MarginContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
@@ -78,7 +69,7 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 mouse_filter = 2
 
-[node name="TopRow" type="VBoxContainer" parent="SafeArea/Layout"]
+[node name="TopRow" type="HBoxContainer" parent="SafeArea/Layout"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -101,34 +92,10 @@ layout_mode = 2
 mouse_filter = 2
 script = ExtResource("6_resources")
 
-[node name="Breakdown" type="PanelContainer" parent="SafeArea/Layout/TopRow/ResourceColumn"]
-visible = false
-layout_mode = 2
-size_flags_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-script = ExtResource("4_breakdown")
-
-[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/TopRow/ResourceColumn/Breakdown"]
-custom_minimum_size = Vector2(300, 176)
-layout_mode = 2
-horizontal_scroll_mode = 0
-scroll_deadzone = 6
-
-[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/TopRow/ResourceColumn/Breakdown/Scroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 1
-
-[node name="TopSpacer" type="Control" parent="SafeArea/Layout/TopRow"]
-visible = false
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
 [node name="PhaseBar" type="PanelContainer" parent="SafeArea/Layout/TopRow"]
 layout_mode = 2
 size_flags_horizontal = 0
-size_flags_vertical = 0
+size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
 [node name="Row" type="HBoxContainer" parent="SafeArea/Layout/TopRow/PhaseBar"]
@@ -154,6 +121,289 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 10
 tooltip_text = "UI_MENU"
 text = "☰"
+
+[node name="Breakdown" type="PanelContainer" parent="SafeArea/Layout"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+script = ExtResource("4_breakdown")
+
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/Breakdown"]
+custom_minimum_size = Vector2(300, 176)
+layout_mode = 2
+horizontal_scroll_mode = 0
+scroll_deadzone = 6
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/Breakdown/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 1
+
+[node name="MenuDock" type="VBoxContainer" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="MenusButton" type="Button" parent="SafeArea/Layout/MenuDock"]
+custom_minimum_size = Vector2(76, 24)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
+theme_override_font_sizes/font_size = 10
+toggle_mode = true
+tooltip_text = "UI_MENUS_HINT"
+text = "UI_MENUS"
+
+[node name="MenuPanel" type="PanelContainer" parent="SafeArea/Layout/MenuDock"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TabsClip" type="ScrollContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 0
+scroll_deadzone = 6
+
+[node name="Tabs" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/TabsClip"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Body" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Powers" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="JobPanel" type="PanelContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body"]
+visible = false
+custom_minimum_size = Vector2(294, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Hint" type="Label" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
+theme_override_font_sizes/font_size = 8
+text = "UI_JOB_BOARD_HINT"
+
+[node name="Header" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HarvestAreas" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Header"]
+custom_minimum_size = Vector2(112, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "GATHER_AREAS"
+
+[node name="Workers" type="Label" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.72, 0.76, 0.82, 1)
+theme_override_font_sizes/font_size = 8
+text = "UI_WORKERS_AVAILABLE"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout"]
+custom_minimum_size = Vector2(274, 220)
+layout_mode = 2
+horizontal_scroll_mode = 0
+scroll_deadzone = 6
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="BuildPanel" type="PanelContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body"]
+visible = false
+custom_minimum_size = Vector2(410, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="CenterRow" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Status" type="Label" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/CenterRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
+theme_override_font_sizes/font_size = 9
+text = "CENTER_ROW_MAX"
+autowrap_mode = 3
+
+[node name="RaiseButton" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/CenterRow"]
+custom_minimum_size = Vector2(122, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
+theme_override_font_sizes/font_size = 9
+text = "UI_UPGRADE_TO"
+
+[node name="Tabs" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CardsScroll" type="ScrollContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout"]
+custom_minimum_size = Vector2(390, 72)
+layout_mode = 2
+vertical_scroll_mode = 0
+scroll_deadzone = 6
+
+[node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/CardsScroll"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="ControlPanel" type="PanelContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body"]
+visible = false
+custom_minimum_size = Vector2(448, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Status" type="Label" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.737255, 0.768627, 0.8, 1)
+theme_override_font_sizes/font_size = 8
+text = "CONTROL_HINT"
+
+[node name="Paint" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Forbidden" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(88, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_FORBIDDEN"
+
+[node name="Work" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(76, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_WORK"
+
+[node name="Guard" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(76, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_GUARD"
+
+[node name="Erase" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint"]
+custom_minimum_size = Vector2(66, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_ERASE"
+
+[node name="Orders" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Shelter" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders"]
+custom_minimum_size = Vector2(108, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_SHELTER"
+
+[node name="Dusk" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders"]
+custom_minimum_size = Vector2(108, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+toggle_mode = true
+text = "CONTROL_DUSK"
+
+[node name="Cleanse" type="Button" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders"]
+custom_minimum_size = Vector2(112, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "CONTROL_CLEANSE"
+
+[node name="LibraryPanel" type="PanelContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body"]
+visible = false
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Header" type="HBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 10
+text = "LIBRARY_TITLE"
+
+[node name="Capacity" type="Label" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "0/0"
+
+[node name="Auto" type="CheckButton" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Header"]
+custom_minimum_size = Vector2(92, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+button_pressed = true
+text = "LIBRARY_AUTO"
+
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout"]
+custom_minimum_size = Vector2(500, 178)
+layout_mode = 2
+horizontal_scroll_mode = 0
+scroll_deadzone = 6
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Details" type="Label" parent="SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout"]
+custom_minimum_size = Vector2(500, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.76, 0.82, 1)
+theme_override_font_sizes/font_size = 8
+text = "LIBRARY_INSPECT_HINT"
+autowrap_mode = 2
 
 [node name="MigrantPrompt" type="PanelContainer" parent="SafeArea/Layout"]
 visible = false
@@ -200,58 +450,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="LibraryPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
-visible = false
-custom_minimum_size = Vector2(520, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel"]
-layout_mode = 2
-theme_override_constants/separation = 3
-
-[node name="Header" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="Title" type="Label" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 10
-text = "LIBRARY_TITLE"
-
-[node name="Capacity" type="Label" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-text = "0/0"
-
-[node name="Auto" type="CheckButton" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header"]
-custom_minimum_size = Vector2(92, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-button_pressed = true
-text = "LIBRARY_AUTO"
-
-[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout"]
-custom_minimum_size = Vector2(500, 178)
-layout_mode = 2
-horizontal_scroll_mode = 0
-scroll_deadzone = 6
-
-[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout/Scroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 2
-
-[node name="Details" type="Label" parent="SafeArea/Layout/BottomRow/LibraryPanel/Layout"]
-custom_minimum_size = Vector2(500, 24)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.72, 0.76, 0.82, 1)
-theme_override_font_sizes/font_size = 8
-text = "LIBRARY_INSPECT_HINT"
-autowrap_mode = 2
-
 [node name="SelectionCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
 custom_minimum_size = Vector2(220, 0)
@@ -283,53 +481,6 @@ custom_minimum_size = Vector2(112, 24)
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
 text = "EQUIP_BEST"
-
-[node name="JobPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
-visible = false
-custom_minimum_size = Vector2(294, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/JobPanel"]
-layout_mode = 2
-theme_override_constants/separation = 2
-
-[node name="Hint" type="Label" parent="SafeArea/Layout/BottomRow/JobPanel/Layout"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.556863, 0.611765, 0.678431, 1)
-theme_override_font_sizes/font_size = 8
-text = "UI_JOB_BOARD_HINT"
-
-[node name="Header" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/JobPanel/Layout"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="HarvestAreas" type="Button" parent="SafeArea/Layout/BottomRow/JobPanel/Layout/Header"]
-custom_minimum_size = Vector2(112, 26)
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-text = "GATHER_AREAS"
-
-[node name="Workers" type="Label" parent="SafeArea/Layout/BottomRow/JobPanel/Layout/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.72, 0.76, 0.82, 1)
-theme_override_font_sizes/font_size = 8
-text = "UI_WORKERS_AVAILABLE"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="Scroll" type="ScrollContainer" parent="SafeArea/Layout/BottomRow/JobPanel/Layout"]
-custom_minimum_size = Vector2(274, 220)
-layout_mode = 2
-horizontal_scroll_mode = 0
-scroll_deadzone = 6
-
-[node name="Rows" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 2
 
 [node name="GatherBar" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
@@ -412,79 +563,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 8
 toggle_mode = true
 text = "GATHER_REMOVE"
-
-[node name="ControlPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
-visible = false
-custom_minimum_size = Vector2(448, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/ControlPanel"]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="Status" type="Label" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.737255, 0.768627, 0.8, 1)
-theme_override_font_sizes/font_size = 8
-text = "CONTROL_HINT"
-
-[node name="Paint" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout"]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="Forbidden" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
-custom_minimum_size = Vector2(88, 24)
-layout_mode = 2
-theme_override_font_sizes/font_size = 8
-toggle_mode = true
-text = "CONTROL_FORBIDDEN"
-
-[node name="Work" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
-custom_minimum_size = Vector2(76, 24)
-layout_mode = 2
-theme_override_font_sizes/font_size = 8
-toggle_mode = true
-text = "CONTROL_WORK"
-
-[node name="Guard" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
-custom_minimum_size = Vector2(76, 24)
-layout_mode = 2
-theme_override_font_sizes/font_size = 8
-toggle_mode = true
-text = "CONTROL_GUARD"
-
-[node name="Erase" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint"]
-custom_minimum_size = Vector2(66, 24)
-layout_mode = 2
-theme_override_font_sizes/font_size = 8
-toggle_mode = true
-text = "CONTROL_ERASE"
-
-[node name="Orders" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout"]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="Shelter" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders"]
-custom_minimum_size = Vector2(108, 24)
-layout_mode = 2
-theme_override_font_sizes/font_size = 8
-toggle_mode = true
-text = "CONTROL_SHELTER"
-
-[node name="Dusk" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders"]
-custom_minimum_size = Vector2(108, 24)
-layout_mode = 2
-theme_override_font_sizes/font_size = 8
-toggle_mode = true
-text = "CONTROL_DUSK"
-
-[node name="Cleanse" type="Button" parent="SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders"]
-custom_minimum_size = Vector2(112, 24)
-layout_mode = 2
-theme_override_font_sizes/font_size = 8
-text = "CONTROL_CLEANSE"
 
 [node name="BuildingCard" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
@@ -589,32 +667,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 8
 text = "PRODUCTION_MAINTAIN"
 
-[node name="BuildPanel" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
-visible = false
-custom_minimum_size = Vector2(410, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="Layout" type="VBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel"]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="Tabs" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="CardsScroll" type="ScrollContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout"]
-custom_minimum_size = Vector2(390, 72)
-layout_mode = 2
-vertical_scroll_mode = 0
-scroll_deadzone = 6
-
-[node name="Cards" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/BuildPanel/Layout/CardsScroll"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 6
-
 [node name="PlacementBar" type="PanelContainer" parent="SafeArea/Layout/BottomRow"]
 visible = false
 layout_mode = 2
@@ -645,85 +697,3 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "UI_BUILD"
 
-[node name="ButtonsClip" type="ScrollContainer" parent="SafeArea/Layout/BottomRow"]
-custom_minimum_size = Vector2(0, 28)
-layout_mode = 2
-size_flags_horizontal = 3
-horizontal_scroll_mode = 1
-vertical_scroll_mode = 0
-scroll_deadzone = 6
-
-[node name="Buttons" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ButtonsClip"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="MenuCycleButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-custom_minimum_size = Vector2(52, 28)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
-theme_override_font_sizes/font_size = 9
-tooltip_text = "UI_BOTTOM_MENU_HINT"
-text = "UI_CYCLE"
-
-[node name="BottomMenuButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-custom_minimum_size = Vector2(82, 28)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
-theme_override_font_sizes/font_size = 9
-tooltip_text = "UI_BOTTOM_MENU_OPEN"
-text = "UI_POWER_UPS"
-
-[node name="Powers" type="HBoxContainer" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="JobsButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-visible = false
-custom_minimum_size = Vector2(62, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 10
-toggle_mode = true
-text = "UI_JOBS"
-
-[node name="BuildButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-visible = false
-custom_minimum_size = Vector2(62, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 10
-toggle_mode = true
-text = "UI_BUILD"
-
-[node name="HandButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-visible = false
-custom_minimum_size = Vector2(70, 22)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
-theme_override_font_sizes/font_size = 9
-toggle_mode = true
-text = "UI_HAND"
-
-[node name="LibraryButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-visible = false
-custom_minimum_size = Vector2(72, 22)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.811765, 0.745098, 1, 1)
-theme_override_font_sizes/font_size = 9
-toggle_mode = true
-text = "UI_LIBRARY"
-
-[node name="ControlButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-visible = false
-custom_minimum_size = Vector2(70, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 10
-toggle_mode = true
-text = "UI_CONTROL"
-
-[node name="RealmButton" type="Button" parent="SafeArea/Layout/BottomRow/ButtonsClip/Buttons"]
-visible = false
-custom_minimum_size = Vector2(62, 22)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.831373, 0.494118, 1)
-theme_override_font_sizes/font_size = 10
-text = "UI_REALM"

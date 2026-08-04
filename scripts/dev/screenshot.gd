@@ -127,9 +127,12 @@ func _capture_all() -> void:
 	for shot: Dictionary in SHOTS:
 		var panel: String = shot.get("panel", "")
 		DefenseControl.cancel_gather_paint()
-		var menu_id: StringName = &"jobs" if panel == "jobs" else (
-			&"build" if panel == "build" else &"powers")
-		hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(menu_id))
+		# A shot with no named panel photographs the map with the dropdown shut, which is
+		# what the game looks like most of the time.
+		if panel == "jobs" or panel == "build":
+			hud._select_menu_tab(StringName(panel))
+		else:
+			hud._close_menus()
 		if panel == "gather":
 			DefenseControl.set_gather_mode(&"woodcutting")
 		_seed_monsters(int(shot.get("monsters", 0)))

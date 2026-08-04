@@ -17,6 +17,7 @@ func _ready() -> void:
 	_check_danger_reasons()
 	_check_rest_and_night_recall()
 	_check_stored_water()
+	_check_hunger_never_freezes_a_villager()
 	_check_two_day_cycles()
 
 	RunSave.clear()
@@ -31,28 +32,27 @@ func _ready() -> void:
 
 func _check_hud(run: Node2D) -> void:
 	var hud: CanvasLayer = run.get_node("Hud")
-	var cycle_button: Button = hud.get_node(
-		"SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton")
-	_expect(cycle_button != null,
-		"Cycle has its own button")
-	var menu_button: Button = hud.get_node(
-		"SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BottomMenuButton")
-	_expect(menu_button != null,
-		"the full bottom menu has its own button")
-	var starting_menu: int = hud._bottom_menu_index
-	hud._on_menu_cycle_pressed()
-	_expect(hud._bottom_menu_index == (starting_menu + 1) % hud.BOTTOM_MENU_IDS.size(),
-		"tapping Cycle chooses the next menu")
-	_expect(not hud._job_panel.visible,
-		"cycling to Jobs does not open it before the selected menu button is pressed")
-	_expect(menu_button.text == tr(hud.BOTTOM_MENU_LABELS[hud._bottom_menu_index]),
-		"the selected menu button is renamed to the cycled choice")
-	hud._on_bottom_menu_pressed()
-	_expect(hud._job_panel.visible,
-		"pressing the Jobs menu button opens the job assignment panel")
-	hud._select_bottom_menu(0)
+	var menus_button: Button = hud.get_node("SafeArea/Layout/MenuDock/MenusButton")
+	var menu_panel: Control = hud.get_node("SafeArea/Layout/MenuDock/MenuPanel")
+	_expect(menus_button != null and not menu_panel.visible,
+		"the dropdown starts closed behind one Menus button")
+	menus_button.button_pressed = true
+	_expect(menu_panel.visible and hud._menu_tab_buttons.size() == hud.MENU_IDS.size(),
+		"pressing Menus drops down a tab for every menu (%d)" % hud.MENU_IDS.size())
+	hud._select_menu_tab(&"build")
+	_expect(menu_panel.visible and hud._build_panel.visible and not hud._job_panel.visible,
+		"a tab swaps the open menu without closing the dropdown")
+	hud._select_menu_tab(&"jobs")
+	_expect(menu_panel.visible and hud._job_panel.visible and not hud._build_panel.visible,
+		"tabbing back is one press and leaves the dropdown up")
+	menus_button.button_pressed = false
+	_expect(not menu_panel.visible and not hud._job_panel.visible,
+		"only pressing Menus again closes it")
+	menus_button.button_pressed = true
+	_expect(hud._menu_tab == &"jobs" and hud._job_panel.visible,
+		"reopening returns to the tab the player was last working in")
 	var harvest: Button = hud.get_node(
-		"SafeArea/Layout/BottomRow/JobPanel/Layout/Header/HarvestAreas")
+		"SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Header/HarvestAreas")
 	_expect(harvest != null and harvest.text == tr(&"GATHER_AREAS"),
 		"the Job Board has one top-level harvest territory button")
 	var per_row_areas_hidden := true
@@ -71,17 +71,7 @@ func _check_hud(run: Node2D) -> void:
 	_expect(not Sim.paused and is_equal_approx(Sim.time_scale, 1.0),
 		"tapping 0x resumes at 1x")
 
-	# Hold opens every menu and releasing over one opens that choice.
-	hud._menu_touch_index = 9
-	hud._menu_touch_position = cycle_button.get_global_rect().get_center()
-	hud._process(Accessibility.hold_duration + 0.01)
-	_expect(hud._menu_switcher_open and hud._menu_switcher.visible,
-		"holding Cycle opens the drag menu switcher")
-	var build_index: int = hud.BOTTOM_MENU_IDS.find(&"build")
-	hud._finish_menu_gesture(hud._menu_switcher._rects[build_index].get_center())
-	_expect(hud._bottom_menu_index == build_index and hud._build_panel.visible,
-		"releasing on a held menu opens that menu")
-	hud._select_bottom_menu(0)
+	hud._close_menus()
 	var sample_power: PowerDef = Powers.all()[0]
 	var sample_power_button := Button.new()
 	hud.add_child(sample_power_button)
@@ -136,18 +126,18 @@ func _check_hud(run: Node2D) -> void:
 		Colony.stock[kind] = int(saved_upgrade_stock[kind])
 
 	Accessibility.set_pause_while_managing(true)
-	hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(&"jobs"))
+	hud._select_menu_tab(&"jobs")
 	_expect(Sim.paused, "the optional management pause still pauses once on open")
 	Sim.set_paused(false)
 	hud._sync_management_pause()
 	_expect(not Sim.paused,
 		"Resume from the pause menu cannot be overridden while the drawer remains open")
-	hud._select_bottom_menu(0)
-	hud._activate_bottom_menu(hud.BOTTOM_MENU_IDS.find(&"jobs"))
+	hud._close_menus()
+	hud._select_menu_tab(&"jobs")
 	hud._on_pause_toggled(false)
 	hud._sync_management_pause()
 	_expect(not Sim.paused, "the HUD Resume button cannot be overridden either")
-	hud._select_bottom_menu(0)
+	hud._close_menus()
 	Accessibility.set_pause_while_managing(false)
 
 
@@ -253,6 +243,63 @@ func _check_stored_water() -> void:
 	_expect(bottling.requires_water_access and bottler.is_stockpile \
 		and &"consumable" in bottler.storage_tags and not bottler.provides_water,
 		"Bottlers fill storage from reachable wells or rivers instead of acting as a free well")
+
+
+## Hunger must never be able to stop a villager thinking.
+##
+## The reported symptom was a colony that froze in place: the clock ran, needs drained,
+## and nobody moved until they died. The cause was that the hunger branch of think()
+## returned unconditionally after ASKING to eat, while the two halves of "is there
+## food" disagreed — Colony.has_food() counts stock inside farm and kitchen buffers,
+## nearest_food_source() only finds shelves you can walk up to and take a meal from. A
+## villager in that gap stopped drinking, sleeping and working too.
+func _check_hunger_never_freezes_a_villager() -> void:
+	if Colony.villagers.is_empty():
+		_expect(false, "a villager exists for hunger checks")
+		return
+	Sim.set_phase(Sim.Phase.DAY)
+	DefenseControl.shelter_active = false
+
+	var villager: Villager = Colony.villagers[0]
+	villager.set_job(&"")
+	villager._release_target()
+	villager._release_bed()
+	villager._shift_sleep = false
+	villager._set_sheltered(false)
+	villager.stop()
+	villager.state = Villager.State.IDLE
+	villager.food = 0.0
+	villager.water = 90.0
+	villager.rest = 90.0
+	villager.health = villager.max_health
+	villager.carry_kind = &"food"
+	villager.carry_amount = 8
+	villager.think(0.1)
+	_expect(villager.food > 0.0 and villager.carry_amount < 8,
+		"a starving villager eats the load of food in their own arms")
+
+	# Strip every shelf, then put the stock back as a bare number. That is exactly the
+	# shape of food held inside a workshop's buffer.
+	for raw_cell in Colony._storage_by_cell.keys():
+		Colony.withdraw_at(int(raw_cell), &"food", 99999)
+		Colony.withdraw_at(int(raw_cell), &"rations", 99999)
+	Colony.overflow[&"food"] = 0
+	Colony.overflow[&"rations"] = 0
+	Colony.stock[&"food"] = 200
+	_expect(Colony.has_food() and Colony.nearest_food_source(villager.cell()) == -1,
+		"the colony can hold food that no villager has a shelf to eat from")
+
+	villager.carry_kind = &""
+	villager.carry_amount = 0
+	villager.food = 0.0
+	villager.water = 90.0
+	villager.rest = 5.0                          # below REST_URGENT, so sleep is next
+	villager.stop()
+	villager.state = Villager.State.IDLE
+	villager.think(0.1)
+	_expect(villager.state != Villager.State.IDLE or villager.is_moving() \
+		or villager._awaiting_path,
+		"unreachable food does not stop a villager acting on their other needs")
 
 
 func _check_two_day_cycles() -> void:

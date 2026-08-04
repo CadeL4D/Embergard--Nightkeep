@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/stonecutter.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"deep_mine"
+display_name = "BUILDING_DEEP_MINE"
+description = "BUILDING_DEEP_MINE_DESC"
+sprite = ExtResource("2_tex")
+category = &"production"
+tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = false
+cost = {&"boards": 6, &"cut_stone": 6, &"wood": 10}
+build_work = 30.0
+max_hp = 200.0
+repair_cost = {&"cut_stone": 1}
+upgrades_from = &"mining_camp"
+is_stockpile = true
+inventory_capacity = 240
+storage_tags = Array[StringName]([&"stone", &"ore", &"emberglass"])
+influence_radius = 6
+worker_slots = 5
+workplace_role = &"mining_camp"
+order = 16
+color = Color(0.6, 0.6, 0.54, 1)

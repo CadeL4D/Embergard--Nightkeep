@@ -16,9 +16,8 @@ footprint = Vector2i(2, 2)
 blocks_movement = false
 max_blight = 255
 cost = {
-&"wood": 40,
-&"boards": 12,
-&"cut_stone": 8
+&"wood": 60,
+&"stone": 45
 }
 build_work = 48.0
 max_hp = 650.0

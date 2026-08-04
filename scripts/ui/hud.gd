@@ -13,54 +13,72 @@ extends CanvasLayer
 
 const JOB_ROW := preload("res://scenes/ui/job_row.tscn")
 const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
-const BOTTOM_MENU_IDS: Array[StringName] = [
-	&"powers", &"jobs", &"build", &"hand", &"library", &"control", &"realm",
+## The menus, in tab order.
+##
+## Ordered by how often a hand reaches for them rather than by when they were written: Jobs and
+## Build are the two the player lives in, so they sit where the thumb lands first.
+##
+## One list, one dropdown, one open tab — replacing three overlapping mechanisms that all reached
+## these same seven panels (a toggle button each, a Cycle button that chose which menu the "open"
+## button would open, and a hold-drag radial switcher). Each had its own idea of what "open" meant,
+## and mutual exclusion was enforced by every panel explicitly un-pressing the other four.
+const MENU_IDS: Array[StringName] = [
+	&"jobs", &"build", &"powers", &"control", &"library", &"hand", &"realm",
 ]
-const BOTTOM_MENU_LABELS: Array[StringName] = [
-	&"UI_POWER_UPS", &"UI_JOBS", &"UI_BUILD", &"UI_HAND", &"UI_LIBRARY",
-	&"UI_CONTROL", &"UI_REALM",
+const MENU_LABELS: Array[StringName] = [
+	&"UI_JOBS", &"UI_BUILD", &"UI_POWER_UPS", &"UI_CONTROL", &"UI_LIBRARY",
+	&"UI_HAND", &"UI_REALM",
 ]
 
 @onready var _safe_area: MarginContainer = $SafeArea
+@onready var _layout: VBoxContainer = $SafeArea/Layout
+@onready var _job_scroll: ScrollContainer = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Scroll
+@onready var _library_scroll: ScrollContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Scroll
+@onready var _cards_scroll: ScrollContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/CardsScroll
+@onready var _breakdown_scroll: ScrollContainer = \
+	$SafeArea/Layout/Breakdown/Scroll
 @onready var _resources: ResourceReadout = \
 	$SafeArea/Layout/TopRow/ResourceColumn/ResourceBar/Resources
 @onready var _resource_bar: PanelContainer = $SafeArea/Layout/TopRow/ResourceColumn/ResourceBar
-@onready var _breakdown: BreakdownPanel = $SafeArea/Layout/TopRow/ResourceColumn/Breakdown
-@onready var _jobs_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/JobsButton
-@onready var _build_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BuildButton
-@onready var _hand_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/HandButton
-@onready var _library_button: Button = \
-	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/LibraryButton
-@onready var _library_panel: PanelContainer = $SafeArea/Layout/BottomRow/LibraryPanel
+@onready var _breakdown: BreakdownPanel = $SafeArea/Layout/Breakdown
+@onready var _menu_dock: VBoxContainer = $SafeArea/Layout/MenuDock
+@onready var _menus_button: Button = $SafeArea/Layout/MenuDock/MenusButton
+@onready var _menu_panel: PanelContainer = $SafeArea/Layout/MenuDock/MenuPanel
+@onready var _menu_tabs_clip: ScrollContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/TabsClip
+@onready var _menu_tabs: HBoxContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/TabsClip/Tabs
+@onready var _library_panel: PanelContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel
 @onready var _library_rows: VBoxContainer = \
-	$SafeArea/Layout/BottomRow/LibraryPanel/Layout/Scroll/Rows
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Scroll/Rows
 @onready var _library_capacity: Label = \
-	$SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header/Capacity
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Header/Capacity
 @onready var _library_auto: CheckButton = \
-	$SafeArea/Layout/BottomRow/LibraryPanel/Layout/Header/Auto
-@onready var _library_details: Label = $SafeArea/Layout/BottomRow/LibraryPanel/Layout/Details
-@onready var _realm_button: Button = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/RealmButton
-@onready var _control_button: Button = \
-	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/ControlButton
-@onready var _control_panel: PanelContainer = $SafeArea/Layout/BottomRow/ControlPanel
-@onready var _control_status: Label = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Status
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Header/Auto
+@onready var _library_details: Label = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/LibraryPanel/Layout/Details
+@onready var _control_panel: PanelContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel
+@onready var _control_status: Label = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Status
 @onready var _forbidden_button: Button = \
-	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Forbidden
-@onready var _work_zone_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Work
-@onready var _guard_zone_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Guard
-@onready var _erase_zone_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Paint/Erase
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint/Forbidden
+@onready var _work_zone_button: Button = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint/Work
+@onready var _guard_zone_button: Button = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint/Guard
+@onready var _erase_zone_button: Button = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Paint/Erase
 @onready var _shelter_button: Button = \
-	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Shelter
-@onready var _dusk_button: Button = $SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Dusk
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders/Shelter
+@onready var _dusk_button: Button = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders/Dusk
 @onready var _cleanse_button: Button = \
-	$SafeArea/Layout/BottomRow/ControlPanel/Layout/Orders/Cleanse
-@onready var _job_panel: PanelContainer = $SafeArea/Layout/BottomRow/JobPanel
-@onready var _job_hint: Label = $SafeArea/Layout/BottomRow/JobPanel/Layout/Hint
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders/Cleanse
+@onready var _job_panel: PanelContainer = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel
+@onready var _job_hint: Label = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Hint
 @onready var _harvest_areas: Button = \
-	$SafeArea/Layout/BottomRow/JobPanel/Layout/Header/HarvestAreas
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Header/HarvestAreas
 @onready var _workers_available: Label = \
-	$SafeArea/Layout/BottomRow/JobPanel/Layout/Header/Workers
-@onready var _rows: VBoxContainer = $SafeArea/Layout/BottomRow/JobPanel/Layout/Scroll/Rows
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Header/Workers
+@onready var _rows: VBoxContainer = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Scroll/Rows
 @onready var _gather_bar: PanelContainer = $SafeArea/Layout/BottomRow/GatherBar
 @onready var _gather_done: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/DoneButton
 @onready var _gather_status: Label = $SafeArea/Layout/BottomRow/GatherBar/Row/Status
@@ -74,10 +92,14 @@ const BOTTOM_MENU_LABELS: Array[StringName] = [
 	$SafeArea/Layout/BottomRow/GatherBar/Row/RadiusPlus
 @onready var _gather_paint: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/PaintButton
 @onready var _gather_erase: Button = $SafeArea/Layout/BottomRow/GatherBar/Row/EraseButton
-@onready var _build_panel: PanelContainer = $SafeArea/Layout/BottomRow/BuildPanel
-@onready var _tabs: HBoxContainer = $SafeArea/Layout/BottomRow/BuildPanel/Layout/Tabs
+@onready var _build_panel: PanelContainer = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel
+@onready var _center_status: Label = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/CenterRow/Status
+@onready var _center_raise: Button = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/CenterRow/RaiseButton
+@onready var _tabs: HBoxContainer = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/Tabs
 @onready var _cards: HBoxContainer = \
-	$SafeArea/Layout/BottomRow/BuildPanel/Layout/CardsScroll/Cards
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/BuildPanel/Layout/CardsScroll/Cards
 @onready var _building_card: PanelContainer = $SafeArea/Layout/BottomRow/BuildingCard
 @onready var _bld_what: Label = $SafeArea/Layout/BottomRow/BuildingCard/Rows/What
 @onready var _bld_detail: Label = $SafeArea/Layout/BottomRow/BuildingCard/Rows/Detail
@@ -111,13 +133,7 @@ const BOTTOM_MENU_LABELS: Array[StringName] = [
 @onready var _placement_status: Label = $SafeArea/Layout/BottomRow/PlacementBar/Row/Status
 @onready var _confirm_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/ConfirmButton
 @onready var _cancel_button: Button = $SafeArea/Layout/BottomRow/PlacementBar/Row/CancelButton
-@onready var _powers: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons/Powers
-@onready var _bottom_buttons: HBoxContainer = $SafeArea/Layout/BottomRow/ButtonsClip/Buttons
-@onready var _menu_cycle_button: Button = \
-	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/MenuCycleButton
-@onready var _bottom_menu_button: Button = \
-	$SafeArea/Layout/BottomRow/ButtonsClip/Buttons/BottomMenuButton
-@onready var _menu_switcher: MenuSwitcher = $MenuSwitcher
+@onready var _powers: HBoxContainer = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/Powers
 @onready var _phase_label: Label = $SafeArea/Layout/TopRow/PhaseBar/Row/Phase
 @onready var _speed_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/SpeedButton
 @onready var _menu_button: Button = $SafeArea/Layout/TopRow/PhaseBar/Row/MenuButton
@@ -158,11 +174,11 @@ var _management_pause_owned: bool = false
 var _management_pause_suppressed: bool = false
 var _upgrade_widgets: Dictionary = {}
 var _upgrade_key: String = ""
-var _bottom_menu_index: int = 0
-var _menu_touch_index: int = -1
-var _menu_touch_elapsed: float = 0.0
-var _menu_touch_position: Vector2 = Vector2.ZERO
-var _menu_switcher_open: bool = false
+## Which tab the dropdown shows. Remembered while closed, so reopening returns you to the menu
+## you were last working in rather than to a fixed first tab.
+var _menu_tab: StringName = &"jobs"
+## menu id -> tab button
+var _menu_tab_buttons: Dictionary = {}
 var _power_hold_button: Button = null
 var _power_hold_def: PowerDef = null
 var _power_hold_elapsed: float = 0.0
@@ -186,20 +202,10 @@ func _ready() -> void:
 	Accessibility.changed.connect(_on_accessibility_changed)
 	_apply_handedness()
 
-	_jobs_button.toggled.connect(_on_jobs_toggled)
-	_build_button.toggled.connect(_on_build_toggled)
-	_hand_button.toggled.connect(_on_hand_toggled)
-	_library_button.toggled.connect(_on_library_toggled)
 	_library_auto.toggled.connect(Divine.set_library_auto_manage)
-	_control_button.toggled.connect(_on_control_toggled)
-	_realm_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"realm")))
-	_menu_cycle_button.gui_input.connect(_on_menu_cycle_input)
-	_bottom_menu_button.pressed.connect(_on_bottom_menu_pressed)
-	_jobs_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"jobs")))
-	_build_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"build")))
-	_hand_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"hand")))
-	_library_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"library")))
-	_control_button.pressed.connect(_activate_bottom_menu.bind(BOTTOM_MENU_IDS.find(&"control")))
+	_menus_button.toggled.connect(_on_menus_toggled)
+	_build_menu_tabs()
+	_center_raise.pressed.connect(_on_center_raise)
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(_on_cancel)
 	Events.resources_changed.connect(_on_resources_changed)
@@ -216,8 +222,8 @@ func _ready() -> void:
 	_god_hand = get_node_or_null("../GodHand")
 	if _god_hand != null:
 		_god_hand.armed_changed.connect(_on_armed_changed)
-		_god_hand.hand_mode_changed.connect(func(active: bool) -> void:
-			_hand_button.set_pressed_no_signal(active))
+		_god_hand.hand_mode_changed.connect(func(_active: bool) -> void:
+			_refresh_menu_tabs())
 
 	# The resource bar is the tap target for the breakdown, so the affordance sits exactly on
 	# the numbers the player is questioning rather than on a separate "info" control.
@@ -283,19 +289,73 @@ func _ready() -> void:
 	Events.powers_changed.connect(_build_powers)
 	Events.library_changed.connect(_rebuild_library)
 
+	# A drawer only costs column height while it is open, so refit on every open and
+	# close as well as on resize. Deferred because the signal arrives before the
+	# containers above have invalidated their cached minimum sizes.
+	for panel: Control in [_job_panel, _library_panel, _build_panel, _breakdown]:
+		panel.visibility_changed.connect(_fit_drawers, CONNECT_DEFERRED)
+
 	_sync_rows()
 	_build_tabs()
 	_build_cards()
 	_build_powers()
 	_rebuild_library()
 	_refresh()
-	_select_bottom_menu(0)
+	_close_menus()
+	_fit_drawers.call_deferred()
 
 
 # --- Layout ------------------------------------------------------------------------
 
+## Authored heights for the scrolling drawers, used as the CEILING they are allowed to
+## reach rather than as a fixed size. See _fit_drawer.
+const JOB_SCROLL_HEIGHT := 220.0
+const LIBRARY_SCROLL_HEIGHT := 178.0
+const CARDS_SCROLL_HEIGHT := 72.0
+const BREAKDOWN_SCROLL_HEIGHT := 176.0
+## Below this a drawer is not worth showing, so it scrolls instead of shrinking further.
+const DRAWER_MIN_HEIGHT := 64.0
+
+
 func _apply_safe_area() -> void:
 	SafeArea.apply(_safe_area, 8)
+	_fit_menu_tabs()
+	_fit_drawers()
+
+
+## Shrink whichever drawer is open until the whole HUD column fits on the screen.
+##
+## The dropdown hangs from the top-left and the world-context cards sit at the bottom, so an
+## over-tall menu body pushes those cards — and anything else below it — off the screen. The
+## original form of this bug took the button row that carried the ONLY way out of a drawer with
+## it, which is why the panel is measured rather than trusted.
+##
+## Measured against the viewport rather than against SafeArea's own rect on purpose. An
+## anchored Control is grown to its combined minimum size, so once the column overflows
+## the container reports the OVERSIZED height and the slack always reads as zero — the
+## measurement would agree that everything fits while it visibly did not.
+func _fit_drawers() -> void:
+	if not is_node_ready():
+		return
+	_fit_drawer(_breakdown_scroll, BREAKDOWN_SCROLL_HEIGHT)
+	_fit_drawer(_job_scroll, JOB_SCROLL_HEIGHT)
+	_fit_drawer(_library_scroll, LIBRARY_SCROLL_HEIGHT)
+	_fit_drawer(_cards_scroll, CARDS_SCROLL_HEIGHT)
+
+
+func _fit_drawer(scroll: ScrollContainer, design_height: float) -> void:
+	if scroll == null or not scroll.is_visible_in_tree():
+		return
+	var chrome := float(_safe_area.get_theme_constant(&"margin_top")
+		+ _safe_area.get_theme_constant(&"margin_bottom"))
+	var available := get_tree().root.get_visible_rect().size.y - chrome
+	# Slack is signed: negative shrinks this drawer by exactly the overflow, positive
+	# grows it back toward its authored height once there is room again. Because the
+	# column's minimum already includes the drawer's current minimum, one pass lands on
+	# the answer — no waiting for a layout frame.
+	var slack := available - _layout.get_combined_minimum_size().y
+	scroll.custom_minimum_size.y = clampf(
+		scroll.custom_minimum_size.y + slack, DRAWER_MIN_HEIGHT, design_height)
 
 
 func _on_accessibility_changed(kind: StringName) -> void:
@@ -307,17 +367,125 @@ func _on_accessibility_changed(kind: StringName) -> void:
 		_refresh_phase()
 
 
+## The dock lives in the top corner on the side the player's thumb is not covering.
+##
+## It was the bottom strip's reordering that used to answer this setting. Now that every menu
+## hangs from one corner, mirroring which corner is both simpler and a bigger win: a right-handed
+## player holding a phone one-handed has their palm over the right edge, so the panel that has to
+## stay readable belongs on the left.
 func _apply_handedness() -> void:
-	if _bottom_buttons == null:
+	if _menu_dock == null:
 		return
-	# Cycle and the selected menu action stay together as one predictable launcher.
-	var order: Array[Control] = [
-		_menu_cycle_button, _bottom_menu_button, _powers,
-		_jobs_button, _build_button,
-		_hand_button, _library_button, _control_button, _realm_button,
-	]
-	for index in order.size():
-		_bottom_buttons.move_child(order[index], index)
+	# The dock is only as wide as its widest child, so its own horizontal size flag is the whole
+	# mirror. A BoxContainer's `alignment` would not help here — on a VBox that aligns children
+	# vertically, which is not the axis being flipped.
+	var left := Accessibility.handedness == Accessibility.Handedness.RIGHT
+	_menu_dock.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if left \
+		else Control.SIZE_SHRINK_END
+
+
+# --- The menu dropdown -----------------------------------------------------------------
+#
+# One button, one panel, one open tab. The panel stays up until the player closes it, because a
+# menu that vanishes on its own is a menu you have to keep reopening — and reopening it used to
+# mean finding the right button in a strip of nine.
+
+func _build_menu_tabs() -> void:
+	for child in _menu_tabs.get_children():
+		_menu_tabs.remove_child(child)
+		child.queue_free()
+	_menu_tab_buttons.clear()
+	for index in MENU_IDS.size():
+		var id: StringName = MENU_IDS[index]
+		var tab := Button.new()
+		tab.name = "Tab_%s" % id
+		tab.text = tr(MENU_LABELS[index])
+		tab.toggle_mode = true
+		tab.custom_minimum_size = Vector2(0, 20)
+		tab.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
+		tab.pressed.connect(_select_menu_tab.bind(id))
+		_menu_tabs.add_child(tab)
+		_menu_tab_buttons[id] = tab
+	_fit_menu_tabs()
+	_refresh_menu_tabs()
+
+
+## Widen the dropdown to hold the whole tab strip, up to what the screen can take.
+##
+## A ScrollContainer reports a minimum width of zero, so without this the panel is sized purely by
+## whichever menu body is open — and on the narrow Job Board that clipped the last tab in half and
+## put a scrollbar under the strip. A tab you cannot see is a menu the player cannot find, which is
+## the exact failure the dropdown exists to fix. The scroll survives underneath as the fallback for
+## a screen genuinely too narrow to show seven tabs at once.
+func _fit_menu_tabs() -> void:
+	if _menu_tabs_clip == null:
+		return
+	var chrome := float(_safe_area.get_theme_constant(&"margin_left")
+		+ _safe_area.get_theme_constant(&"margin_right")) + 24.0
+	var room := get_tree().root.get_visible_rect().size.x - chrome
+	_menu_tabs_clip.custom_minimum_size.x = minf(
+		_menu_tabs.get_combined_minimum_size().x, maxf(room, 0.0))
+
+
+func _on_menus_toggled(pressed: bool) -> void:
+	if pressed:
+		_select_menu_tab(_menu_tab)
+	else:
+		_close_menus()
+
+
+func _select_menu_tab(id: StringName) -> void:
+	if id == &"realm":
+		# The Realm map is a screen of its own, not a drawer. Opening it closes the dropdown
+		# rather than leaving a panel stranded underneath a full-screen map — and _menu_tab is
+		# left alone so reopening returns to the menu the player was actually working in.
+		_close_menus()
+		_on_realm()
+		return
+	_menu_tab = id
+	_menu_panel.visible = true
+	_menus_button.set_pressed_no_signal(true)
+	_apply_menu_tab()
+
+
+func _close_menus() -> void:
+	_menu_panel.visible = false
+	_menus_button.set_pressed_no_signal(false)
+	_apply_menu_tab()
+
+
+func _menu_is_open(id: StringName) -> bool:
+	return _menu_panel.visible and _menu_tab == id
+
+
+## Push the one piece of state out to every panel.
+##
+## Each `_on_*_toggled` still owns what its own menu does on open and close — cancelling a brush,
+## dropping a placement ghost, closing the breakdown. What they no longer do is reach across and
+## un-press each other: exclusivity is a property of there being one open tab.
+func _apply_menu_tab() -> void:
+	if not is_node_ready():
+		return
+	_on_jobs_toggled(_menu_is_open(&"jobs"))
+	_on_build_toggled(_menu_is_open(&"build"))
+	_on_control_toggled(_menu_is_open(&"control"))
+	_on_library_toggled(_menu_is_open(&"library"))
+	_on_hand_toggled(_menu_is_open(&"hand"))
+	_powers.visible = _menu_is_open(&"powers")
+	_refresh_menu_tabs()
+	_fit_drawers()
+
+
+func _refresh_menu_tabs() -> void:
+	for id in _menu_tab_buttons:
+		var tab: Button = _menu_tab_buttons[id]
+		var active: bool = _menu_panel.visible and id == _menu_tab
+		tab.set_pressed_no_signal(active)
+		tab.add_theme_color_override("font_color",
+			UiPalette.ACCENT if active else UiPalette.TEXT_DIM)
+	# The Hand is a world tool rather than a panel, so its tab is where its state has to show.
+	if _god_hand != null and _menu_tab_buttons.has(&"hand"):
+		(_menu_tab_buttons[&"hand"] as Button).text = _god_hand.hand_status()
 
 
 # --- Job rows ------------------------------------------------------------------------
@@ -406,9 +574,6 @@ func _on_jobs_toggled(pressed: bool) -> void:
 			_god_hand.set_hand_mode(false)
 		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
-		_build_button.button_pressed = false
-		_control_button.button_pressed = false
-		_library_button.button_pressed = false
 	_refresh_selection()
 	_refresh_building_card()
 	_sync_management_pause()
@@ -436,14 +601,9 @@ func _on_gather_mode_changed(job_id: StringName, erasing: bool, radius: int) -> 
 	_gather_bar.visible = active
 	if not active:
 		return
-	_job_panel.visible = false
-	_jobs_button.set_pressed_no_signal(false)
-	_build_button.set_pressed_no_signal(false)
-	_control_button.set_pressed_no_signal(false)
-	_library_button.set_pressed_no_signal(false)
-	_build_panel.visible = false
-	_control_panel.visible = false
-	_library_panel.visible = false
+	# A harvest brush owns the map surface, so the dropdown that was covering part of it
+	# gets out of the way for the duration.
+	_close_menus()
 	_breakdown.visible = false
 	if _placement != null and _placement.active:
 		_placement.cancel()
@@ -522,10 +682,11 @@ func _build_cards() -> void:
 		old.queue_free()
 	_card_widgets.clear()
 
-	# in_menu(), not placeable(): a card the colony has not earned yet is SHOWN and disabled.
-	# Hiding it would mean the player cannot discover that a Smelter exists, let alone what it
-	# needs — and the whole progression is meant to be something to work toward.
-	for def: BuildingDef in Buildings.in_menu():
+	# revealed(), not placeable(): a card gated only on POPULATION is shown and disabled, because
+	# that gate is a number the player watches climb. A card behind a Village Center tier is not
+	# here at all — the Center row above the tabs is where the next tier is advertised, once,
+	# with the whole list behind it. See Buildings.revealed.
+	for def: BuildingDef in Buildings.revealed():
 		if def.category != _tab:
 			continue
 		var card: Button = BUILD_CARD.instantiate()
@@ -546,6 +707,74 @@ func _build_cards() -> void:
 	_refresh_cards()
 
 
+## The colony's Village Center, whatever tier it currently stands at.
+##
+## Found by property rather than by id so a scenario that nominates a different structure as its
+## centre keeps working — the same reason BuildingDef carries `center_tier` at all.
+func _center_building() -> Building:
+	var best: Building = null
+	for candidate in Colony.buildings:
+		var b := candidate as Building
+		if b == null or not is_instance_valid(b) or b.is_site() or b.def.center_tier <= 0:
+			continue
+		if best == null or b.def.center_tier > best.def.center_tier:
+			best = b
+	return best
+
+
+## The one place the build menu talks about progression.
+##
+## Since the tier gate now HIDES future cards, something has to say what raising the Center buys,
+## or a first-day menu of fifteen cards reads as the whole game. This row is that something: the
+## next tier by name, what it wants, and how many buildings arrive with it.
+##
+## Raising happens right here rather than only on the Center's own selection card. Requiring the
+## player to close the build menu and find the Hearth on the map, in order to unlock the rest of
+## the build menu, is the kind of loop that makes progression feel hidden rather than earned. The
+## work itself still goes through Colony.upgrade_building, so there is one upgrade path.
+func _refresh_center_row() -> void:
+	if not is_node_ready():
+		return
+	var center := _center_building()
+	# Built in two statements, not a ternary. An inline `else []` is an UNTYPED Array literal,
+	# which cannot be assigned to an Array[Dictionary] — and the failure is a runtime script
+	# error rather than a parse error, so it only surfaces when the HUD is actually built.
+	var checks: Array[Dictionary] = []
+	if center != null:
+		checks = Colony.upgrade_checks(center)
+	if checks.is_empty():
+		_center_status.text = tr(&"CENTER_ROW_MAX")
+		_center_raise.visible = false
+		return
+
+	var check: Dictionary = checks[0]
+	var next: BuildingDef = check["def"]
+	_center_status.text = L10n.t(&"CENTER_ROW_NEXT", [
+		tr(next.display_name), Buildings.revealed_by_next_center(), next.cost_text()])
+	_center_raise.visible = true
+	_center_raise.text = L10n.t(&"UI_UPGRADE_TO", [tr(next.display_name)])
+	_center_raise.disabled = not bool(check["ok"])
+	_center_raise.tooltip_text = String(check["reason"])
+
+
+func _on_center_raise() -> void:
+	var center := _center_building()
+	if center == null:
+		return
+	var checks := Colony.upgrade_checks(center)
+	if checks.is_empty():
+		return
+	var next: BuildingDef = checks[0]["def"]
+	if next == null or not Colony.upgrade_building(center, next.id):
+		return
+	# Show the player where their materials are about to go. The Center can be well off screen by
+	# the time this is affordable, and an upgrade with no visible consequence reads as a dead tap.
+	var camera := get_node_or_null("../CameraRig")
+	if camera != null and camera.has_method("focus_on_rect"):
+		camera.focus_on_rect(center.world_rect())
+	_refresh_center_row()
+
+
 ## Anything that can change what is buildable: a completed Village Center raises the tier, a
 ## destroyed one lowers it, an arriving survivor can clear a headcount gate.
 func _on_roster_changed(_arg: Variant = null) -> void:
@@ -555,11 +784,12 @@ func _on_roster_changed(_arg: Variant = null) -> void:
 	# card row unconditionally — so the stress test's 60 spawns triggered 60 full menu rebuilds,
 	# instantiating several hundred card scenes and immediately freeing them. Population only matters
 	# here through `min_population` gates, which change at a handful of thresholds, not per villager.
-	var key := "%d:%d:%d" % [Colony.center_tier(), Colony.population(), Buildings.in_menu().size()]
+	var key := "%d:%d:%d" % [Colony.center_tier(), Colony.population(), Buildings.revealed().size()]
 	if key != _menu_key:
 		_menu_key = key
 		_build_tabs()
 		_build_cards()
+	_refresh_center_row()
 	# A finished sawmill adds the Sawyer row; a destroyed one takes it away again. Guarded separately
 	# because the job set and the build menu change on different events.
 	_sync_rows()
@@ -838,12 +1068,10 @@ func _on_build_toggled(pressed: bool) -> void:
 			_god_hand.set_hand_mode(false)
 		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
-		_jobs_button.button_pressed = false
-		_control_button.button_pressed = false
-		_library_button.button_pressed = false
 	elif _placement != null and _placement.active:
 		_placement.cancel()
 	_refresh_cards()
+	_refresh_center_row()
 	_refresh_selection()
 	_refresh_building_card()
 	_sync_management_pause()
@@ -854,14 +1082,6 @@ func _on_hand_toggled(pressed: bool) -> void:
 		return
 	_god_hand.set_hand_mode(pressed)
 	if pressed:
-		_jobs_button.button_pressed = false
-		_build_button.button_pressed = false
-		_control_button.button_pressed = false
-		_library_button.button_pressed = false
-		_job_panel.visible = false
-		_build_panel.visible = false
-		_control_panel.visible = false
-		_library_panel.visible = false
 		_breakdown.visible = false
 	_sync_management_pause()
 
@@ -873,9 +1093,6 @@ func _on_control_toggled(pressed: bool) -> void:
 			_god_hand.set_hand_mode(false)
 		DefenseControl.cancel_gather_paint()
 		_breakdown.visible = false
-		_jobs_button.button_pressed = false
-		_build_button.button_pressed = false
-		_library_button.button_pressed = false
 		if _placement != null and _placement.active:
 			_placement.cancel()
 	else:
@@ -896,12 +1113,6 @@ func _on_library_toggled(pressed: bool) -> void:
 		DefenseControl.cancel_gather_paint()
 		DefenseControl.cancel_paint()
 		_breakdown.visible = false
-		_jobs_button.button_pressed = false
-		_build_button.button_pressed = false
-		_control_button.button_pressed = false
-		_job_panel.visible = false
-		_build_panel.visible = false
-		_control_panel.visible = false
 		if _placement != null and _placement.active:
 			_placement.cancel()
 		_rebuild_library()
@@ -1041,15 +1252,13 @@ func _on_realm() -> void:
 ## competing panels in the thumb zone is how you get mis-taps on a phone.
 func _on_placement_changed(active: bool, status: String, valid: bool) -> void:
 	_placement_bar.visible = active
-	_build_panel.visible = _build_button.button_pressed and not active
+	_build_panel.visible = _menu_is_open(&"build") and not active
 	if not active:
 		_refresh_selection()
 		_refresh_building_card()
 		return
 	DefenseControl.cancel_gather_paint()
 	_breakdown.visible = false
-	_jobs_button.button_pressed = false
-	_control_button.button_pressed = false
 	# Tapping the ghost is the primary confirm, so the bar has to teach it — the
 	# gesture is invisible otherwise, and a player who never finds it is left tapping
 	# a small button at the bottom of the screen for every wall segment.
@@ -1125,11 +1334,6 @@ func _on_power_pressed(def: PowerDef, button: Button = null) -> void:
 	if Divine.faith < def.faith_cost:
 		Events.notice.emit(L10n.t(&"POWER_NEED_FAITH", [int(def.faith_cost)]), 1)
 		return
-	# Arming a power closes the build and job panels: all three want the bottom of
-	# the screen, and the tap that arms a power must not also land on a menu.
-	_jobs_button.button_pressed = false
-	_build_button.button_pressed = false
-	_control_button.button_pressed = false
 	DefenseControl.cancel_gather_paint()
 	_god_hand.arm(def)
 
@@ -1226,15 +1430,6 @@ func _process(delta: float) -> void:
 	# 4 Hz, not per frame. A per-frame rebuild of these strings shows up in the
 	# profiler as the UI's own cost while you are trying to profile the sim.
 
-	if _menu_touch_index != -1 and not _menu_switcher_open:
-		_menu_touch_elapsed += delta
-		if _menu_touch_elapsed >= Accessibility.hold_duration:
-			_menu_switcher_open = true
-			var labels := PackedStringArray()
-			for key in BOTTOM_MENU_LABELS:
-				labels.append(tr(key))
-			_menu_switcher.open(labels, _menu_cycle_button.get_global_rect().get_center())
-			_menu_switcher.update_pointer(_menu_touch_position)
 	if _power_hold_button != null and not _power_hold_shown:
 		_power_hold_elapsed += delta
 		if _power_hold_elapsed >= Accessibility.hold_duration:
@@ -1260,7 +1455,7 @@ func _process(delta: float) -> void:
 	_refresh_selection()
 	_refresh_building_card()
 	if _god_hand != null:
-		_hand_button.text = _god_hand.hand_status()
+		_refresh_menu_tabs()
 	if _job_panel.visible:
 		_refresh_counts()
 	if _gather_bar.visible:
@@ -1270,153 +1465,12 @@ func _process(delta: float) -> void:
 			DefenseControl.gather_radius)
 	if _build_panel.visible:
 		_refresh_cards()
+		_refresh_center_row()
 	if _control_panel.visible:
 		_refresh_control_panel()
 	if _library_panel.visible:
 		_library_capacity.text = L10n.t(&"LIBRARY_CAPACITY", [Divine.installed_count(),
 			Divine.tome_capacity()])
-
-
-func _on_menu_cycle_pressed() -> void:
-	_select_bottom_menu((_bottom_menu_index + 1) % BOTTOM_MENU_IDS.size())
-
-
-func _on_menu_cycle_input(event: InputEvent) -> void:
-	var pressed := false
-	var released := false
-	var index := -1
-	var point := Vector2.ZERO
-	if event is InputEventScreenTouch:
-		var touch := event as InputEventScreenTouch
-		pressed = touch.pressed
-		released = not touch.pressed
-		index = touch.index
-		point = touch.position
-	elif event is InputEventMouseButton:
-		var mouse := event as InputEventMouseButton
-		if mouse.button_index != MOUSE_BUTTON_LEFT:
-			return
-		pressed = mouse.pressed
-		released = not mouse.pressed
-		index = -2
-		point = mouse.position
-	else:
-		return
-	if pressed and _menu_touch_index == -1:
-		_menu_touch_index = index
-		_menu_touch_elapsed = 0.0
-		_menu_touch_position = point
-		_menu_switcher_open = false
-		_menu_cycle_button.accept_event()
-	elif released and index == _menu_touch_index:
-		_finish_menu_gesture(point)
-
-
-func _input(event: InputEvent) -> void:
-	if _menu_touch_index == -1:
-		return
-	if event is InputEventScreenDrag and (event as InputEventScreenDrag).index == _menu_touch_index:
-		_menu_touch_position = (event as InputEventScreenDrag).position
-		if _menu_switcher_open:
-			_menu_switcher.update_pointer(_menu_touch_position)
-	elif event is InputEventMouseMotion and _menu_touch_index == -2:
-		_menu_touch_position = (event as InputEventMouseMotion).position
-		if _menu_switcher_open:
-			_menu_switcher.update_pointer(_menu_touch_position)
-	elif event is InputEventScreenTouch and not (event as InputEventScreenTouch).pressed \
-			and (event as InputEventScreenTouch).index == _menu_touch_index:
-		_finish_menu_gesture((event as InputEventScreenTouch).position)
-	elif event is InputEventMouseButton and _menu_touch_index == -2 \
-			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
-			and not (event as InputEventMouseButton).pressed:
-		_finish_menu_gesture((event as InputEventMouseButton).position)
-
-
-func _finish_menu_gesture(point: Vector2) -> void:
-	_menu_touch_position = point
-	if _menu_switcher_open:
-		_menu_switcher.update_pointer(point)
-		var picked := _menu_switcher.finish()
-		if picked >= 0:
-			_activate_bottom_menu(picked)
-	else:
-		_on_menu_cycle_pressed()
-	_menu_touch_index = -1
-	_menu_touch_elapsed = 0.0
-	_menu_switcher_open = false
-
-
-func _on_bottom_menu_pressed() -> void:
-	if _bottom_menu_is_open(_bottom_menu_index):
-		_close_bottom_menu()
-	else:
-		_activate_bottom_menu(_bottom_menu_index)
-
-
-func _select_bottom_menu(index: int) -> void:
-	if BOTTOM_MENU_IDS.is_empty():
-		return
-	_close_bottom_menu()
-	_bottom_menu_index = posmod(index, BOTTOM_MENU_IDS.size())
-	var label := tr(BOTTOM_MENU_LABELS[_bottom_menu_index])
-	_bottom_menu_button.text = label
-	_bottom_menu_button.tooltip_text = L10n.t(&"UI_OPEN_SELECTED_MENU", [label])
-
-
-func _close_bottom_menu() -> void:
-	_jobs_button.set_pressed_no_signal(false)
-	_build_button.set_pressed_no_signal(false)
-	_hand_button.set_pressed_no_signal(false)
-	_library_button.set_pressed_no_signal(false)
-	_control_button.set_pressed_no_signal(false)
-	_on_jobs_toggled(false)
-	_on_build_toggled(false)
-	_on_hand_toggled(false)
-	_on_library_toggled(false)
-	_on_control_toggled(false)
-	_powers.visible = false
-
-
-func _bottom_menu_is_open(index: int) -> bool:
-	match BOTTOM_MENU_IDS[posmod(index, BOTTOM_MENU_IDS.size())]:
-		&"powers": return _powers.visible
-		&"jobs": return _job_panel.visible
-		&"build": return _build_panel.visible
-		&"hand": return _god_hand != null and _god_hand.hand_mode
-		&"library": return _library_panel.visible
-		&"control": return _control_panel.visible
-	return false
-
-
-func _activate_bottom_menu(index: int) -> void:
-	if BOTTOM_MENU_IDS.is_empty():
-		return
-	var next_index := posmod(index, BOTTOM_MENU_IDS.size())
-	_close_bottom_menu()
-	_bottom_menu_index = next_index
-	var label := tr(BOTTOM_MENU_LABELS[_bottom_menu_index])
-	_bottom_menu_button.text = label
-
-	match BOTTOM_MENU_IDS[_bottom_menu_index]:
-		&"powers":
-			_powers.visible = true
-		&"jobs":
-			_jobs_button.set_pressed_no_signal(true)
-			_on_jobs_toggled(true)
-		&"build":
-			_build_button.set_pressed_no_signal(true)
-			_on_build_toggled(true)
-		&"hand":
-			_hand_button.set_pressed_no_signal(true)
-			_on_hand_toggled(true)
-		&"library":
-			_library_button.set_pressed_no_signal(true)
-			_on_library_toggled(true)
-		&"control":
-			_control_button.set_pressed_no_signal(true)
-			_on_control_toggled(true)
-		&"realm":
-			_on_realm()
 
 
 ## Calendar only. Lighting, particles, and the world itself communicate phase and weather.
@@ -1454,17 +1508,14 @@ func _on_resource_bar_input(event: InputEvent) -> void:
 	var opening := not _breakdown.visible
 	if opening:
 		DefenseControl.cancel_gather_paint()
-		_jobs_button.button_pressed = false
-		_build_button.button_pressed = false
-		_control_button.button_pressed = false
-		_library_button.button_pressed = false
+		_close_menus()
 		if _placement != null and _placement.active:
 			_placement.cancel()
 	_breakdown.toggle()
 	_refresh_selection()
 	_refresh_building_card()
 	if _god_hand != null:
-		_hand_button.text = _god_hand.hand_status()
+		_refresh_menu_tabs()
 	# On the CONTROL that received the event, not on self — the Hud is a CanvasLayer and
 	# accept_event() is a Control method. Consuming it stops the tap falling through to the
 	# God Hand and sending the Ember to wherever the resource bar happens to be.
@@ -1481,9 +1532,7 @@ func _on_migrants_arrived(count: int) -> void:
 	# ledger or job board had been open on a short phone display.
 	_breakdown.visible = false
 	DefenseControl.cancel_gather_paint()
-	_jobs_button.button_pressed = false
-	_build_button.button_pressed = false
-	_control_button.button_pressed = false
+	_close_menus()
 	_migrant_prompt.visible = true
 	var beds := Colony.beds_free()
 	var warning := ""
@@ -1545,11 +1594,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed(&"game_speed"):
 		Sim.cycle_speed()
 	elif event.is_action_pressed(&"game_jobs"):
-		_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"jobs"))
+		_select_menu_tab(&"jobs")
 	elif event.is_action_pressed(&"game_build"):
-		_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"build"))
+		_select_menu_tab(&"build")
 	elif event.is_action_pressed(&"game_realm"):
-		_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"realm"))
+		_select_menu_tab(&"realm")
 	elif event.is_action_pressed(&"game_cancel"):
 		if _placement != null and _placement.active:
 			_placement.cancel()
@@ -1557,7 +1606,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			DefenseControl.cancel_gather_paint()
 		else:
 			_breakdown.visible = false
-			_activate_bottom_menu(BOTTOM_MENU_IDS.find(&"powers"))
+			_close_menus()
 	else:
 		return
 	get_viewport().set_input_as_handled()

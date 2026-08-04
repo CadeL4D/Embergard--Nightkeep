@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/well.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"cistern"
+display_name = "BUILDING_CISTERN"
+description = "BUILDING_CISTERN_DESC"
+sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 2
+footprint = Vector2i(1, 1)
+blocks_movement = false
+max_blight = 40
+cost = {&"cut_stone": 8, &"boards": 3}
+build_work = 22.0
+max_hp = 220.0
+repair_cost = {&"cut_stone": 1}
+upgrades_from = &"well"
+is_stockpile = false
+provides_water = true
+influence_radius = 6
+order = 4
+color = Color(0.4, 0.72, 0.86, 1)

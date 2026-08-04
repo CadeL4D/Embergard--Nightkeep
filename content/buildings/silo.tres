@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/stockpile.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"silo"
+display_name = "BUILDING_SILO"
+description = "BUILDING_SILO_DESC"
+sprite = ExtResource("2_tex")
+category = &"logistics"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = false
+cost = {&"boards": 10, &"cut_stone": 4, &"wood": 10}
+build_work = 26.0
+max_hp = 190.0
+repair_cost = {&"boards": 1}
+upgrades_from = &"granary"
+is_stockpile = true
+inventory_capacity = 720
+storage_tags = Array[StringName]([&"food", &"rations", &"herbs"])
+spoilage_multiplier = 0.08
+influence_radius = 6
+order = 10
+color = Color(0.78, 0.7, 0.34, 1)
