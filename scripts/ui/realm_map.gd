@@ -1,5 +1,5 @@
 extends CanvasLayer
-## Region selection, colony summaries, transfers, and the campaign victory action.
+## Region selection, colony summaries, transfers, and the Blight Heart action.
 
 @onready var _canvas: RealmMapCanvas = $Backdrop/Safe/Panel/Layout/Main/MapFrame/Map
 @onready var _title: Label = $Backdrop/Safe/Panel/Layout/Header/Title
@@ -45,7 +45,7 @@ func _ready() -> void:
 	_assault.pressed.connect(_on_assault)
 	_warning.pressed.connect(_on_warning_help)
 	Events.realm_changed.connect(_refresh)
-	Events.realm_victory.connect(close)
+	Events.heart_shattered.connect(close)
 
 
 func open() -> void:
@@ -174,13 +174,14 @@ func _refresh() -> void:
 			int(Realm.RECOVERY_COST[&"food"]),
 			Realm.RECOVERY_SETTLERS])
 	else:
-		_status.text = tr(&"REALM_AWAKE") if is_awake else tr(&"REALM_SLEEPING")
+		_status.text = tr(&"REALM_PURIFIED") if ledger.purified else (
+			tr(&"REALM_AWAKE") if is_awake else tr(&"REALM_SLEEPING"))
 		_summary.text = tr(&"REALM_COLONY_SUMMARY").format([
 			ledger.population(), ledger.building_count(), int(round(ledger.average_mood())),
 			ledger.stock_of(&"food"), ledger.stock_of(&"wood"), ledger.stock_of(&"stone"),
 			int(round(ledger.corruption * 100.0)),
 			int(round(ledger.defense_strength() * 100.0)),
-			int(round(ledger.pressure))])
+			int(round(ledger.pressure * 100.0))])
 		var identity: Dictionary = row.get("economic_identity", {})
 		if not identity.is_empty():
 			_summary.text += "\n" + L10n.t(&"REALM_ECONOMIC_IDENTITY", [
@@ -246,7 +247,7 @@ func _update_footer() -> void:
 	_coverage.value = Realm.ring_coverage() * 100.0
 	_coverage.tooltip_text = tr(&"REALM_COVERAGE_HELP")
 	_heart.text = tr(&"REALM_HEART_STATE").format([
-		Realm.blight_heart_health, Realm.BLIGHT_HEART_MAX])
+		Realm.blight_heart_health, Realm.blight_heart_max_health])
 	var assault_check := Realm.can_assault()
 	_assault.disabled = not bool(assault_check["ok"])
 	_assault.tooltip_text = String(assault_check["reason"])

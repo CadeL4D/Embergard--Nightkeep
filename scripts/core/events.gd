@@ -28,9 +28,14 @@ signal climate_changed(season: StringName, weather: StringName, severity: float)
 ## rather than polling World.blight_structures, which changes a handful of times a night.
 signal blight_structure_raised(cell: int, kind: StringName)
 signal blight_structure_razed(cell: int)
+## Rich destruction event used by the regional enemy-settlement progression. The legacy
+## `blight_structure_razed` signal remains the view's simple remove notification.
+signal blight_structure_destroyed(cell: int, kind: StringName, was_initial_outpost: bool)
 
 # --- Colony ----------------------------------------------------------------------
 signal resources_changed(kind: StringName, amount: int)
+## A physical resource or Essence object appeared, moved, expired, or was collected.
+signal loose_drops_changed(cell: int)
 signal villager_spawned(villager: Node)
 signal villager_died(villager: Node, cause: StringName)
 signal migrant_arrived(cell: int)
@@ -86,4 +91,4 @@ signal notice(text: String, urgency: int)           ## 0 info, 1 warning, 2 alar
 signal realm_changed()
 signal colony_awakened(colony_id: StringName)
 signal trade_route_updated(route_id: int, status: StringName)
-signal realm_victory()
+signal heart_shattered()

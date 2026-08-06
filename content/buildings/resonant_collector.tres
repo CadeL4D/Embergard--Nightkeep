@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/temple.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"resonant_collector"
+display_name = "BUILDING_RESONANT_COLLECTOR"
+description = "BUILDING_RESONANT_COLLECTOR_DESC"
+sprite = ExtResource("2_tex")
+category = &"divine"
+tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = true
+max_blight = 30
+cost = {&"cut_stone": 10, &"ingots": 2, &"emberglass": 2}
+build_work = 42.0
+max_hp = 230.0
+upgrades_from = &"essence_collector"
+min_population = 12
+light_radius = 3
+influence_radius = 8
+energy_capacity = 300
+energy_radius = 12
+energy_per_essence = 3
+order = 46
+color = Color(0.56, 0.74, 1.0, 1)

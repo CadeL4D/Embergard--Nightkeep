@@ -20,6 +20,8 @@ const BLIGHT_HEART_MAX := 300
 const ASSAULT_COST := {&"tools": 8, &"cut_stone": 16}
 const ASSAULT_FAITH := 70.0
 const ASSAULT_DAMAGE := 100
+const HEART_REGROW_DAYS := 7
+const HEART_MAX_GROWTH := 100
 
 const _ADJECTIVES: Array[String] = [
 	"Amber", "Ashen", "Briar", "Cinder", "Elder", "Fallow",
@@ -37,8 +39,14 @@ var awake_id: StringName = &""
 var heart_region_id: StringName = &""
 var blight_core_id: StringName = &""
 var global_corruption: float = 0.0
+
+## Readout only: normalized mean corruption across settleable regions. Combat always asks
+## `region_threat()` and therefore follows the local map or sleeping colony ledger.
 var blight_heart_health: int = BLIGHT_HEART_MAX
-var complete: bool = false
+var blight_heart_max_health: int = BLIGHT_HEART_MAX
+var heart_shattered: bool = false
+var heart_regrow_days_left: int = 0
+var heart_shatter_count: int = 0
 var macro_texture: ImageTexture
 var _region_preview_cache: Dictionary = {}
 var corruption_sources: Array[Vector2i] = []
@@ -78,7 +86,10 @@ func start_new(seed_value: int) -> void:
 	blight_core_id = &""
 	global_corruption = 0.0
 	blight_heart_health = BLIGHT_HEART_MAX
-	complete = false
+	blight_heart_max_health = BLIGHT_HEART_MAX
+	heart_shattered = false
+	heart_regrow_days_left = 0
+	heart_shatter_count = 0
 	_threat_serial = 0
 	_route_serial = 0
 	routes.clear()
@@ -234,7 +245,7 @@ func _build_regions() -> void:
 	for id: StringName in sites:
 		var links: Array = sites[id].get("connections", [])
 		links.erase(blight_core_id)
-	global_corruption = total_corruption / float(maxi(land_count, 1))
+	global_corruption = clampf(total_corruption / float(maxi(land_count, 1)), 0.0, 1.0)
 
 
 func _sample_landscape(x: float, y: float) -> Dictionary:
@@ -853,6 +864,45 @@ func settled(id: StringName) -> bool:
 	return colonies.has(id) and not (colonies[id] as ColonyLedger).fallen
 
 
+## The awake map owns its live containment value; sleeping regions own the value in their ledger.
+## Unsettled regions do not inject a hidden combat modifier into another colony.
+func region_threat(region_id: StringName) -> float:
+	if region_id == awake_id and World.grid.cell_count > 0:
+		return 0.0 if World.region_purified else Threat.pressure
+	var ledger := colony(region_id)
+	return 0.0 if ledger == null or ledger.purified else clampf(ledger.pressure, 0.0, 1.0)
+
+
+func mark_awake_purified() -> void:
+	var ledger := awake_ledger()
+	if ledger == null:
+		return
+	ledger.purified = true
+	ledger.pressure = 0.0
+	ledger.corruption = 0.0
+	if sites.has(ledger.id):
+		var row: Dictionary = sites[ledger.id]
+		row["corruption"] = 0.0
+		sites[ledger.id] = row
+	_recompute_global_corruption()
+	Events.realm_changed.emit()
+
+
+func _recompute_global_corruption() -> void:
+	var total := 0.0
+	var count := 0
+	for id: StringName in sites:
+		var row: Dictionary = sites[id]
+		if not bool(row.get("settleable", false)):
+			continue
+		var local := float(row.get("corruption", 0.0))
+		if colonies.has(id):
+			local = (colonies[id] as ColonyLedger).corruption
+		total += clampf(local, 0.0, 1.0)
+		count += 1
+	global_corruption = clampf(total / float(maxi(count, 1)), 0.0, 1.0)
+
+
 func connected(from_id: StringName, to_id: StringName) -> bool:
 	if not sites.has(from_id):
 		return false
@@ -1421,6 +1471,7 @@ func _ensure_recovery_hearth(ledger: ColonyLedger) -> void:
 
 
 func _on_day_advanced(day_number: int) -> void:
+	_advance_heart_regrowth()
 	_process_routes(day_number)
 	for id in colonies:
 		if id == awake_id:
@@ -1438,8 +1489,20 @@ func _on_day_advanced(day_number: int) -> void:
 			local = (colonies[id] as ColonyLedger).corruption
 		sum += local
 		count += 1
-	global_corruption = sum / float(maxi(count, 1))
+	global_corruption = clampf(sum / float(maxi(count, 1)), 0.0, 1.0)
 	Events.realm_changed.emit()
+
+
+func _advance_heart_regrowth() -> void:
+	if not heart_shattered:
+		return
+	heart_regrow_days_left = maxi(heart_regrow_days_left - 1, 0)
+	if heart_regrow_days_left > 0:
+		return
+	heart_shattered = false
+	blight_heart_max_health = BLIGHT_HEART_MAX + heart_shatter_count * HEART_MAX_GROWTH
+	blight_heart_health = blight_heart_max_health
+	Events.notice.emit(L10n.t(&"REALM_NOTICE_HEART_REGROWN", [blight_heart_max_health]), 2)
 
 
 func region_is_warded(site_id: StringName) -> bool:
@@ -1530,14 +1593,15 @@ func intercept_threat(cell: int, cost: float) -> bool:
 	var deterministic := absf(sin(float(_threat_serial * 37 + cell * 13 + world_seed)))
 	if deterministic < HEART_BASELINE_THREAT:
 		return false
-	shield.pressure += cost * (1.0 + global_corruption)
+	shield.pressure += cost * (1.0 + 0.5 * clampf(region_threat(awake_id), 0.0, 1.0))
 	Events.realm_changed.emit()
 	return true
 
 
 func can_assault() -> Dictionary:
-	if complete:
-		return {"ok": false, "reason": L10n.t(&"REALM_REASON_HEART_BROKEN")}
+	if heart_shattered:
+		return {"ok": false, "reason": L10n.t(&"REALM_REASON_HEART_BROKEN",
+			[heart_regrow_days_left])}
 	if not ring_closed():
 		return {"ok": false, "reason": L10n.t(&"REALM_REASON_RING_OPEN")}
 	if Divine.faith < ASSAULT_FAITH:
@@ -1560,8 +1624,13 @@ func assault_blight_heart() -> bool:
 	Events.faith_changed.emit(Divine.faith)
 	blight_heart_health = maxi(blight_heart_health - ASSAULT_DAMAGE, 0)
 	if blight_heart_health == 0:
-		complete = true
-		Events.realm_victory.emit()
+		heart_shattered = true
+		heart_shatter_count += 1
+		heart_regrow_days_left = HEART_REGROW_DAYS
+		Threat.pressure = 0.0
+		Threat.target_pressure = 0.0
+		World.repel_blight(128)
+		Events.heart_shattered.emit()
 	else:
 		Events.notice.emit(L10n.t(&"REALM_NOTICE_HEART_CRACKS", [blight_heart_health]), 1)
 	Events.realm_changed.emit()
@@ -1574,7 +1643,7 @@ func to_dict() -> Dictionary:
 	for ledger: ColonyLedger in colonies.values():
 		packed_colonies.append(ledger.to_dict())
 	return {
-		"format": 3,
+		"format": 4,
 		"world_seed": world_seed,
 		"colonies": packed_colonies,
 		"awake_id": String(awake_id),
@@ -1582,7 +1651,10 @@ func to_dict() -> Dictionary:
 		"blight_core_id": String(blight_core_id),
 		"global_corruption": global_corruption,
 		"blight_heart_health": blight_heart_health,
-		"complete": complete,
+		"blight_heart_max_health": blight_heart_max_health,
+		"heart_shattered": heart_shattered,
+		"heart_regrow_days_left": heart_regrow_days_left,
+		"heart_shatter_count": heart_shatter_count,
 		"threat_serial": _threat_serial,
 		"route_serial": _route_serial,
 		"routes": routes.map(func(route: TradeRoute) -> Dictionary: return route.to_dict()),
@@ -1591,32 +1663,31 @@ func to_dict() -> Dictionary:
 
 
 func load_dict(data: Dictionary) -> bool:
-	if data.is_empty():
+	if data.is_empty() or int(data.get("format", 0)) != 4:
 		return false
 	var old_colonies: Array = data.get("colonies", []).duplicate(true)
-	var old_awake := StringName(data.get("awake_id", ""))
 	start_new(int(data.get("world_seed", 0)))
-	if int(data.get("format", 1)) < 2:
-		_migrate_legacy_colonies(old_colonies, old_awake)
-	else:
-		for packed: Dictionary in old_colonies:
-			var ledger := ColonyLedger.from_dict(packed)
-			if not sites.has(ledger.id):
-				continue
-			var row: Dictionary = sites[ledger.id]
-			ledger.realm_position = Vector2(row["coord"])
-			ledger.connections.assign(row["connections"])
-			colonies[ledger.id] = ledger
-		awake_id = StringName(data.get("awake_id", ""))
-		heart_region_id = StringName(data.get("heart_region_id", ""))
-		if heart_region_id == &"":
-			for ledger: ColonyLedger in colonies.values():
-				if ledger.is_heart:
-					heart_region_id = ledger.id
-					break
-	global_corruption = float(data.get("global_corruption", global_corruption))
+	for packed: Dictionary in old_colonies:
+		var ledger := ColonyLedger.from_dict(packed)
+		if not sites.has(ledger.id):
+			continue
+		var row: Dictionary = sites[ledger.id]
+		ledger.realm_position = Vector2(row["coord"])
+		ledger.connections.assign(row["connections"])
+		colonies[ledger.id] = ledger
+	awake_id = StringName(data.get("awake_id", ""))
+	heart_region_id = StringName(data.get("heart_region_id", ""))
+	if heart_region_id == &"":
+		for ledger: ColonyLedger in colonies.values():
+			if ledger.is_heart:
+				heart_region_id = ledger.id
+				break
+	global_corruption = clampf(float(data.get("global_corruption", global_corruption)), 0.0, 1.0)
 	blight_heart_health = int(data.get("blight_heart_health", BLIGHT_HEART_MAX))
-	complete = bool(data.get("complete", false))
+	blight_heart_max_health = int(data.get("blight_heart_max_health", BLIGHT_HEART_MAX))
+	heart_shattered = bool(data.get("heart_shattered", false))
+	heart_regrow_days_left = int(data.get("heart_regrow_days_left", 0))
+	heart_shatter_count = int(data.get("heart_shatter_count", 0))
 	_threat_serial = int(data.get("threat_serial", 0))
 	selected_doctrines = Doctrines.sanitize(data.get("selected_doctrines", []))
 	_route_serial = int(data.get("route_serial", 0))
@@ -1628,49 +1699,3 @@ func load_dict(data: Dictionary) -> bool:
 			_route_serial = maxi(_route_serial, route.route_id)
 	Events.realm_changed.emit()
 	return colonies.has(awake_id)
-
-
-func _migrate_legacy_colonies(packed_colonies: Array, old_awake: StringName) -> void:
-	if packed_colonies.is_empty():
-		return
-	var placements := _migration_placements(packed_colonies.size())
-	var remap := {}
-	for i in mini(packed_colonies.size(), placements.size()):
-		var ledger := ColonyLedger.from_dict(packed_colonies[i])
-		var old_id := ledger.id
-		var id: StringName = placements[i]
-		var row: Dictionary = sites[id]
-		ledger.id = id
-		ledger.display_name = String(row["name"])
-		ledger.realm_position = Vector2(row["coord"])
-		ledger.connections.assign(row["connections"])
-		colonies[id] = ledger
-		remap[old_id] = id
-		if ledger.is_heart:
-			heart_region_id = id
-	if heart_region_id == &"" and not placements.is_empty():
-		heart_region_id = placements[0]
-		(colonies[heart_region_id] as ColonyLedger).is_heart = true
-	awake_id = remap.get(old_awake, heart_region_id)
-
-
-func _migration_placements(wanted: int) -> Array[StringName]:
-	var out: Array[StringName] = []
-	var start := suggested_first_region()
-	if start == &"":
-		return out
-	var queue: Array[StringName] = [start]
-	var seen := {start: true}
-	while not queue.is_empty() and out.size() < wanted:
-		var id: StringName = queue.pop_front()
-		out.append(id)
-		var coord: Vector2i = sites[id]["coord"]
-		for offset in [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]:
-			var row := site_at(coord + offset)
-			if row.is_empty() or not bool(row.get("settleable", false)):
-				continue
-			var other := StringName(row["id"])
-			if not seen.has(other):
-				seen[other] = true
-				queue.append(other)
-	return out

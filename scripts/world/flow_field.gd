@@ -40,6 +40,17 @@ const LIGHT_PENALTY := 60
 ## Cost of breaking through a solid building, in the same units.
 const WALL_PENALTY := 220
 
+## Cost of squeezing through a gate.
+##
+## Strictly between open ground and a wall, and that ordering is the whole funnel. Gates used to
+## be charged the FULL wall price on the reasoning that a monster should be as willing to chew the
+## door as the wall — but a field that prices two crossings identically has no reason to prefer
+## either, so the horde simply hit whichever was geometrically nearer and the door the player left
+## open meant nothing. Cheaper than a wall makes the gate the obvious way in; dearer than open
+## ground keeps it a wall rather than a hole. At these numbers a monster will walk about thirteen
+## tiles out of its way to use a gate, which is thirteen tiles of the player's guns.
+const GATE_PENALTY := 90
+
 ## Added back on top of a road, per tier, cancelling most of the saving the surface gave.
 ##
 ## The horde reads the same `move_cost` array villagers do, so without this every road the player
@@ -174,13 +185,12 @@ func _cell_cost(i: int) -> int:
 			return WALL_PENALTY + lit
 		return -1
 
-	# A gate is walkable ground as far as villagers and `move_cost` are concerned, but
-	# to the horde it costs the same as smashing a wall. Charged rather than forbidden
-	# so a gate in a long wall still reads as the cheap way in — the funnel is the
-	# point, and a monster that would rather chew the gate than walk twenty tiles
-	# around it is walking into the player's guns.
+	# A gate is walkable ground as far as villagers and `move_cost` are concerned, but the
+	# horde is charged for it — less than a wall, more than open ground. See GATE_PENALTY:
+	# that ordering is what makes a gate in a long wall read as the cheap way in, and the
+	# funnel is the point.
 	if _gate[i] != 0:
-		return WALL_PENALTY + lit
+		return GATE_PENALTY + lit
 
 	return int(mc) + lit + int(_path[i]) * PATH_PENALTY
 

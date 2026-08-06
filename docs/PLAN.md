@@ -1058,6 +1058,396 @@ that no longer exists.
 
 ---
 
+## Core-loop pass: a contested board — 2026-08-05
+
+The diagnosis this pass answers: the game had breadth and no depth. Thirty story events, a realm
+layer, tomes, climate, equipment, fifty-odd buildings — and almost every system ran one way. The
+map was a backdrop rather than a scoreboard, the settlement never had to be re-decided after the
+first ten minutes, and nothing the player owned compounded. That is what "one dimensional" was.
+
+### Walls became geometry (the big one)
+
+`FlowField` was already well built: it charges `WALL_PENALTY` to cross a barrier and extra to
+cross lit ground, so a horde *should* route around a palisade and pour through the gap. It never
+could, because `Threat._goal_cells()` made **every building cell a goal, walls included**. The
+nearest goal for anything standing outside the wall was the wall, so the crossing penalty had
+nothing to route toward. `BuildingDef`'s own header describes a gate as "deliberately a funnel";
+that funnel could not form. Walls were hit points.
+
+Two changes:
+
+- `BuildingDef.is_horde_goal()` — derived, not declared. A building is worth walking to if it has
+  interior function (centre, storage, beds, workers, water, faith, tomes, work aura) or if it
+  shoots *and* blocks movement. Palisades, gates, ramparts, paths and floor traps are pure cost.
+- `FlowField.GATE_PENALTY = 90`, between open ground (~10) and a wall (220). Gates used to cost
+  the full wall price, and a field that prices two crossings identically has no reason to prefer
+  either. At these numbers a monster will detour about thirteen tiles to use a gate.
+
+Proven rather than assumed: the regression test raises a nine-tile palisade with one gate and
+asserts no wall cell is a goal and that the gate is the cheapest crossing of the line
+(gate 176 < wall 226).
+
+### Light takes ground back
+
+`LIGHT_RESIST` only ever *slowed* corruption, and `repel_blight()` had three callers — the Cleanse
+ritual, its completion, and one story event. The Blight was a ratchet, so nothing was ever won at
+night; a night survived changed nothing you could see in the morning.
+
+`BlightField.reclaim_lit_ground()` now runs at dawn: boundary tiles lit above `RECLAIM_LIGHT`
+lose `RECLAIM_PER_DAWN` intensity, and the morning reports how much ground came back. Frontier-only
+on purpose — reclaiming from anywhere would let one deep beacon hollow the corruption from behind.
+The settlement edge is now a line that moves both ways, a beacon is territory, and the Ember has a
+job after dark that competes with the job it has in daylight.
+
+### Decisions expire
+
+`Climate.FROZEN_SEASONS` — in winter, rivers and lakes are not drinkable; wells and cisterns are.
+Every other seasonal effect is a multiplier the colony absorbs. This one makes a settlement
+decision go stale: a colony that drank from the river all autumn must have sunk a well before the
+freeze. Warned a full season early, and only when the colony actually lacks one
+(`Colony.has_sheltered_water`).
+
+### Villagers compound
+
+`VillagerRecord.mastery` — job id to 0..1, earned per completed work cycle, capped at a +50% work
+multiplier and saved with the villager. Every other number on a villager is rolled at birth and
+never moves, which is why a day-40 colony played like a day-10 one with more wood. A veteran
+woodcutter is now worth protecting and cannot be replaced by a migrant turning up.
+
+### Readability
+
+- **The Watch** — a new dropdown tab listing what is wrong right now, ranked by severity: people at
+  zero food or water, idle villagers grouped by *why*, no well before the freeze, dry towers, no
+  beds, damaged buildings. Derived entirely from live state; no new simulation. Both freeze bugs
+  this month reached the point of killing colonists partly because the only way to discover either
+  was to notice a body.
+- **`Villager.idle_reason`** — recorded at all eight points where a decision comes back empty
+  (no reachable food, no water, stores full, no workplace open, nothing marked, unreachable,
+  route blocked) and shown on the selection card. The villager always knew; the answer used to go
+  out of scope.
+- **Buildings show state** — stock, input and output bars already existed. Added a damage bar that
+  appears only once damaged, and an amber bar on a workplace that has stopped producing. That
+  second one is the state that stranded farmers at a full barn for an entire run while looking
+  perfectly normal from outside.
+
+### Not done
+
+**Physical spills.** Dropped loads still return to the aggregate store rather than landing on the
+ground. There is no positional pile concept in the codebase — `Colony.store_item` places into a
+building or into `overflow_items`, which lives at the Hearth — so this needs a save-backed
+cell-keyed store, a view, and hauler targeting. Deliberately left rather than rushed at the end of
+a large pass.
+
+---
+
+## Toward Rise to Ruins, pass 1 — 2026-08-05
+
+Two of the three changes I had ranked load-bearing. Both are small; both change what the game IS
+rather than how much of it there is.
+
+### The Hand got verbs
+
+It could lift a thing and put it down. Now:
+
+- **Drowning.** A hostile dropped in water dies. `_hand_drop_valid` previously demanded a walkable
+  destination, so the oldest verb in the genre was not merely absent, it was forbidden. Villagers
+  are deliberately still refused — this is played with a thumb, and a mistap that kills a colonist
+  is a worse trade than a verb withheld.
+- **Reaping.** Tapping a harvestable tile with an empty hand tears it out for `REAP_COST` faith and
+  drops the yield straight into stores. Ignores gathering designations on purpose: those exist to
+  tell villagers where to work, and routing the player's most direct verb through the work orders
+  would turn it into another way of filing a request.
+
+### Buildings hold the ground they claim
+
+Dawn reclamation shipped last pass and was a treadmill — the light cleared a tile at first light
+and the frontier took it back the same afternoon. Standing buildings now resist spread into ground
+inside the colony's sphere (`INFLUENCE_RESIST`, 0.8). A resistance rather than a wall: at 1.0 a
+sphere would end the siege outright, at 0.0 the reclamation is pointless. The corruption still gets
+in, slowly, where the player let their buildings thin out.
+
+The influence overlay already renders that sphere, so the "data view" half of this comes free — the
+player can see the line they are being asked to hold.
+
+**A trap worth recording.** The obvious implementation was `World.in_influence()`, and it is wrong:
+that function reports TRUE for every cell while no sphere exists at all, so that the founding
+Village Center has somewhere to go. Used as a blight check it made the entire map eighty percent
+corruption-proof from the first frame. The smoke test's "blight is advancing" assertion caught it
+across all four seeds. `World.resists_blight()` now states the narrower question directly.
+
+### Still open, in order
+
+1. **The win question.** RtR is explicitly unwinnable — global corruption only climbs, and the
+   design is managed decline. We have a Cleanse ritual that clears the map and a Realm with a
+   killable blight heart and a `complete` flag. That is a different emotional shape, and no feature
+   closes the gap. Middle path: keep the Cleanse but have it *relieve* pressure rather than end the
+   run.
+2. **The world clock** — see the backlog below. `Realm.global_corruption` is still an average
+   rather than a ledger, so staying costs nothing and expanding pays nothing.
+3. **Physical spills + the Porter job**, together, as one positional-pile system.
+
+---
+
+## Toward Rise to Ruins, pass 2 — release the pressure — 2026-08-05
+
+### The Cleanse is a valve, not an ending
+
+It was a one-shot: cleanse once and the button was dead for the run, because the ritual was framed
+as WINNING the ground back rather than buying time on it. That framing is a large part of why
+nothing was ever won at night — the only reversal in the whole game was a single end-game button.
+
+`cleanse_completed` no longer gates `can_start_cleanse()`. The ritual is repeatable, still
+expensive, and the corruption starts creeping back the moment it finishes. Completing one now also
+calls `Realm.relieve_corruption(CLEANSE_RELIEF)`, so the relief is felt Realm-wide rather than only
+on the map you cast it from.
+
+**The Realm's blight-heart victory was deliberately left alone.** Breaking the Heart still ends the
+run and advances ascension. That is the campaign's actual ending and removing it is a much larger
+call than the one that was asked for — worth doing if the goal really is RtR's "you cannot win",
+but not something to slip in unasked.
+
+### The world map has a clock
+
+`Realm.global_corruption` was a pure readout — the mean of every region's corruption, recomputed at
+dawn. Nothing the player did moved it and nothing about time moved it, so the world map was a place
+to look at rather than a clock to race.
+
+It now carries `corruption_pressure`, folded into both recompute sites and persisted with the
+Realm:
+
+- **+`PRESSURE_PER_COLONY_DAY` per settled colony, per day** — occupying the Realm costs something,
+  and holding four regions costs four times as much as holding one
+- **−`PRESSURE_FOUNDING_RELIEF` on founding a settlement** — worth about a colony-week, so pushing
+  outward is a real answer to the squeeze rather than another mouth on the ledger
+- **−`CLEANSE_RELIEF` on a completed Cleanse** — the expensive lever
+- clamped to `PRESSURE_MAX`, never negative
+
+That is the pair RtR runs on: staying still is what kills you, and expansion is how you hold the
+line. Ours keeps the regional average underneath it, so a quiet Realm still reads as quiet.
+
+### Still not done
+
+**Physical spills + the Porter job.** Third pass running that this has been deferred, and honestly:
+it is a positional pile store, a save-format addition, a view, and hauler targeting — call it 200
+lines across four files — and starting it at the end of a session this long is how the careless
+version gets written. It wants a session of its own. Everything it needs is now specified in the
+job-roster backlog below.
+
+---
+
+## Toward Rise to Ruins, pass 3 — spills, porters, one nest — 2026-08-05
+
+### Goods have a place now
+
+`Colony.spills` is the colony's first POSITIONAL store: cell to {kind: amount}. Everything else
+here is an aggregate — stock is a number, overflow is a number parked at the Hearth — so a load
+that could not be delivered either teleported into the stores or ceased to exist. A porter's death
+cost the colony a figure it never saw leave.
+
+- A villager who dies drops what they carried, and their pending loads, on the tile they fell on
+- `spill()` / `nearest_spill()` / `take_spill()` / `spill_total()` on Colony
+- Persisted through the Abstractor and Reconstitutor, so a sleeping colony keeps its piles
+- `scripts/world/spill_view.gd` draws the lot in one `_draw`, on the `spill_changed` signal —
+  a pile has no behaviour, so it does not deserve a node
+- The Watch reports uncollected goods, ranked higher when the colony employs nobody who hauls
+
+### The Worker is the porter
+
+`JobDef.hauls`, beside `defends` / `repairs` / `heals`. The Worker — which previously had no
+target features, no workplace and nothing to do — now carries it.
+
+The ordering is now explicit and load-bearing: standing supply requests come first (tower
+ammunition, need-producing workshops, then other production), construction comes next, and loose
+pile recovery comes last. A non-Worker can still claim construction, so keeping a defence supplied
+does not make a new blueprint inert.
+
+Collection reuses the FETCHING state with a `_fetch_spill` flag rather than adding a state, for
+the reason Villager's header gives: the villager is walking somewhere to pick something up, which
+is what FETCHING already means.
+
+### One nest
+
+`NEST_COUNT` 4 → 1. Four gave the map four independent corruption clocks and no single place to
+point at — the player could clear one and watch the ground keep turning, so destroying a nest never
+felt like it accomplished anything and the Blight read as weather. One nest is a thing on the map:
+findable, wallable, pushed back from, eventually assaulted. Every one of those is a decision about
+a place.
+
+---
+
+## Backlog: what Rise to Ruins has that we do not — researched 2026-08-05
+
+Ordered by how much each one addresses the "breadth without depth" diagnosis. Every entry names
+what already exists here, so none of these are green-field.
+
+### 1. The world map needs a clock
+
+RtR raises **global corruption by +1 per 4 days summed across every village you own**, drops it
+**−3 for founding a new one**, and drops it further for completed goals. Staying is punished,
+expanding is rewarded, and the threat bar on the world map is the whole reason that screen is a
+game rather than a menu.
+
+`Realm.global_corruption` exists but is a **readout** — recomputed as the average of regional
+corruption (realm.gd:237, realm.gd:1441). Nothing makes staying cost anything; nothing makes
+founding pay. `Chronicle` goals, colony ledgers and settlement costs are all already built.
+
+**Fix:** make it a ledger. Accrue per colony-day owned, credit on founding and on each Chronicle
+goal, feed into threat scaling. Wiring, not a new system.
+
+### 2. Corruption resistance, and a data view to check it
+
+In RtR every non-wall building projects corruption resistance equal to its build range, and unlike
+build range it is **not blocked by walls**. A Data View overlay lets the player confirm coverage
+before committing; the advanced guides are entirely about reading it.
+
+We have `influence_radius` (gates buildability) and, as of today, light that reclaims ground at
+dawn. We have no per-building resistance and no toggleable coverage overlay.
+
+**Fix:** reuse `influence_radius` as blight resistance and add a views toggle. This completes what
+shipped today — **light takes ground, resistance holds it**. Without the holding half, reclaimed
+ground simply re-corrupts.
+
+### 3. The Hand needs more verbs
+
+RtR's grab: drop resources **onto a construction site** to skip the haul, harvest a tile yourself,
+drop a monster **into water** to kill it or across the map, feed anything to a Cullis Gate. Cost
+scales with how long you hold. Ours lifts and drops.
+
+**Fix:** three verbs on top of `GodHand` — water kills a dropped monster, a resource dropped on a
+blueprint counts as delivered, holding over a tile harvests it.
+
+### 4. Essence: a resource with a body
+
+Harvesting and killing leave essence on the ground; it drifts toward the player; three buildings
+collect it; it powers magic towers and golem production. Our faith accrues invisibly from mood.
+
+**Fix:** make part of faith physical — motes from harvests and kills that decay if ignored.
+**Shares one implementation with physical spills**: build the positional pile system once and let
+spills, essence and dropped loot all use it.
+
+### 5. Damage types that sort the horde
+
+RtR mazes work because crystal blocks most monsters but not Spectres, and Fire Elementals will not
+cross water — one maze routes different enemies down different lanes. We have `DamageTypes`,
+resistances, `blocks_monsters_only` and a terrain-aware flow field. Now that walls actually funnel,
+a funnel with only one shape is the next thing to run out.
+
+**Fix:** give two or three monsters a terrain aversion or immunity.
+
+### 6. Golems
+
+Six types, spawned by a building that burns essence, level driven by that building's upgrade tier.
+We have no persistent god-made unit — powers fire and vanish. A construct that costs faith and
+emberglass and then *stands somewhere* gives faith a sink with presence on the map.
+
+### 7. Lootboxes and keys
+
+Mystic circles you click for a chest or a key; keys also drop from harvesting wood, water and wild
+food; chests hold villager equipment and tower ammunition. We have a full items catalogue and no
+reason to ever look at the parts of the map we are not harvesting.
+
+### 8. Wildlife
+
+Animals seek out places with food *and* water and congregate there; rangers hunt them; they drop
+meat, hide, eggs and feathers. **Our `ranger_lodge` and Ranger job exist and have no prey.**
+
+---
+
+## Backlog: the job roster
+
+Twenty-two jobs exist. The gaps are not "more crafting" — they are the roles the systems above
+create, and one role the codebase already talks about but never built.
+
+| Job | Why | Notes |
+|---|---|---|
+| **Porter** | Required by physical spills. Hauling today is done by whoever produced the load (`Villager._begin_haul` runs after gathering); nobody's job is *moving things*. Piles on the ground need someone to collect them. | RtR's Organizer: "takes resources from point A to B... cannot build, harvest or manufacture." Add a `hauls` flag beside `defends`/`repairs`/`heals`. Also rearms towers, which currently happens by magic in `Building._consume_ammo` via `Colony.spend_near`. |
+| **Cleanser** | A labour answer to corruption, not just a lighting one. `BlightField.purify()` already carries the comment "a Cleanser working" — the job was anticipated and never written. | Pairs with dawn reclamation: light takes the edge passively, a Cleanser takes it deliberately. Add a `cleanses` flag. |
+| **Water carrier** | Turns the winter freeze from a wall into a logistics problem you can prepare for: fill cisterns from the shore through autumn against the freeze. | RtR's Water Master. Depends on nothing new. |
+| **Hunter** | Wildlife (#8) needs someone to kill it. Ranger already exists and *defends*; hunting is a separate verb. | Add a `hunts` flag. |
+| **Occultist** | Owns essence (#4) and the soul/grave loop: prays at an altar to generate essence, carries the dead to rest. | Only worth adding with #4. |
+
+**Builder is deliberately NOT on this list.** Construction is a role anyone free picks up
+(`Villager._try_claim_site`), and that class's comment explains why: a dedicated builder slider
+means remembering to staff it before anything you place ever gets raised. Adding a Porter gets the
+RtR split anyway — builders stop hauling because someone else is doing it.
+
+**The Bottler is already the answer to winter, by accident.** `requires_water_access` stops bottling
+when `Colony.has_water_access()` fails, and that now excludes frozen shores but still counts wells.
+So: sink a well and your Bottler keeps filling waterskins through winter; do not and it stops, and
+`Colony.has_stored_water()` is all that stands between the colony and dehydration. That is a real
+seasonal preparation loop and it fell out of the freeze change without being designed.
+
+---
+
+## Cohesion foundation — landed 2026-08-06
+
+This is the first load-bearing implementation slice of the revised Rise to Ruins roadmap:
+
+- **Threat is regional containment.** `Threat.pressure_breakdown()` exposes desired versus actual
+  Blight territory, structures, trend and the bounded 0–1 pressure used by waves. Population and
+  Realm-wide pressure no longer change it. The existing phase strip shows the trend/cause and the
+  Watch tab carries the full breakdown.
+- **The enemy has one Core and physical works.** Every biome now generates exactly one Core and a
+  deterministic 2–4 initial Graveyard outpost settlement. Half the initial outposts calls the biome
+  boss; destroying the Heart-region Core calls the Heart Warden. Initial and later worker-built
+  structures remain distinct through save/load.
+- **Taking ground can answer back.** Dawn reclamation banks a small, capped, daytime retaliation
+  budget. Storyteller outcomes now change physical Blight instead of secretly adding to pressure.
+- **Regional purification is permanent.** Core, all works, workers, hostiles and relevant bosses
+  must be gone before the three-dawn project starts. A purified region serializes that state and
+  cannot spread, seed, build or launch waves while awake or asleep.
+- **The Heart is a valve, not an ending.** A shatter collapses local pressure, repels Blight, awards
+  one ascension and leaves the run playable. It regrows after seven days with +100 maximum strength
+  per completed cycle. `Realm.complete` and `realm_victory` are retired; Ascend is the clean exit.
+- **Persistence began this foundation at schema 10 with no migration.** Older campaign saves are
+  rejected deliberately.
+
+The required smoke, requested-behavior, mobile-touch and Realm suites are green.
+
+## Physical supply â€” landed 2026-08-06
+
+- `SupplyRequest` is a serializable promise from a physical store to one building anchor. Shelf
+  reservations and in-transit commitments are separate internally, so two Workers cannot collect
+  the same load and a cancellation cannot lock stock permanently.
+- Workers fill towers to twelve shots, need-producing workshops to two input cycles, and other
+  active workshops to two cycles. Paused, worker-disabled, output-blocked and maintain-target-
+  satisfied workshops do not hoard inputs.
+- Bow Towers, Ballistae and Catapults now have real twelve-unit magazines. Firing consumes only the
+  local input buffer; distant global stock cannot fire a shot. The building card and Watch warning
+  also read that local magazine rather than the aggregate stock cache.
+- Save/load preserves carried assignments by stable request id and rebuilds reservations from the
+  goods actually in villagers' arms. Pre-pick path promises are intentionally discarded. Death
+  releases the request before dropping the load, and destruction evacuates buffered ammunition.
+- The new persisted logistics state bumps campaign saves to schema 11. Per the roadmap decision,
+  schema-10 campaigns are rejected rather than partially migrated.
+- Verification covers duplicate claims, interruption/death, reload, local-only firing and exact
+  conservation. The pass also fixed a night-recall loop where shift handling cancelled and
+  requeued one civilian's path home every tick.
+
+## Physical Essence and local magic — landed 2026-08-06
+
+- `LooseDrop` replaces the resource-only spill dictionary with stable, serializable objects carrying
+  cell, kind, amount, collection policy, expiry and source. Resources remain worker-only and never
+  expire; Essence is divine-only and lasts exactly one in-game day.
+- Harvests have a deterministic 35% mote chance. Ordinary, elite and boss kills drop 1/3/15; a
+  fallen villager drops 4. Resource loads and Essence share one batched map view and persistence
+  path without turning individual drops into simulation nodes.
+- The Ember absorbs motes within two tiles into the existing Faith economy. In the open Hand tab,
+  a one-finger sweep that begins on Essence collects it; the second finger promotes immediately to
+  camera navigation using the same arbitration contract as the gather brush.
+- The Essence Altar introduces the Occultist: one worker per tier, a 20-second cycle, three physical
+  motes and a small mood lift. The Collector upgrade line holds 150/300/500 energy, attracts motes
+  within twelve tiles and converts each to three charge.
+- Energy is physical and local. `energy_available_near` and `draw_energy_near` spend from completed
+  Collectors covering the consumer; Banish Spires, Ember Beacons and Storm Rods refuse to fire when
+  their district lacks charge. The selected-building card, Watch tab, range ring and charge bar all
+  expose the state.
+- Campaign persistence is schema 12 with no migration. Focused behavior, save/load and mobile
+  gesture tests cover expiry, conservation, attraction, range, atomic spending and camera yield.
+
+Golems remain next because their path and simulation budgets now have both required foundations:
+physical delivery tasks and a local magical power source.
+
 ## Reference
 - [World Map — Rise to Ruins Wiki](https://rise-to-ruins.fandom.com/wiki/World_Map)
 - [Corruption Threat — Rise to Ruins Wiki](https://rise-to-ruins.fandom.com/wiki/Global_Corruption_Power)

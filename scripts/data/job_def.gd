@@ -27,6 +27,10 @@ extends Resource
 @export var cycle_yield: Dictionary = {}
 ## Optional durable item made by one completed cycle instead of a resource load.
 @export var item_yield: StringName = &""
+## A physical object produced at the workplace instead of entering aggregate stock.
+@export var loose_yield_kind: StringName = &""
+@export var loose_yield_amount: int = 0
+@export var cycle_mood_boost: float = 0.0
 
 ## What one cycle CONSUMES, e.g. { &"wood": 2 }. Empty means the job creates from nothing —
 ## a farm growing food, a forester felling a tree.
@@ -76,6 +80,11 @@ extends Resource
 ## number in the stockpile — so `cycle_yield` stays empty and no haul is queued.
 @export var scribes: bool = false
 ## Repairs damaged buildings instead of running an ordinary workshop cycle.
+## This job collects loose goods off the ground and carries them to a store.
+##
+## A role flag like `defends` and `repairs` rather than a workplace, because hauling has no
+## building to stand in — the work is wherever somebody dropped something. See Colony.loose_drops.
+@export var hauls: bool = false
 @export var repairs: bool = false
 ## Future clinics use the same task-routing hook without adding an id branch.
 @export var heals: bool = false

@@ -32,7 +32,7 @@ attack_type = &"crushing"
 attack_area_radius = 2.0
 ammo_kind = &"stone"
 ammo_per_shot = 1
+input_capacity = 12
 default_target_policy = &"structure"
 order = 40
 color = Color(0.62, 0.6, 0.55, 1)
-

@@ -30,9 +30,9 @@ attack_damage = 14.0
 attack_range = 7.5
 attack_cooldown = 1.15
 attack_type = &"elemental"
+energy_per_shot = 5
 attack_area_radius = 2.5
 storm_damage_multiplier = 2.2
 storm_self_damage = 3.0
 order = 43
 color = Color(0.48, 0.72, 0.95, 1)
-

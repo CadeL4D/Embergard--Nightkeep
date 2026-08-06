@@ -8,6 +8,7 @@ static func capture(ledger: ColonyLedger) -> void:
 	ledger.keep_cell = World.keep_cell
 	ledger.last_advanced_day = Sim.day
 	ledger.pressure = Threat.pressure
+	ledger.purified = World.region_purified
 	var state := {
 		"terrain": World.terrain.duplicate(),
 		"feature": World.feature.duplicate(),
@@ -18,15 +19,19 @@ static func capture(ledger: ColonyLedger) -> void:
 		"blight_growth": Threat.growth_progress(),
 		"blight_mass": Threat.blight_mass,
 		"blight_boss_stage": Threat.boss_stage,
+		"blight_progression": Threat.progression_state(),
 		"blight_workers": _pack_blight_workers(),
 		"physical_inventory": 1,
 		"stock": Colony.stock.duplicate(true),
 		"overflow": Colony.overflow.duplicate(true),
 		"overflow_spoilage": Colony.overflow_spoilage_progress.duplicate(true),
 		"overflow_items": Colony.overflow_items.duplicate(true),
+		"loose_drops": Colony.pack_loose_drops(),
+		"next_loose_drop_id": Colony._next_loose_drop_id,
 		"next_item_serial": Colony._next_item_serial,
 		"memorials": Colony.memorials.duplicate(true),
 		"reserved": Colony.reserved.duplicate(true),
+		"supply_requests": Colony.pack_supply_requests(),
 		"quotas": Colony.quotas.duplicate(true),
 		"migration_progress": Colony.migration_progress,
 		"faith": Divine.faith,
@@ -45,7 +50,8 @@ static func capture(ledger: ColonyLedger) -> void:
 	for value in World.blight:
 		if value > 0:
 			blighted += 1
-	ledger.corruption = float(blighted) / float(maxi(World.blight.size(), 1))
+	ledger.corruption = 0.0 if ledger.purified else \
+		float(blighted) / float(maxi(World.blight.size(), 1))
 	ledger.fallen = state["villagers"].is_empty()
 
 
@@ -65,6 +71,7 @@ static func _pack_villagers() -> Array:
 			"health": v.health,
 			"carry_kind": v.carry_kind,
 			"carry_amount": v.carry_amount,
+			"supply_request_id": v._supply_request_id,
 			"pending_loads": v.pending_loads.duplicate(true),
 			"statuses": v.statuses.duplicate(true),
 			"record": v.profile_dict(),
@@ -100,6 +107,7 @@ static func _pack_buildings() -> Array:
 			"spoilage_progress": b.spoilage_progress.duplicate(true),
 			"input_buffer": b.input_buffer.duplicate(true),
 			"output_buffer": b.output_buffer.duplicate(true),
+			"stored_energy": b.stored_energy,
 		})
 	return out
 

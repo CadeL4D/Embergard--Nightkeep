@@ -113,6 +113,9 @@ var nest_hp: Dictionary = {}
 ## They are, mechanically, nests with different art and different side effects. Treating them as
 ## anything else would have been a second system to keep in step with the first.
 var blight_structures: Dictionary = {}
+## A purified region keeps its exact map, but Blight spread, construction and waves are inert.
+## Serialized by ColonyLedger rather than treated as a global campaign flag.
+var region_purified: bool = false
 
 ## Walkable cells with open water next to them — where a villager can kneel and drink.
 ##
@@ -137,6 +140,23 @@ func _ready() -> void:
 	blight_field = BlightField.new()
 	paths = PathService.new()
 	resources = ResourceIndex.new()
+	Events.phase_changed.connect(_on_phase_changed)
+
+
+## Dawn is when the colony's light collects on what it held overnight.
+##
+## Announced rather than silent: the whole point of making the Blight reversible is that the
+## player can SEE the boundary move, and a line of ground quietly going clean while they are
+## looking somewhere else teaches nobody anything.
+func _on_phase_changed(phase: int, _duration: float) -> void:
+	if phase != Sim.Phase.DAWN or blight_field == null or region_purified:
+		return
+	var cleared := blight_field.reclaim_lit_ground()
+	if cleared > 0:
+		if Threat:
+			Threat.note_reclaimed_tiles(cleared)
+		cost_dirty = true
+		Events.notice.emit(L10n.t(&"BLIGHT_PUSHED_BACK", [cleared]), 0)
 
 
 ## Sim's current tick, read defensively so PathService can age its queue without
@@ -151,6 +171,7 @@ func tick_hint() -> int:
 ## makes a new map reflect the selected macro biome and its resources.
 func generate(new_seed: int, keep_override: int = -1, region_profile: Dictionary = {}) -> void:
 	seed_value = new_seed
+	region_purified = false
 	self.region_profile = region_profile.duplicate(true)
 	biome_id = StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
 	grid.resize(MAP_WIDTH, MAP_HEIGHT)
@@ -425,6 +446,17 @@ func in_influence(i: int) -> bool:
 	return influence_at(i) >= INFLUENCE_MIN
 
 
+## Ground the colony's standing buildings actively hold against corruption.
+##
+## Deliberately NOT in_influence(), which answers a subtly different question and carries a
+## special case that is wrong here: it reports TRUE for every cell while no sphere exists at all,
+## so that the founding Village Center has somewhere to go. Borrowing it as a blight check made
+## the entire map eighty percent corruption-proof from the first frame of a run, and the only
+## reason that did not ship is that the smoke test asserts the Blight must actually advance.
+func resists_blight(i: int) -> bool:
+	return _influence_any and influence_at(i) >= INFLUENCE_MIN
+
+
 ## Does any ground at all fall inside the buildable sphere?
 ##
 ## Tracked as a flag maintained by rebuild_influence rather than scanned per query: this is asked
@@ -492,6 +524,8 @@ func repel_blight(cells_to_clean: int) -> int:
 
 
 func seed_blight_surge(cells_to_seed: int) -> int:
+	if region_purified:
+		return 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value ^ (Sim.day * 65537) ^ 0xB117
 	var seeded := 0
@@ -609,8 +643,9 @@ func damage_nest(cell: int, amount: float) -> bool:
 ## Stamps occupancy, so an enemy structure is a real obstacle that reshapes both the monster flow
 ## field and villager pathing — the Blight's village genuinely gets in the way, which is most of
 ## what makes contesting it interesting.
-func add_blight_structure(cell: int, def: BlightStructureDef) -> bool:
-	if def == null or not grid.is_valid_index(cell):
+func add_blight_structure(cell: int, def: BlightStructureDef,
+		initial_outpost: bool = false) -> bool:
+	if region_purified or def == null or not grid.is_valid_index(cell):
 		return false
 	if blight_structures.has(cell) or is_nest(cell) or claimed[cell] != 0:
 		return false
@@ -619,7 +654,12 @@ func add_blight_structure(cell: int, def: BlightStructureDef) -> bool:
 	if feature[cell] != Terrain.Feature.NONE:
 		return false
 
-	blight_structures[cell] = {"kind": def.id, "hp": def.max_hp, "cooldown": 0.0}
+	blight_structures[cell] = {
+		"kind": def.id,
+		"hp": def.max_hp,
+		"cooldown": 0.0,
+		"initial_outpost": initial_outpost,
+	}
 	# Negative id so it can never collide with a Building's instance id, and so anything reading
 	# occupancy to find a building gets nothing rather than a wrong answer.
 	occupancy[cell] = -cell - 1
@@ -654,6 +694,8 @@ func damage_blight_structure(cell: int, amount: float,
 		return false
 	var entry: Dictionary = blight_structures[cell]
 	var def := blight_structure_def(cell)
+	var kind: StringName = def.id if def != null else StringName(entry.get("kind", &""))
+	var was_initial_outpost := bool(entry.get("initial_outpost", false))
 	var applied := DamageTypes.apply(amount, def.resistances if def != null else {}, damage_type)
 	var remaining: float = float(entry["hp"]) - applied
 	if remaining > 0.0:
@@ -670,6 +712,7 @@ func damage_blight_structure(cell: int, amount: float,
 	if Threat:
 		Threat.mark_field_dirty()
 	Events.blight_structure_razed.emit(cell)
+	Events.blight_structure_destroyed.emit(cell, kind, was_initial_outpost)
 	Events.notice.emit(tr(&"NOTICE_BLIGHT_RAZED"), 1)
 	return true
 

@@ -449,10 +449,22 @@ func stockpile_filter_name(cell: int) -> String:
 func can_start_cleanse() -> Dictionary:
 	if cleanse_dawns_left > 0:
 		return {"ok": false, "reason": tr(&"CLEANSE_ALREADY_ACTIVE")}
-	if cleanse_completed or _blighted_count() == 0:
+	# A Cleanse is the permanent regional payoff. Every physical enemy and boss gate must be
+	# resolved before the three-dawn project can begin.
+	if World.region_purified or cleanse_completed:
 		return {"ok": false, "reason": tr(&"CLEANSE_ALREADY_COMPLETE")}
 	if not World.live_nest_cells().is_empty():
 		return {"ok": false, "reason": tr(&"CLEANSE_NESTS_REMAIN")}
+	if not World.blight_structures.is_empty():
+		return {"ok": false, "reason": tr(&"CLEANSE_WORKS_REMAIN")}
+	if not Threat.workers.is_empty():
+		return {"ok": false, "reason": tr(&"CLEANSE_WORKERS_REMAIN")}
+	if not Threat.hostiles.is_empty():
+		return {"ok": false, "reason": tr(&"CLEANSE_HOSTILES_REMAIN")}
+	if not Threat.regional_boss_defeated():
+		return {"ok": false, "reason": tr(&"CLEANSE_BOSS_REMAINS")}
+	if Realm.awake_id == Realm.heart_region_id and not Threat.heart_warden_defeated():
+		return {"ok": false, "reason": tr(&"CLEANSE_WARDEN_REMAINS")}
 	if World.blight_field.coverage() > CLEANSE_MAX_COVERAGE:
 		return {"ok": false, "reason": tr(&"CLEANSE_TOO_CORRUPTED")}
 	if Divine.faith < CLEANSE_FAITH:
@@ -485,6 +497,8 @@ func _on_phase_changed(phase: int, _duration: float) -> void:
 		World.repel_blight(World.grid.cell_count)
 		cleanse_dawns_left = 0
 		cleanse_completed = true
+		Threat.complete_regional_purification()
+		Realm.mark_awake_purified()
 		Events.notice.emit(tr(&"CLEANSE_COMPLETE"), 0)
 	else:
 		Events.notice.emit(L10n.t(&"CLEANSE_PROGRESS", [cleanse_dawns_left]), 0)

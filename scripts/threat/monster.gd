@@ -203,7 +203,9 @@ func _tunnel_target() -> int:
 	var best := -1
 	var best_dist := 0x7FFFFFFF
 	for b in Colony.buildings:
-		if not is_instance_valid(b) or b.is_site():
+		# Same list the flow field walks toward. A creature whose whole trick is ignoring walls
+		# has no business surfacing at one — it should come up inside, at something that matters.
+		if not is_instance_valid(b) or b.is_site() or not b.def.is_horde_goal():
 			continue
 		var d := World.grid.dist_sq(cell(), b.anchor)
 		if d < best_dist:
@@ -419,6 +421,8 @@ func on_death(cause: StringName) -> void:
 	# player fought.
 	if cause != &"dawn" and def != null:
 		Divine.reward_kill(def.faith_on_death * (1.5 if empowered else 1.0))
+		Colony.drop_essence(cell(), 15 if def.is_boss else (3 if empowered else 1),
+			&"boss" if def.is_boss else (&"elite" if empowered else &"monster"))
 		if def.boss_reward > 0:
 			Colony.add(&"emberglass", def.boss_reward)
 			Events.notice.emit(L10n.t(&"NOTICE_BOSS_FALLS", [tr(def.display_name),

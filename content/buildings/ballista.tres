@@ -31,7 +31,7 @@ attack_cooldown = 2.4
 attack_type = &"piercing"
 ammo_kind = &"bolts"
 ammo_per_shot = 1
+input_capacity = 12
 default_target_policy = &"strongest"
 order = 39
 color = Color(0.64, 0.58, 0.48, 1)
-

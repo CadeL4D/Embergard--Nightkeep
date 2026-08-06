@@ -52,6 +52,24 @@ const SEASON_EFFECTS := {
 		"move": 0.90},
 }
 
+## Seasons in which open water is frozen over and cannot be drunk from.
+##
+## The one seasonal effect that is structural rather than a multiplier, and it exists to make a
+## settlement DECISION expire. Everything else the calendar does is a number: crops grow at 0.68,
+## gathering at 0.86, and the colony that was working carries on working slightly worse. Nothing
+## the player had built ever stopped being the right answer, so after the first ten minutes the
+## game had no further questions.
+##
+## A frozen shore has one: a colony drinking from the river all autumn has to have sunk a well
+## inside its walls before the freeze, or it is walking its people out onto ice to die. Wells and
+## cisterns are unaffected — that is the whole point of them, and it is why they are cheap.
+const FROZEN_SEASONS: Array[StringName] = [&"winter"]
+
+
+## Whether rivers and lakes are drinkable right now. See FROZEN_SEASONS.
+func shores_frozen() -> bool:
+	return season in FROZEN_SEASONS
+
 ## Weighted tables keep weather compatible with the land without hard-coding one outcome.
 const BIOME_WEATHER := {
 	&"coast": {&"clear": 18, &"rain": 31, &"storm": 23, &"fog": 18, &"drought": 3,
@@ -78,6 +96,7 @@ var biome: StringName = Biomes.DEFAULT_ID
 var effects: Dictionary = WEATHER_EFFECTS[&"clear"].duplicate()
 ## kind -> last day on which its protection applies.
 var mitigations: Dictionary = {}
+var _announced_season: StringName = &""
 var _forced_weather: StringName = &""
 var _forced_severity: float = 0.0
 
@@ -117,8 +136,24 @@ func refresh() -> void:
 	severity = _forced_severity if _forced_weather != &"" else float(snapshot["severity"])
 	effects = _compose_effects(season, weather, severity, biome, Sim.day, mitigations)
 	_prune_mitigations()
+	if season != _announced_season:
+		_announce_season(_announced_season)
+		_announced_season = season
 	changed.emit()
 	Events.climate_changed.emit(season, weather, severity)
+
+
+## The freeze is the one seasonal effect that can kill a colony which did nothing wrong, so it is
+## the one the calendar owes the player a warning about — a full season early, while there is
+## still time to sink a well, and only if they actually need to hear it.
+func _announce_season(previous: StringName) -> void:
+	if previous.is_empty():
+		return                              # the first refresh of a run is not a transition
+	if season == &"autumn" and not Colony.has_sheltered_water():
+		Events.notice.emit(tr(&"SEASON_FREEZE_WARNING"), 1)
+	elif shores_frozen():
+		Events.notice.emit(tr(&"SEASON_SHORES_FROZEN"
+			if Colony.has_sheltered_water() else &"SEASON_SHORES_FROZEN_NO_WELL"), 1)
 
 
 static func season_for_day(day: int) -> StringName:

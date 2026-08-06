@@ -23,6 +23,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="22_pause"]
 [ext_resource type="PackedScene" path="res://scenes/ui/site_picker.tscn" id="23_site_picker"]
 [ext_resource type="Script" path="res://scripts/world/gather_designation_view.gd" id="24_gather_view"]
+[ext_resource type="Script" path="res://scripts/world/loose_drop_view.gd" id="27_drops"]
 [ext_resource type="Script" path="res://scripts/world/terrain_transition_overlay.gd" id="25_terrain_edges"]
 [ext_resource type="Script" path="res://scripts/world/path_surface_view.gd" id="26_path_surface"]
 
@@ -107,6 +108,10 @@ mouse_filter = 2
 [node name="ControlZones" type="Node2D" parent="WorldView"]
 z_index = 4
 script = ExtResource("20_zones")
+
+[node name="LooseDrops" type="Node2D" parent="WorldView"]
+z_index = 5
+script = ExtResource("27_drops")
 
 [node name="GatherDesignations" type="Node2D" parent="WorldView"]
 z_index = 5

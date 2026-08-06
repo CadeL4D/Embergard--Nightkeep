@@ -47,7 +47,14 @@ const NEST_MIN_DIST := 30
 ## coastline of a 112 grid, where `_find_nest_site_near` fails and the fallback bunches every nest
 ## that missed onto the same mid-ring position.
 const NEST_DIST_SPAN := 8.0
-const NEST_COUNT := 4
+## One nest, not four.
+##
+## Four gave the map four independent corruption clocks and no single place to point at. The
+## player could clear one and watch the ground keep turning anyway, so destroying a nest never
+## felt like it accomplished anything and the Blight read as weather rather than as something
+## with a source. One nest is a THING ON THE MAP: it can be found, walled off, pushed back from,
+## and eventually assaulted, and every one of those is a decision about a place.
+const NEST_COUNT := 1
 const MIN_RESOURCE_REGION := 8
 const MIN_BERRY_REGION := 4
 
@@ -682,7 +689,9 @@ static func _place_nests(grid: Grid, res: Result, rng: RandomNumberGenerator,
 	var out := PackedInt32Array()
 	var keep := grid.coord(res.keep_cell)
 	var biome_id := StringName(region_profile.get("biome", Biomes.DEFAULT_ID))
-	var nest_count := NEST_COUNT if region_profile.is_empty() else Biomes.nest_count(biome_id)
+	# Every region has one campaign Core. Biomes still vary its distance, terrain and
+	# surrounding economy; they no longer silently replace it with three to five Cores.
+	var nest_count := NEST_COUNT
 	var nest_min := NEST_MIN_DIST if region_profile.is_empty() \
 		else Biomes.nest_min_distance(biome_id)
 	var nest_span := NEST_DIST_SPAN if region_profile.is_empty() \

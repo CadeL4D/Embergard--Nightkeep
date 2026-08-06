@@ -139,8 +139,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Painted orders own one-finger drags. Their paint surfaces consume that first
 	# finger, but deliberately pass a two-finger gesture through for map navigation.
 	# Desktop wheel zoom also remains available.
+	var hand: Node = get_node_or_null("../GodHand")
+	var hand_sweep_mode: bool = hand != null and bool(hand.get("_sweep_navigating"))
 	if DefenseControl.gather_job != &"" \
-			or DefenseControl.paint_mode != DefenseControl.PaintMode.NONE:
+			or DefenseControl.paint_mode != DefenseControl.PaintMode.NONE or hand_sweep_mode:
 		if event is InputEventScreenTouch:
 			_handle_paint_touch(event as InputEventScreenTouch)
 			return

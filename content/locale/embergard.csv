@@ -298,7 +298,7 @@ NOTICE_TOME_WRITTEN,The priests finish {0}.
 NOTICE_TOME_COMBINED,Three works are bound into {0}.
 NOTICE_TOME_CRUMBLED,{0} falls to dust.
 NOTICE_TEMPLE_RAISED,The temple stands. Tier {0} rites are open to you.
-JOB_WORKER,workers
+JOB_WORKER,Worker
 JOB_PRIEST,priests
 BUILDING_GREAT_HALL,Great Hall
 BUILDING_GREAT_HALL_DESC,"The heart of the colony, raised. Tier 2: opens the upper half of the build list."
@@ -394,7 +394,7 @@ REALM_REASON_CORE,The Blight Heart cannot be settled.
 REALM_REASON_NO_ROAD,No safe road reaches that site.
 REALM_REASON_SETTLERS,The colony needs two settlers and one survivor at home.
 REALM_REASON_RESOURCE,The caravan lacks {0}.
-REALM_REASON_HEART_BROKEN,The Blight Heart is already broken.
+REALM_REASON_HEART_BROKEN,The Blight Heart reforms in {0} days.
 REALM_REASON_RING_OPEN,The regions around the Blight Heart are not fully warded.
 REALM_REASON_FAITH,The assault needs {0} Faith.
 REALM_REASON_ASSAULT_RESOURCE,The assault lacks {0}.
@@ -407,7 +407,8 @@ REALM_ROUTE_ARRIVED,A caravan reached {0}.
 REALM_ROUTE_ARRIVED_HURT,A battered caravan reached {0}; some cargo was lost.
 REALM_NOTICE_OUTPOST_FALLEN,{0} has fallen. The First Hearth still endures. {1}
 REALM_NOTICE_HEART_CRACKS,The Blight Heart cracks. {0} strength remains.
-REALM_NOTICE_VICTORY,The ring holds. The Blight Heart is broken.
+REALM_NOTICE_HEART_SHATTERED,The ring holds. The Blight Heart is shattered—for now.
+REALM_NOTICE_HEART_REGROWN,The Blight Heart has regrown with {0} strength.
 UPGRADE_LOCKED,sealed to you — {0} shards
 UI_HISTORY,Chronicle
 UI_INTERFACE,Interface
@@ -643,15 +644,29 @@ FORECAST_READY,prepared
 FORECAST_CLOSE,close
 FORECAST_DANGER,underdefended
 FORECAST_WARNING,The coming night is stronger than this colony's current defenses.
+THREAT_QUIET,Quiet
+THREAT_PURIFIED,Purified
+THREAT_BOXED_IN,Boxed in
+THREAT_ENEMY_WORKS,Enemy works
+THREAT_WORLD_DAY,World day
+THREAT_TOOLTIP,"Containment pressure {0}% · desired Blight territory {1}% · actual {2}% · enemy works {3}"
+THREAT_WATCH_BREAKDOWN,"Containment {0}% · Blight wants {1}% · holds {2}% · {3} enemy works"
+THREAT_REGION_PURIFIED,This region is permanently purified; Blight activity is halted.
 CLEANSE_ALREADY_ACTIVE,A cleansing project is already underway.
-CLEANSE_ALREADY_COMPLETE,There is no minor corruption left to cleanse.
-CLEANSE_NESTS_REMAIN,Destroy every nest in this region first.
+CLEANSE_ALREADY_COMPLETE,This region is permanently purified.
+CLEANSE_NESTS_REMAIN,Destroy the Blight Core in this region first.
+CLEANSE_WORKS_REMAIN,Destroy every Blight outpost and structure first.
+CLEANSE_WORKERS_REMAIN,Hunt down the remaining Blight workers first.
+CLEANSE_HOSTILES_REMAIN,Defeat every hostile creature in this region first.
+CLEANSE_BOSS_REMAINS,Defeat the regional Blight leader first.
+CLEANSE_WARDEN_REMAINS,Defeat the Heart Warden first.
 CLEANSE_TOO_CORRUPTED,The corruption is still too entrenched for a final cleansing.
 CLEANSE_NEED_FAITH,The rite needs {0} Faith.
 CLEANSE_NEED_SUPPLIES,The rite needs 30 stone and 18 tools.
 CLEANSE_STARTED,The three-dawn cleansing of this region has begun.
 CLEANSE_PROGRESS,The cleansing continues. {0} dawns remain.
-CLEANSE_COMPLETE,This region has been cleansed of its remaining corruption.
+CLEANSE_COMPLETE,This region is permanently purified. Blight can no longer grow here.
+REALM_PURIFIED,Purified
 REALM_RECOVER,Recover ruins
 REALM_RECOVERY_NOT_RUIN,This colony does not need recovery.
 REALM_RECOVERY_HEART,The First Hearth cannot be recovered this way.
@@ -936,3 +951,43 @@ BUILDING_INFIRMARY,Infirmary
 BUILDING_INFIRMARY_DESC,A staffed ward. Four healers instead of two, and enough medicine kept to hand for a bad night.
 UI_MENUS,Menus
 UI_MENUS_HINT,"Open every colony menu. Tap again to close."
+BLIGHT_PUSHED_BACK,"Your light pushed the Blight back from {0} tiles."
+VILLAGER_MASTERY,"{0} is getting good at {1} ({2}%)."
+VILLAGER_MASTERY_LINE,"{0} {1}%"
+SEASON_FREEZE_WARNING,"Autumn. The shores freeze in winter — sink a well before they do."
+SEASON_SHORES_FROZEN,"Winter. The shores are frozen; your wells are all that is drinkable."
+SEASON_SHORES_FROZEN_NO_WELL,"Winter. The shores are frozen and you have no well."
+IDLE_NO_FOOD,"nothing to eat within reach"
+IDLE_NO_WATER,"no water they can reach"
+IDLE_STORES_FULL,"holding a load — every store is full"
+IDLE_NO_WORKPLACE,"no workplace open for their job"
+IDLE_NOTHING_MARKED,"nothing marked for them to harvest"
+IDLE_UNREACHABLE,"cannot reach the work"
+IDLE_ROUTE_BLOCKED,"the route is closed to them"
+SELECT_IDLE_REASON,"waiting: {0}"
+SELECT_MASTERY,"{0} mastery {1}%"
+UI_CONCERNS,Watch
+CONCERNS_NONE,"Nothing needs you right now."
+CONCERN_IDLE,"{0} idle — {1}"
+CONCERN_NO_WELL,"No well. The shores freeze in winter."
+CONCERN_STORES_FULL,"{0} carrying a load with nowhere to put it."
+CONCERN_STARVING,"{0} at zero food."
+CONCERN_PARCHED,"{0} at zero water."
+CONCERN_NO_BEDS,"{0} with no bed."
+CONCERN_UNSTAFFED,"{0} idle at a workplace that has stopped producing."
+CONCERN_DAMAGED,"{0} damaged and unrepaired."
+CONCERN_TOWER_DRY,"{0} out of ammunition."
+HAND_REAPED,"Torn from the ground: {0}."
+CONCERN_SPILLS,"{0} goods lying on the ground uncollected."
+CONCERN_MAGIC_DRY,"{0} magical defences outside powered Collector range."
+BLD_ENERGY,"\nEnergy: {0}/{1}"
+BLD_NEARBY_ENERGY,"\nNearby energy: {0} ({1} per shot)"
+JOB_OCCULTIST,Occultist
+BUILDING_ESSENCE_ALTAR,Essence Altar
+BUILDING_ESSENCE_ALTAR_DESC,"One Occultist tends this altar, producing 3 expiring Essence motes every 20 seconds and a small mood lift."
+BUILDING_ESSENCE_COLLECTOR,Essence Collector
+BUILDING_ESSENCE_COLLECTOR_DESC,"Draws nearby Essence across the ground and stores up to 150 local energy. Powers magical buildings within 12 tiles."
+BUILDING_RESONANT_COLLECTOR,Resonant Collector
+BUILDING_RESONANT_COLLECTOR_DESC,"An upgraded Collector holding 300 local energy within the same clear 12-tile network."
+BUILDING_CROWN_COLLECTOR,Crown Collector
+BUILDING_CROWN_COLLECTOR_DESC,"The final Collector holds 500 local energy for a heavily enchanted district."

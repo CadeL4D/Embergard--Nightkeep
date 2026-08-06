@@ -201,6 +201,8 @@ func step(delta: float) -> void:
 	_expire_lights(delta)
 	_tick_cooldowns(delta)
 	_wear_tomes(delta)
+	if ember_cell != -1:
+		absorb_essence(Colony.collect_essence_near(ember_cell, 2))
 
 	var rate := net_faith_rate()
 	if is_zero_approx(rate):
@@ -1087,6 +1089,15 @@ func reward_kill(amount: float) -> void:
 		return
 	faith = minf(faith + amount, faith_max())
 	night_faith_earned += amount
+	Events.faith_changed.emit(faith)
+
+
+## Essence is a board object, not a currency. Absorbing it turns the object into the existing
+## Faith economy, while Collectors can instead turn the same mote into local building energy.
+func absorb_essence(amount: int) -> void:
+	if amount <= 0:
+		return
+	faith = minf(faith + float(amount), faith_max())
 	Events.faith_changed.emit(faith)
 
 

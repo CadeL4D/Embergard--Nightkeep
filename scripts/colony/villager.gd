@@ -149,7 +149,14 @@ const REACH_SQ := 700.0
 ##
 ## Walking is the escape, not a retry: every nearest_* query is a distance query, so a
 ## source that is unreachable from this cell very often is reachable from the next one.
+##
+## Two thresholds because the two cases deserve different patience. A villager whose food or
+## water has already hit zero is taking damage, so ten seconds of standing still is ten seconds
+## too many. A villager who is merely stuck in a decision loop is not in danger, and a longer
+## fuse keeps the recovery — which costs a path solve — off the hot path for the many villagers
+## who are legitimately standing about between tasks.
 const STALL_LIMIT := 10.0
+const IDLE_STALL_LIMIT := 22.0
 
 var job: StringName = &""
 var state: State = State.IDLE
@@ -199,6 +206,15 @@ var _patient: Villager = null
 var _fetch_kind: StringName = &""
 var _fetch_from: int = -1
 var _fetch_for_workplace: bool = false
+## Fetching loose goods off the ground rather than out of a store. A third flavour of FETCHING
+## instead of a new state, for the reason this class's header gives: the villager is walking to
+## a place to pick something up, which is what FETCHING already means.
+var _fetch_loose_drop: bool = false
+var _fetch_drop_id: int = -1
+## A physical building-buffer delivery. The id is stable across save/reload; the destination node
+## is resolved again from its anchor because scene instance ids are intentionally not persistent.
+var _supply_request_id: int = 0
+var _supply_destination: Building = null
 
 ## Materials carried per trip to a building site. Low enough that a distant site
 ## takes several journeys, which is what makes a forward stockpile worth building.
@@ -209,10 +225,22 @@ var _awaiting_path: bool = false
 var _path_request_serial: int = 0
 var _path_requested_tick: int = 0
 var _drink_from_store: bool = false
+## Why this villager is not working, in their own words.
+##
+## Every decision in think() can come back empty — no reachable shelf with food on it, no well
+## since the freeze, every stockpile full, a route a control zone forbids. The villager knows
+## exactly which one it was at the moment it happened; until now that answer was a local variable
+## that went out of scope, and the player was left watching somebody stand still with no way to
+## find out why. Two separate freeze bugs got as far as killing colonists partly because of that.
+var idle_reason: StringName = &""
+
 ## Cell the stall watchdog last saw this villager on, and how long they have been
 ## there with a need at zero. See STALL_LIMIT.
 var _stall_cell: int = -1
 var _stall_time: float = 0.0
+## Work progress as of the last watchdog sample. A stationary villager whose progress is not
+## moving either is not working, whatever their state says.
+var _stall_progress: float = 0.0
 var _tint_timer: float = 0.0
 var _presentation_accum: float = 0.0
 var _last_damage_reason: StringName = &""
@@ -362,11 +390,26 @@ func _wear_equipment(slot: StringName, amount: int = 1) -> void:
 
 func _work_multiplier() -> float:
 	var multiplier := (profile.strength + profile.wisdom) * 0.5
+	# Time served at this job. The only figure on a villager that answers to what they have
+	# actually done rather than what they were born as. See VillagerRecord.mastery.
+	multiplier *= 1.0 + profile.mastery_of(job) * VillagerRecord.MASTERY_WORK_BONUS
 	var row: Dictionary = profile.equipment.get(&"tool", {})
 	var item_def := Items.get_item(StringName(row.get("def", &"")))
 	if item_def != null:
 		multiplier *= 1.0 + float(item_def.modifiers.get(&"work_speed", 0.0))
 	return multiplier
+
+
+## Credit a finished piece of work toward this villager's mastery of their job.
+##
+## Called where a CYCLE completes rather than per tick, so the number tracks output rather than
+## time spent standing near a task — a villager blocked on a full barn is not learning anything.
+func _credit_mastery() -> void:
+	if profile.gain_mastery(job):
+		var def := Jobs.get_job(job)
+		Events.notice.emit(L10n.t(&"VILLAGER_MASTERY", [profile.display_name,
+			tr(def.display_name) if def != null else String(job),
+			int(profile.mastery_of(job) * 100.0)]), 0)
 
 
 func _guard_damage() -> float:
@@ -415,6 +458,22 @@ func _receive_harm(amount: float, reason: StringName, source: Node = null,
 	_damage_reason_timer = 4.0
 	queue_redraw()
 	super.take_damage(amount, source, damage_type)
+
+
+## Record why nothing happened. Cleared by _note_working() the moment something does.
+func _note_idle(reason: StringName) -> void:
+	idle_reason = reason
+
+
+func _note_working() -> void:
+	idle_reason = &""
+
+
+## Player-facing form of idle_reason, empty when the villager is getting on with something.
+func idle_text() -> String:
+	if idle_reason.is_empty():
+		return ""
+	return tr(StringName("IDLE_" + String(idle_reason).to_upper()))
 
 
 func is_player_commanded() -> bool:
@@ -626,6 +685,12 @@ func _tick_shift_sleep(delta: float) -> void:
 		_target_cell = house.work_cell()
 		_request_path(_target_cell, State.SLEEPING)
 
+	# Shift handling runs before the general `_awaiting_path` guard in think(), because the shift
+	# itself must preempt work immediately. It therefore needs the guard here as well. Without it,
+	# every think cancelled and re-queued the same trip home before PathService could solve it; the
+	# last civilian in the bucket order could remain outside all night with one perpetual request.
+	if _awaiting_path:
+		return
 	if _bed == null or not is_instance_valid(_bed):
 		_set_sheltered(false)
 		_release_bed()
@@ -814,6 +879,7 @@ func _begin_drink() -> bool:
 		source = Colony.nearest_water_source(cell())
 	if source == -1:
 		_drink_from_store = false
+		_note_idle(&"no_water")
 		return false
 	if _shift_sleep:
 		_shift_sleep = false
@@ -866,6 +932,7 @@ func _begin_eat() -> bool:
 
 	var source := Colony.nearest_food_source(cell())
 	if source == -1:
+		_note_idle(&"no_food")
 		return false
 	stop()
 	_release_target()
@@ -948,6 +1015,10 @@ func _seek_work() -> void:
 	# Holding something with nowhere to put it — a delivery whose site vanished, or
 	# a harvest interrupted by nightfall. Get rid of it before taking new work, or
 	# the load is carried around forever and quietly lost when the villager dies.
+	if carry_amount > 0 and _supply_request_id > 0:
+		if _resume_supply_delivery():
+			return
+		_release_supply_task()
 	if carry_amount > 0:
 		# A colony with every shelf full is a situation the player has to be able to
 		# SEE. Wandering keeps the carrier visibly alive and re-asks the question from
@@ -975,6 +1046,10 @@ func _seek_work() -> void:
 		return
 
 	var def := Jobs.get_job(job)
+	# A standing defence or workshop request is time-sensitive in a way ordinary tidying is not.
+	# Requests sort ammunition first, need-producing workshops second and other production third.
+	if def != null and def.hauls and _begin_supply_fetch(def):
+		return
 	if def != null and def.heals:
 		if not _try_claim_patient(def):
 			_wander()
@@ -989,6 +1064,10 @@ func _seek_work() -> void:
 	# makes placing a building feel like it gets attention without the economy
 	# grinding to a halt every time the player taps the build menu.
 	if _try_claim_site():
+		return
+	# Loose recovery is last. The pile does not expire and therefore should never delay a tower
+	# magazine, a kitchen input or a building the player just committed to raising.
+	if def != null and def.hauls and _begin_loose_drop_fetch():
 		return
 
 	if def == null:
@@ -1008,6 +1087,7 @@ func _seek_work() -> void:
 	var target := World.resources.nearest(cell(), def,
 		_can_work_in_catchment if def.catchment_radius > 0 else _can_work_on)
 	if target == -1:
+		_note_idle(&"nothing_marked")
 		if def.catchment_radius > 0:
 			_release_workplace()
 		_wander()
@@ -1044,8 +1124,8 @@ func _can_work_in_catchment(target: int) -> bool:
 func _claim_field_workplace(def: JobDef) -> bool:
 	if _workplace != null and is_instance_valid(_workplace) and not _workplace.is_site():
 		return true
-	var place := Colony.nearest_workplace(def.workplace, cell())
-	if place == null or not Colony.claim_workplace(place, self):
+	var place := Colony.nearest_workplace(def.workplace, cell(), def)
+	if place == null or not Colony.claim_workplace(place, self, def):
 		return false
 	_workplace = place
 	return true
@@ -1079,15 +1159,23 @@ func _try_claim_workplace(def: JobDef) -> bool:
 	# Already holding a slot — walk back to it. Without this, a farmer returning
 	# from a delivery would try to re-claim a slot it still occupies, be refused,
 	# and wander off instead of going back to work.
+	#
+	# Held only while the shift is still worth walking back for. A workplace that has
+	# stopped producing — full barn, maintain-target met, paused by the player — is given
+	# up here so the worker looks for something else, instead of re-taking the slot they
+	# released one think ago and standing over it.
 	if _workplace != null and is_instance_valid(_workplace) and not _workplace.is_site():
-		_target_cell = _workplace.anchor
-		_request_path(_workplace.work_cell(), State.WORKING)
-		return true
+		if _workplace.production_is_available(def):
+			_target_cell = _workplace.anchor
+			_request_path(_workplace.work_cell(), State.WORKING)
+			return true
+		_release_workplace()
 
-	var place: Node = Colony.nearest_workplace(def.workplace, cell())
+	var place: Node = Colony.nearest_workplace(def.workplace, cell(), def)
 	if place == null:
+		_note_idle(&"no_workplace")
 		return false
-	if not Colony.claim_workplace(place, self):
+	if not Colony.claim_workplace(place, self, def):
 		return false
 	_workplace = place
 	_target_cell = place.anchor
@@ -1144,8 +1232,10 @@ func _tick_working(delta: float) -> void:
 
 	_queue_output(Terrain.yield_of(feature), def.carry_capacity,
 		Climate.gather_multiplier(feature))
+	_credit_mastery()
 	_take_next_pending_load()
 
+	Colony.maybe_drop_harvest_essence(_target_cell)
 	World.clear_feature(_target_cell)
 	_wear_equipment(&"tool")
 	_release_target()
@@ -1236,6 +1326,7 @@ func _tick_healing(def: JobDef, delta: float) -> void:
 	if not def.cycle_cost.is_empty() \
 			and not Colony.spend_near(_workplace.centre_cell(), def.cycle_cost):
 		return
+	_credit_mastery()
 	_patient.receive_treatment()
 	if not _patient.needs_treatment():
 		_release_patient()
@@ -1293,6 +1384,39 @@ func _begin_fetch() -> bool:
 	return true
 
 
+## Reserve a request before walking to the source. That promise covers both the shelf leg and,
+## after pickup, the in-transit leg of the trip.
+func _begin_supply_fetch(def: JobDef) -> bool:
+	if carry_amount > 0 or def == null or not def.hauls:
+		return false
+	var capacity := def.carry_capacity if def.carry_capacity > 0 else CARRY_PER_TRIP
+	var assignment := Colony.claim_supply_request(self, cell(), capacity)
+	if assignment.is_empty():
+		return false
+	_supply_request_id = int(assignment["id"])
+	_supply_destination = Colony.supply_destination(_supply_request_id)
+	_fetch_kind = StringName(assignment["resource"])
+	_fetch_from = int(assignment["source"])
+	_fetch_for_workplace = false
+	_fetch_loose_drop = false
+	_request_path(_fetch_from, State.FETCHING)
+	return true
+
+
+func _resume_supply_delivery() -> bool:
+	if _supply_request_id <= 0 or carry_amount <= 0:
+		return false
+	_supply_destination = Colony.resume_supply_request(
+		_supply_request_id, self, carry_amount)
+	if _supply_destination == null:
+		return false
+	_fetch_kind = carry_kind
+	_fetch_for_workplace = false
+	_fetch_loose_drop = false
+	_request_path(_supply_destination.work_cell(), State.DELIVERING)
+	return true
+
+
 func _begin_workplace_fetch(def: JobDef) -> bool:
 	if _workplace == null or not is_instance_valid(_workplace):
 		return false
@@ -1310,6 +1434,12 @@ func _begin_workplace_fetch(def: JobDef) -> bool:
 
 
 func _tick_fetching() -> void:
+	if _supply_request_id > 0:
+		_tick_supply_fetching()
+		return
+	if _fetch_loose_drop:
+		_tick_loose_drop_fetching()
+		return
 	if _fetch_for_workplace:
 		_tick_workplace_fetching()
 		return
@@ -1344,6 +1474,73 @@ func _tick_fetching() -> void:
 	_request_path(approach, State.DELIVERING)
 
 
+func _tick_supply_fetching() -> void:
+	if is_moving():
+		return
+	if _fetch_from == -1 or not _within_reach(_fetch_from):
+		_release_target()
+		state = State.IDLE
+		return
+	var def := Jobs.get_job(job)
+	var limit := def.carry_capacity if def != null and def.carry_capacity > 0 else CARRY_PER_TRIP
+	var taken := Colony.withdraw_supply_request(
+		_supply_request_id, self, _fetch_from, limit)
+	if taken <= 0:
+		_release_target()
+		state = State.IDLE
+		return
+	carry_kind = _fetch_kind
+	carry_amount = taken
+	_supply_destination = Colony.supply_destination(_supply_request_id)
+	if _supply_destination == null:
+		_release_target()
+		state = State.IDLE
+		return
+	_request_path(_supply_destination.work_cell(), State.DELIVERING)
+
+
+## Walk to a loose pile and pick it up. Another porter may have got there first, which is not an
+## error — it is two people doing their job — so an empty pile just sends this one back to IDLE.
+func _tick_loose_drop_fetching() -> void:
+	if is_moving():
+		return
+	_fetch_loose_drop = false
+	if _fetch_from == -1 or not _within_reach(_fetch_from):
+		state = State.IDLE
+		return
+	var def := Jobs.get_job(job)
+	var limit: int = def.carry_capacity if def != null and def.carry_capacity > 0 else CARRY_PER_TRIP
+	var load := Colony.take_loose_drop(_fetch_drop_id, limit, LooseDrop.POLICY_WORKER)
+	_fetch_from = -1
+	_fetch_drop_id = -1
+	if load.is_empty():
+		state = State.IDLE
+		return
+	carry_kind = StringName(load["kind"])
+	carry_amount = int(load["amount"])
+	if not _begin_haul():
+		_wander()
+
+
+## Send this villager to the nearest loose pile. False when there is none worth walking to.
+func _begin_loose_drop_fetch() -> bool:
+	if carry_amount > 0 or Colony.loose_resource_total() <= 0:
+		return false
+	var drop_id := Colony.nearest_worker_drop(cell())
+	var drop := Colony.loose_drop(drop_id)
+	if drop == null:
+		return false
+	var approach: int = drop.cell if World.is_walkable(drop.cell) else World.nearest_walkable(drop.cell)
+	if approach == -1:
+		return false
+	_fetch_loose_drop = true
+	_fetch_drop_id = drop.id
+	_fetch_for_workplace = false
+	_fetch_from = drop.cell
+	_request_path(approach, State.FETCHING)
+	return true
+
+
 func _tick_workplace_fetching() -> void:
 	if _workplace == null or not is_instance_valid(_workplace) or _workplace.is_site():
 		_release_target()
@@ -1372,6 +1569,9 @@ func _tick_workplace_fetching() -> void:
 
 
 func _tick_delivering() -> void:
+	if _supply_request_id > 0:
+		_tick_supply_delivering()
+		return
 	if _fetch_for_workplace:
 		_tick_workplace_delivering()
 		return
@@ -1436,6 +1636,33 @@ func _tick_workplace_delivering() -> void:
 	_fetch_from = -1
 	_fetch_kind = &""
 	state = State.WORKING
+
+
+func _tick_supply_delivering() -> void:
+	if _supply_destination == null or not is_instance_valid(_supply_destination) \
+			or _supply_destination.is_site():
+		_release_target()
+		state = State.IDLE
+		return
+	if is_moving():
+		return
+	if not _within_reach(_supply_destination.work_cell()):
+		_request_path(_supply_destination.work_cell(), State.DELIVERING)
+		return
+	var deposited := Colony.deposit_building_input(
+		_supply_destination, carry_kind, carry_amount)
+	Colony.complete_supply_delivery(_supply_request_id, deposited)
+	carry_amount -= deposited
+	if carry_amount <= 0:
+		carry_kind = &""
+	_release_supply_task()
+	_fetch_from = -1
+	_fetch_kind = &""
+	if carry_amount > 0:
+		if not _begin_haul():
+			_wander()
+		return
+	state = State.IDLE
 
 
 func _tick_building(delta: float) -> void:
@@ -1548,6 +1775,7 @@ func _tick_workplace(def: JobDef, delta: float) -> void:
 
 	_work_progress = 0.0
 	_wear_equipment(&"tool")
+	_credit_mastery()
 
 	# A scribe's output is an object, not a stock. It is handed to the Temple rather than carried to
 	# a stockpile, so this is the skip-the-haul branch — and it is the same branch any future
@@ -1558,6 +1786,15 @@ func _tick_workplace(def: JobDef, delta: float) -> void:
 	if def.scribes:
 		Divine.priest_cycle(Colony.headcount_of(job))
 		Events.production_completed.emit(_workplace, &"tome", 1)
+		return
+	if not def.loose_yield_kind.is_empty() and def.loose_yield_amount > 0:
+		if def.loose_yield_kind == Colony.ESSENCE_KIND:
+			Colony.drop_essence(_workplace.centre_cell(), def.loose_yield_amount, &"altar")
+		else:
+			Colony.create_loose_drop(_workplace.centre_cell(), def.loose_yield_kind,
+				def.loose_yield_amount, LooseDrop.POLICY_EITHER, -1, &"workplace")
+		mood = minf(mood + def.cycle_mood_boost, 100.0)
+		Events.production_completed.emit(_workplace, def.loose_yield_kind, def.loose_yield_amount)
 		return
 	if not def.item_yield.is_empty():
 		Colony.create_item(def.item_yield, _workplace.centre_cell())
@@ -1605,6 +1842,7 @@ func _begin_haul() -> bool:
 		return false
 	var drop := Colony.nearest_storage_destination(cell(), carry_kind)
 	if drop == -1:
+		_note_idle(&"stores_full")
 		state = State.IDLE
 		return false
 	_target_cell = drop
@@ -1767,6 +2005,7 @@ func _request_path(dest: int, next_state: State) -> void:
 		if not alive:
 			return
 		if path.is_empty():
+			_note_idle(&"unreachable")
 			# Unreachable. Give up this target so we do not re-request it forever.
 			if next_state == State.SLEEPING:
 				_set_sheltered(false)
@@ -1794,6 +2033,7 @@ func _request_path(dest: int, next_state: State) -> void:
 		var returning_to_safety := desperate or next_state in [
 			State.FLEEING, State.SLEEPING, State.DRINKING, State.EATING]
 		if not DefenseControl.path_allowed(path, is_guard, returning_to_safety):
+			_note_idle(&"route_blocked")
 			if next_state in [State.SEEKING, State.FETCHING, State.DELIVERING,
 					State.BUILDING, State.HAULING]:
 				_release_target()
@@ -1802,27 +2042,35 @@ func _request_path(dest: int, next_state: State) -> void:
 			think_urgent = true
 			return
 		follow_path(path)
+		_note_working()
 		state = next_state
 	, next_state == State.DRINKING)
 
 
-## Catch a villager who is dying on the spot and force them to move.
+## Catch a villager who has stopped getting anywhere and force them to move.
 ##
-## Scoped deliberately tight: it only ever fires while food or water is already at
-## ZERO, which means the villager is taking damage. Standing still is legitimate for
-## most of this class — farming, sleeping, holding a guard post — but standing still
-## while a need is empty is not, whatever state the machine believes it is in.
+## "Getting somewhere" is three things, and a villager doing ANY of them is fine: moving,
+## standing on a different tile than last time, or advancing `_work_progress`. That last one is
+## what separates a farmer working a field from a farmer trapped in a claim/release loop over a
+## workplace that has quietly stopped producing — both are stationary and both report WORKING,
+## but only one of them is making progress. Sleeping, resting, guarding and following a player
+## order are stationary on purpose and are excluded outright.
 ##
-## The specific failures this used to catch are fixed above where they happen; this is
-## the floor under all of them, including the ones nobody has hit yet. See STALL_LIMIT.
+## The specific failures this has caught are all fixed where they happen; this is the floor under
+## all of them, including the ones nobody has hit yet. See STALL_LIMIT.
 func _tick_stall_watchdog(delta: float) -> void:
 	var here := cell()
-	if here != _stall_cell or is_moving() or (food > 0.0 and water > 0.0):
+	var dying := food <= 0.0 or water <= 0.0
+	var settled: bool = state in [State.SLEEPING, State.RESTING, State.GUARDING,
+		State.COMMANDED]
+	if here != _stall_cell or is_moving() or (settled and not dying) \
+			or not is_equal_approx(_work_progress, _stall_progress):
 		_stall_cell = here
+		_stall_progress = _work_progress
 		_stall_time = 0.0
 		return
 	_stall_time += delta
-	if _stall_time < STALL_LIMIT:
+	if _stall_time < (STALL_LIMIT if dying else IDLE_STALL_LIMIT):
 		return
 	_stall_time = 0.0
 	_break_deadlock()
@@ -1870,6 +2118,7 @@ func _cancel_path_request() -> void:
 func _release_target() -> void:
 	_cancel_path_request()
 	_release_patient()
+	_release_supply_task()
 	if _target_cell != -1:
 		Colony.release(_target_cell, self)
 	Colony.release_all_by(self)
@@ -1878,6 +2127,15 @@ func _release_target() -> void:
 	_fetch_kind = &""
 	_fetch_from = -1
 	_fetch_for_workplace = false
+	_fetch_loose_drop = false
+	_fetch_drop_id = -1
+
+
+func _release_supply_task() -> void:
+	if _supply_request_id > 0:
+		Colony.release_supply_request(_supply_request_id, self, carry_amount)
+	_supply_request_id = 0
+	_supply_destination = null
 
 
 ## Direct player order. Solved immediately rather than queued — a tap that takes
@@ -1921,6 +2179,19 @@ func on_death(cause: StringName) -> void:
 		"age_days": profile.age_days,
 	}
 	Colony.release_household_partner(self)
+	# What they were carrying falls where they fell. Losing a porter used to lose the load with
+	# them, silently, which meant a death cost the colony a number it never saw leave. Now it
+	# leaves a pile somebody has to walk out and recover — often across the ground that killed
+	# the last one.
+	if carry_amount > 0:
+		Colony.drop_resource(carry_kind, carry_amount, cell(), &"villager_carry")
+		carry_kind = &""
+		carry_amount = 0
+	for load: Dictionary in pending_loads:
+		Colony.drop_resource(StringName(load.get("kind", &"")), int(load.get("amount", 0)),
+			cell(), &"villager_pending")
+	pending_loads.clear()
+	Colony.drop_essence(cell(), 4, &"villager")
 	_drop_equipment()
 	Colony.record_memorial(profile.to_dict())
 	Events.villager_died.emit(self, cause)

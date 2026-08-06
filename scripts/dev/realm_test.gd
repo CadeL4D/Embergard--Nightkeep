@@ -272,6 +272,14 @@ func _ready() -> void:
 		"destroying a nest permanently weakens local corruption spread")
 	for nest in World.live_nest_cells():
 		World.damage_nest(nest, Terrain.NEST_HP * 2.0)
+	for cell in World.blight_structures.keys():
+		var def := World.blight_structure_def(int(cell))
+		if def != null:
+			World.damage_blight_structure(int(cell), def.max_hp * 2.0)
+	for hostile in Threat.hostiles.duplicate():
+		if is_instance_valid(hostile):
+			hostile.die(&"test")
+	await get_tree().process_frame
 	Colony.add(&"stone", 80)
 	Colony.add(&"tools", 40)
 	Divine.faith = 60.0
@@ -284,6 +292,14 @@ func _ready() -> void:
 
 	heart_id = Realm.heart_region_id
 	_expect(run.travel_to_colony(heart_id), "the test returns home before testing protection")
+	var purified_ledger := Realm.colony(neighbour_id)
+	var purified_blight: PackedByteArray = purified_ledger.state.get(
+		"blight", PackedByteArray()).duplicate()
+	purified_ledger.advance_to(purified_ledger.last_advanced_day + 2)
+	_expect(purified_ledger.purified and purified_ledger.pressure == 0.0 \
+			and purified_ledger.corruption == 0.0 \
+			and purified_ledger.state.get("blight", PackedByteArray()) == purified_blight,
+		"a sleeping purified region cannot regrow Blight or pressure")
 	_build_test_containment()
 	_expect(Realm.ring_closed(), "developed colonies can ward every region around the Blight Heart")
 	var intercepted := 0
@@ -317,19 +333,26 @@ func _ready() -> void:
 	Colony.add(&"tools", 30)
 	Colony.add(&"cut_stone", 60)
 	var ascension_before := Meta.ascension
-	var victory_result := {"seen": false}
-	var on_victory := func() -> void: victory_result["seen"] = true
-	Events.realm_victory.connect(on_victory)
+	var shatter_result := {"seen": false}
+	var on_shatter := func() -> void: shatter_result["seen"] = true
+	Events.heart_shattered.connect(on_shatter)
 	_expect(Realm.assault_blight_heart(), "containment unlocks the first Heart strike")
 	_expect(Realm.blight_heart_health == 200, "a Heart strike deals persistent damage")
 	_expect(Realm.assault_blight_heart(), "the second Heart strike spends its own cost")
 	_expect(Realm.assault_blight_heart(), "the final Heart strike resolves")
 	await get_tree().process_frame
-	_expect(bool(victory_result["seen"]) and Realm.complete,
-		"destroying the spatial Blight Heart completes the Realm")
+	_expect(bool(shatter_result["seen"]) and Realm.heart_shattered \
+			and Realm.heart_regrow_days_left == Realm.HEART_REGROW_DAYS \
+			and Sim.running,
+		"shattering the spatial Blight Heart leaves the Realm playable")
 	_expect(Meta.ascension == ascension_before + 1,
-		"only the completed Realm advances ascension")
-	Events.realm_victory.disconnect(on_victory)
+		"shattering the Heart advances ascension exactly once")
+	for _day in Realm.HEART_REGROW_DAYS:
+		Realm._advance_heart_regrowth()
+	_expect(not Realm.heart_shattered \
+			and Realm.blight_heart_health == Realm.BLIGHT_HEART_MAX + Realm.HEART_MAX_GROWTH,
+		"the Heart regrows stronger for another cycle")
+	Events.heart_shattered.disconnect(on_shatter)
 
 	_restore_profile()
 	RunSave.clear()

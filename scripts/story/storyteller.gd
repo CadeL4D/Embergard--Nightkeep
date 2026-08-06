@@ -304,9 +304,8 @@ func _apply_choice(event_id: StringName, choice_id: StringName, payload: Diction
 			if choice_id == &"faith_ward":
 				World.repel_blight(34)
 			elif choice_id == &"stockade":
-				Threat.pressure = maxf(Threat.pressure - 0.24, 0.0)
+				World.repel_blight(18)
 			else:
-				Threat.pressure += 0.24
 				World.seed_blight_surge(8)
 		&"stormfront":
 			if choice_id == &"reinforce":
@@ -315,7 +314,7 @@ func _apply_choice(event_id: StringName, choice_id: StringName, payload: Diction
 				Climate.set_mitigation(&"storm_ward", Sim.day)
 				Colony.adjust_mood(1.5)
 			else:
-				Threat.pressure += 0.10
+				World.seed_blight_surge(4)
 		&"drought":
 			if choice_id == &"cistern":
 				Climate.set_mitigation(&"drought_relief", Sim.day + 2)

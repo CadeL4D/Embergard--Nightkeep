@@ -23,10 +23,10 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 ## button would open, and a hold-drag radial switcher). Each had its own idea of what "open" meant,
 ## and mutual exclusion was enforced by every panel explicitly un-pressing the other four.
 const MENU_IDS: Array[StringName] = [
-	&"jobs", &"build", &"powers", &"control", &"library", &"hand", &"realm",
+	&"jobs", &"build", &"concerns", &"powers", &"control", &"library", &"hand", &"realm",
 ]
 const MENU_LABELS: Array[StringName] = [
-	&"UI_JOBS", &"UI_BUILD", &"UI_POWER_UPS", &"UI_CONTROL", &"UI_LIBRARY",
+	&"UI_JOBS", &"UI_BUILD", &"UI_CONCERNS", &"UI_POWER_UPS", &"UI_CONTROL", &"UI_LIBRARY",
 	&"UI_HAND", &"UI_REALM",
 ]
 
@@ -72,6 +72,12 @@ const MENU_LABELS: Array[StringName] = [
 @onready var _dusk_button: Button = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders/Dusk
 @onready var _cleanse_button: Button = \
 	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ControlPanel/Layout/Orders/Cleanse
+@onready var _concerns_panel: PanelContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ConcernsPanel
+@onready var _concerns_scroll: ScrollContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ConcernsPanel/Layout/Scroll
+@onready var _concerns_rows: VBoxContainer = \
+	$SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/ConcernsPanel/Layout/Scroll/Rows
 @onready var _job_panel: PanelContainer = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel
 @onready var _job_hint: Label = $SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Hint
 @onready var _harvest_areas: Button = \
@@ -312,6 +318,7 @@ func _ready() -> void:
 const JOB_SCROLL_HEIGHT := 220.0
 const LIBRARY_SCROLL_HEIGHT := 178.0
 const CARDS_SCROLL_HEIGHT := 72.0
+const CONCERNS_SCROLL_HEIGHT := 150.0
 const BREAKDOWN_SCROLL_HEIGHT := 176.0
 ## Below this a drawer is not worth showing, so it scrolls instead of shrinking further.
 const DRAWER_MIN_HEIGHT := 64.0
@@ -341,6 +348,7 @@ func _fit_drawers() -> void:
 	_fit_drawer(_job_scroll, JOB_SCROLL_HEIGHT)
 	_fit_drawer(_library_scroll, LIBRARY_SCROLL_HEIGHT)
 	_fit_drawer(_cards_scroll, CARDS_SCROLL_HEIGHT)
+	_fit_drawer(_concerns_scroll, CONCERNS_SCROLL_HEIGHT)
 
 
 func _fit_drawer(scroll: ScrollContainer, design_height: float) -> void:
@@ -472,6 +480,8 @@ func _apply_menu_tab() -> void:
 	_on_library_toggled(_menu_is_open(&"library"))
 	_on_hand_toggled(_menu_is_open(&"hand"))
 	_powers.visible = _menu_is_open(&"powers")
+	_concerns_panel.visible = _menu_is_open(&"concerns")
+	_refresh_concerns()
 	_refresh_menu_tabs()
 	_fit_drawers()
 
@@ -707,6 +717,129 @@ func _build_cards() -> void:
 	_refresh_cards()
 
 
+# --- The Watch -------------------------------------------------------------------------
+#
+# What is wrong in the colony, right now, ranked. Derived entirely from live state — no new
+# simulation, nothing stored — because everything here was already knowable and simply had
+# nowhere to be said. Toasts scroll away; a villager standing still says nothing at all. Two
+# separate freeze bugs reached the point of killing colonists partly because the only way to
+# discover either was to notice a body.
+
+## Highest severity first, so the thing that will kill somebody is never below the thing that
+## is merely untidy. Capped: a list nobody can read is the same as no list.
+const MAX_CONCERNS := 12
+
+
+func _gather_concerns() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var threat_info := Threat.pressure_breakdown()
+	if bool(threat_info.get("suppressed", false)):
+		out.append({"rank": 3, "text": tr(&"THREAT_REGION_PURIFIED")})
+	else:
+		out.append({"rank": 2, "text": L10n.t(&"THREAT_WATCH_BREAKDOWN", [
+			int(round(float(threat_info.get("current_pressure", 0.0)) * 100.0)),
+			int(round(float(threat_info.get("desired_coverage", 0.0)) * 100.0)),
+			int(round(float(threat_info.get("actual_coverage", 0.0)) * 100.0)),
+			int(threat_info.get("enemy_structure_count", 0)),
+		])})
+	var idle_by_reason: Dictionary = {}
+	var starving := 0
+	var parched := 0
+	for villager: Villager in Colony.villagers:
+		if not is_instance_valid(villager) or not villager.alive:
+			continue
+		if villager.food <= 0.0:
+			starving += 1
+		if villager.water <= 0.0:
+			parched += 1
+		# Only counted while genuinely stopped: a villager walking to the answer is not a problem.
+		if villager.idle_reason != &"" and not villager.is_moving():
+			idle_by_reason[villager.idle_reason] = \
+				int(idle_by_reason.get(villager.idle_reason, 0)) + 1
+
+	if parched > 0:
+		out.append({"rank": 0, "text": L10n.t(&"CONCERN_PARCHED", [parched])})
+	if starving > 0:
+		out.append({"rank": 0, "text": L10n.t(&"CONCERN_STARVING", [starving])})
+	for reason: StringName in idle_by_reason:
+		var rank := 1 if reason in [&"no_food", &"no_water"] else 2
+		out.append({"rank": rank, "text": L10n.t(&"CONCERN_IDLE", [
+			int(idle_by_reason[reason]),
+			tr(StringName("IDLE_" + String(reason).to_upper()))])})
+
+	# A settlement drinking from the river has until the freeze to sink a well, and the whole
+	# point of a warning a season early is that it is still actionable.
+	if not Colony.has_sheltered_water():
+		out.append({"rank": 1 if Climate.shores_frozen() else 3,
+			"text": tr(&"CONCERN_NO_WELL")})
+
+	# beds_free() already nets off who is sleeping in them, so a negative reading is exactly
+	# "more people than the housing can hold" without a second count of the population.
+	if Colony.beds_free() <= 0 and Colony.population() > 0:
+		out.append({"rank": 3, "text": L10n.t(&"CONCERN_NO_BEDS", [Colony.population()])})
+
+	var damaged := 0
+	var dry_towers := 0
+	var dry_magic := 0
+	for candidate in Colony.buildings:
+		var b := candidate as Building
+		if b == null or not is_instance_valid(b) or b.is_site():
+			continue
+		if b.needs_repair():
+			damaged += 1
+		if not b.def.ammo_kind.is_empty() and b.def.ammo_per_shot > 0 \
+				and int(b.input_buffer.get(b.def.ammo_kind, 0)) < b.def.ammo_per_shot:
+			dry_towers += 1
+		if b.def.energy_per_shot > 0 \
+				and Colony.energy_available_near(b.centre_cell()) < b.def.energy_per_shot:
+			dry_magic += 1
+	# Goods on the ground are only a problem if nobody is coming for them, so this is really a
+	# report on whether the colony employs anyone who hauls.
+	var loose := Colony.loose_resource_total()
+	if loose > 0:
+		out.append({"rank": 2 if Colony.headcount_of(&"worker") <= 0 else 3,
+			"text": L10n.t(&"CONCERN_SPILLS", [loose])})
+	if dry_towers > 0:
+		out.append({"rank": 1, "text": L10n.t(&"CONCERN_TOWER_DRY", [dry_towers])})
+	if dry_magic > 0:
+		out.append({"rank": 1, "text": L10n.t(&"CONCERN_MAGIC_DRY", [dry_magic])})
+	if damaged > 0:
+		out.append({"rank": 3, "text": L10n.t(&"CONCERN_DAMAGED", [damaged])})
+
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a["rank"]) < int(b["rank"]))
+	return out
+
+
+func _refresh_concerns() -> void:
+	if not is_node_ready() or not _concerns_panel.visible:
+		return
+	for child in _concerns_rows.get_children():
+		_concerns_rows.remove_child(child)
+		child.queue_free()
+
+	var concerns := _gather_concerns()
+	if concerns.is_empty():
+		var calm := Label.new()
+		calm.text = tr(&"CONCERNS_NONE")
+		calm.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
+		calm.add_theme_color_override("font_color", UiPalette.OK)
+		_concerns_rows.add_child(calm)
+		return
+
+	for index in mini(concerns.size(), MAX_CONCERNS):
+		var row: Dictionary = concerns[index]
+		var label := Label.new()
+		label.text = String(row["text"])
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.custom_minimum_size = Vector2(300, 0)
+		label.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE_SMALL)
+		label.add_theme_color_override("font_color", [
+			UiPalette.DANGER, UiPalette.WARN, UiPalette.TEXT, UiPalette.TEXT_DIM,
+		][clampi(int(row["rank"]), 0, 3)])
+		_concerns_rows.add_child(label)
+
+
 ## The colony's Village Center, whatever tier it currently stands at.
 ##
 ## Found by property rather than by id so a scenario that nominates a different structure as its
@@ -898,10 +1031,15 @@ func _refresh_building_card() -> void:
 			_bld_detail.text += L10n.t(&"BLD_OUTPUTS",
 				[b._buffer_used(b.output_buffer), def.output_capacity])
 		if not def.ammo_kind.is_empty():
-			_bld_detail.text += L10n.t(&"BLD_AMMO", [Colony.amount_of(def.ammo_kind),
+			_bld_detail.text += L10n.t(&"BLD_AMMO", [int(b.input_buffer.get(def.ammo_kind, 0)),
 				L10n.resource(def.ammo_kind)])
 		if def.faith_upkeep > 0.0:
 			_bld_detail.text += L10n.t(&"BLD_FAITH_UPKEEP", [def.faith_upkeep])
+		if def.energy_capacity > 0:
+			_bld_detail.text += L10n.t(&"BLD_ENERGY", [b.stored_energy, def.energy_capacity])
+		elif def.energy_per_shot > 0:
+			_bld_detail.text += L10n.t(&"BLD_NEARBY_ENERGY",
+				[Colony.energy_available_near(b.centre_cell()), def.energy_per_shot])
 		if def.sleep_slots > 0:
 			_bld_detail.text += L10n.t(&"BLD_HOUSING", [def.sleep_slots,
 				int(round(def.sleep_recovery_multiplier * 100.0))])
@@ -1033,6 +1171,7 @@ func _on_production_pause() -> void:
 	var b := _selected_building()
 	if b != null:
 		b.production_paused = not b.production_paused
+		Colony.mark_supply_requests_dirty()
 		_refresh_building_card()
 
 
@@ -1041,6 +1180,7 @@ func _on_worker_limit() -> void:
 	if b != null and b.def.worker_slots > 0:
 		var current := b.effective_worker_slots()
 		b.production_worker_limit = (current + 1) % (b.def.worker_slots + 1)
+		Colony.mark_supply_requests_dirty()
 		_refresh_building_card()
 
 
@@ -1058,6 +1198,7 @@ func _on_maintain_target() -> void:
 	var targets: Array[int] = [-1, 10, 25, 50, 100, 200]
 	var at := targets.find(b.production_target)
 	b.production_target = targets[(maxi(at, 0) + 1) % targets.size()]
+	Colony.mark_supply_requests_dirty()
 	_refresh_building_card()
 
 
@@ -1463,6 +1604,8 @@ func _process(delta: float) -> void:
 			DefenseControl.gather_job,
 			DefenseControl.gather_erasing,
 			DefenseControl.gather_radius)
+	if _concerns_panel.visible:
+		_refresh_concerns()
 	if _build_panel.visible:
 		_refresh_cards()
 		_refresh_center_row()
@@ -1475,9 +1618,26 @@ func _process(delta: float) -> void:
 
 ## Calendar only. Lighting, particles, and the world itself communicate phase and weather.
 func _refresh_phase() -> void:
-	_phase_label.text = "%s · %s" % [
-		Climate.name_of_season(), L10n.t(&"HUD_DAY_MINIMAL", [Sim.day])]
-	_phase_label.tooltip_text = ""
+	var threat_info := Threat.pressure_breakdown()
+	var trend := int(threat_info.get("trend", 0))
+	var arrow := "↑" if trend > 0 else ("↓" if trend < 0 else "→")
+	var cause := &"THREAT_QUIET"
+	if bool(threat_info.get("suppressed", false)):
+		cause = &"THREAT_PURIFIED"
+	elif float(threat_info.get("containment_ratio", 0.0)) > 0.05:
+		cause = &"THREAT_BOXED_IN"
+	elif int(threat_info.get("enemy_structure_count", 0)) > 0:
+		cause = &"THREAT_ENEMY_WORKS"
+	elif Sim.day > 1:
+		cause = &"THREAT_WORLD_DAY"
+	_phase_label.text = "%s · %s · %s %s" % [Climate.name_of_season(),
+		L10n.t(&"HUD_DAY_MINIMAL", [Sim.day]), arrow, tr(cause)]
+	_phase_label.tooltip_text = L10n.t(&"THREAT_TOOLTIP", [
+		int(round(float(threat_info.get("current_pressure", 0.0)) * 100.0)),
+		int(round(float(threat_info.get("desired_coverage", 0.0)) * 100.0)),
+		int(round(float(threat_info.get("actual_coverage", 0.0)) * 100.0)),
+		int(threat_info.get("enemy_structure_count", 0)),
+	])
 	_phase_label.add_theme_font_size_override("font_size", 9)
 	_phase_label.add_theme_color_override("font_color", UiPalette.TEXT)
 
@@ -1635,9 +1795,22 @@ func _refresh_selection() -> void:
 	_sel_who.text = L10n.t(&"SELECT_IDENTITY",
 		[who.profile.display_name, who.profile.age_days, role])
 	_sel_doing.text = who.describe()
+	# Why they are standing there, straight from the decision that came back empty. This is the
+	# question the player was previously left to answer by watching, and it is the one they ask
+	# every time somebody appears to be doing nothing. See Villager.idle_reason.
+	var idle := who.idle_text()
+	if not idle.is_empty() and not who.is_moving():
+		_sel_doing.text += "\n" + L10n.t(&"SELECT_IDLE_REASON", [idle])
 	var danger := who.danger_text()
 	if not danger.is_empty():
 		_sel_doing.text += "\n" + L10n.t(&"SELECT_DANGER", [danger])
+	# Time served, which is the one number on a villager that answers to what they have done.
+	var mastery := who.profile.mastery_of(who.job)
+	if mastery > 0.01:
+		var job_def := Jobs.get_job(who.job)
+		_sel_doing.text += "\n" + L10n.t(&"SELECT_MASTERY", [
+			tr(job_def.display_name) if job_def != null else String(who.job),
+			int(mastery * 100.0)])
 	var gear: PackedStringArray = []
 	for row in who.profile.equipment.values():
 		if typeof(row) != TYPE_DICTIONARY:

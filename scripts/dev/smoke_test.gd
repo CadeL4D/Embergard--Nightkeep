@@ -1278,8 +1278,8 @@ func _check_phase6(seed_value: int) -> void:
 		nest_counts[Biomes.nest_count(id)] = true
 		_expect(Locale.has_key(Biomes.name_key(id)) and Locale.has_key(Biomes.hazard_key(id)),
 			seed_value, "%s has a translated identity and hazard" % id)
-	_expect(nest_counts.size() >= 3, seed_value,
-		"biomes vary enemy nest pressure instead of sharing one ring")
+	_expect(nest_counts.size() == 1 and nest_counts.has(MapGen.NEST_COUNT), seed_value,
+		"every biome generates exactly one campaign Blight Core")
 	_expect(Biomes.yield_multiplier(&"forest", Terrain.Feature.TREE) \
 		> Biomes.yield_multiplier(&"badlands", Terrain.Feature.TREE), seed_value,
 		"deep forest timber is richer than badlands timber")

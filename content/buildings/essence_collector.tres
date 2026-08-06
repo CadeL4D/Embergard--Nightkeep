@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/shrine.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"essence_collector"
+display_name = "BUILDING_ESSENCE_COLLECTOR"
+description = "BUILDING_ESSENCE_COLLECTOR_DESC"
+sprite = ExtResource("2_tex")
+category = &"divine"
+tier = 1
+footprint = Vector2i(2, 2)
+blocks_movement = true
+max_blight = 30
+cost = {&"stone": 8, &"wood": 12}
+build_work = 24.0
+max_hp = 145.0
+light_radius = 2
+influence_radius = 6
+energy_capacity = 150
+energy_radius = 12
+energy_per_essence = 3
+order = 45
+color = Color(0.48, 0.68, 0.94, 1)

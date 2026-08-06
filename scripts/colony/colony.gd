@@ -105,6 +105,23 @@ var stock: Dictionary = {}                ## StringName -> int
 var overflow: Dictionary = {}             ## StringName -> int
 var overflow_spoilage_progress: Dictionary = {}
 var overflow_items: Array[Dictionary] = []
+
+## Physical stacks lying on the map, keyed by stable id.
+##
+## The colony's first POSITIONAL store. Everything else here is an aggregate — stock is a number,
+## overflow is a number parked at the Hearth — so a load that could not be delivered either
+## teleported into the stores or ceased to exist. Neither reads as a place where something
+## happened. A porter's body should leave the wood he was carrying on the tile he fell on, and
+## somebody should have to go and get it.
+##
+## Kept as records rather than nodes: resources, expiring Essence and future loot share one batched
+## draw call without paying for a scene object per mote or log pile.
+var loose_drops: Dictionary = {}          ## int -> LooseDrop
+var _next_loose_drop_id: int = 1
+var _loose_drop_timer: float = 0.0
+const LOOSE_DROP_STEP := 0.5
+const ESSENCE_KIND: StringName = &"essence"
+const ESSENCE_COLLECT_RADIUS := 1
 var _next_item_serial: int = 1
 
 ## Materials promised to blueprints but not yet carried out to them. Placing a
@@ -113,6 +130,16 @@ var _next_item_serial: int = 1
 ## against one hut's worth of timber and only discover it when nothing got built.
 var reserved: Dictionary = {}             ## StringName -> int
 var buffered: Dictionary = {}             ## workshop inputs committed but not consumed
+## Stock promised to a Worker for a physical delivery. This is separate from blueprint
+## reservations: construction releases its promise at pickup, while a supply promise stays live
+## until the load reaches the destination so another porter cannot duplicate it in transit.
+var supply_reserved: Dictionary = {}       ## StringName -> int still reserved on shelves
+var supply_requests: Array[SupplyRequest] = []
+var _supply_reservations_by_cell: Dictionary = {}   ## cell -> {kind: amount}
+var _supply_claims: Dictionary = {}        ## request id -> Villager
+var _next_supply_request_id: int = 1
+var _supply_requests_dirty: bool = true
+var _supply_refresh_tick: int = -1
 var quotas: Dictionary = {}               ## job id -> headcount the player wants
 var villagers: Array = []
 var buildings: Array = []
@@ -181,17 +208,28 @@ func reset() -> void:
 	_next_item_serial = 1
 	reserved.clear()
 	buffered.clear()
+	supply_reserved.clear()
 	for k in KINDS:
 		stock[k] = 0
 		overflow[k] = 0
 		overflow_spoilage_progress[k] = 0.0
 		reserved[k] = 0
 		buffered[k] = 0
+		supply_reserved[k] = 0
+	supply_requests.clear()
+	_supply_reservations_by_cell.clear()
+	_supply_claims.clear()
+	_next_supply_request_id = 1
+	_supply_requests_dirty = true
+	_supply_refresh_tick = -1
 	quotas.clear()
 	villagers.clear()
 	buildings.clear()
 	memorials.clear()
 	stockpiles = PackedInt32Array()
+	loose_drops.clear()
+	_next_loose_drop_id = 1
+	_loose_drop_timer = 0.0
 	_storage_by_cell.clear()
 	_claims.clear()
 	_patient_claims.clear()
@@ -231,6 +269,7 @@ func step(delta: float) -> void:
 		rebalance()
 	_step_migration(delta)
 	_step_flow(delta)
+	_step_loose_drops(delta)
 
 
 # --- Measured flow --------------------------------------------------------------------------
@@ -673,7 +712,8 @@ func add(kind: StringName, amount: int) -> void:
 
 ## What is actually spendable: on the shelf and not already promised elsewhere.
 func available(kind: StringName) -> int:
-	return maxi(stock.get(kind, 0) - reserved.get(kind, 0) - buffered.get(kind, 0), 0)
+	return maxi(stock.get(kind, 0) - reserved.get(kind, 0) - buffered.get(kind, 0) \
+		- supply_reserved.get(kind, 0), 0)
 
 
 func can_afford(cost: Dictionary) -> bool:
@@ -733,6 +773,339 @@ func amount_of(kind: StringName) -> int:
 func _change_stock(kind: StringName, delta: int) -> void:
 	stock[kind] = maxi(int(stock.get(kind, 0)) + delta, 0)
 	Events.resources_changed.emit(kind, stock[kind])
+
+
+# --- Physical supply requests -------------------------------------------------------------
+
+func mark_supply_requests_dirty() -> void:
+	_supply_requests_dirty = true
+
+
+func _building_at_anchor(anchor: int) -> Building:
+	for candidate in buildings:
+		var b := candidate as Building
+		if b != null and is_instance_valid(b) and b.anchor == anchor \
+				and b.state == Building.State.COMPLETE:
+			return b
+	return null
+
+
+func _supply_request_by_id(request_id: int) -> SupplyRequest:
+	for request in supply_requests:
+		if request.id == request_id:
+			return request
+	return null
+
+
+func _supply_specs_for(b: Building) -> Array[Dictionary]:
+	var specs: Array[Dictionary] = []
+	if b.def.input_capacity <= 0:
+		return specs
+	if not b.def.ammo_kind.is_empty() and b.def.ammo_per_shot > 0:
+		specs.append({
+			"resource": b.def.ammo_kind,
+			"target": mini(b.def.input_capacity, b.def.ammo_per_shot * 12),
+			"priority": 320 if Sim.is_dark() else 260,
+		})
+		return specs
+	for job_def in Jobs.all():
+		if job_def.workplace != b.def.id or job_def.cycle_cost.is_empty() \
+				or not job_def.supports_production_policy \
+				or not b.production_is_available(job_def):
+			continue
+		var protects_needs := job_def.requires_water_access \
+			or job_def.cycle_yield.has(&"food") or job_def.cycle_yield.has(&"rations")
+		for raw_kind in job_def.cycle_cost:
+			var kind := StringName(raw_kind)
+			specs.append({
+				"resource": kind,
+				"target": mini(b.def.input_capacity, int(job_def.cycle_cost[kind]) * 2),
+				"priority": 210 if protects_needs else 120,
+			})
+		break
+	return specs
+
+
+## Reconcile content-driven requests against the buildings that actually stand on the map.
+## Existing ids survive so a carrier can still name its destination through save/reload.
+func refresh_supply_requests(force: bool = false) -> void:
+	if not force and not _supply_requests_dirty and _supply_refresh_tick == Sim.tick:
+		return
+	_supply_refresh_tick = Sim.tick
+	_supply_requests_dirty = false
+	var wanted: Dictionary = {}
+	for candidate in buildings:
+		var b := candidate as Building
+		if b == null or not is_instance_valid(b) or b.state != Building.State.COMPLETE:
+			continue
+		for spec in _supply_specs_for(b):
+			var kind := StringName(spec["resource"])
+			var key := "%d:%s" % [b.anchor, kind]
+			wanted[key] = {
+				"destination": b.anchor,
+				"resource": kind,
+				"target": int(spec["target"]),
+				"priority": int(spec["priority"]),
+			}
+
+	var existing: Dictionary = {}
+	for request in supply_requests:
+		existing["%d:%s" % [request.destination, request.resource]] = request
+	for key in wanted:
+		var row: Dictionary = wanted[key]
+		var request: SupplyRequest = existing.get(key)
+		if request == null:
+			request = SupplyRequest.new()
+			request.id = _next_supply_request_id
+			_next_supply_request_id += 1
+			request.destination = int(row["destination"])
+			request.resource = StringName(row["resource"])
+			supply_requests.append(request)
+		request.target = int(row["target"])
+		request.priority = int(row["priority"])
+
+	for i in range(supply_requests.size() - 1, -1, -1):
+		var request := supply_requests[i]
+		var key := "%d:%s" % [request.destination, request.resource]
+		if wanted.has(key):
+			continue
+		_release_supply_shelf(request)
+		_supply_claims.erase(request.id)
+		supply_requests.remove_at(i)
+
+
+func _supply_reserved_at(cell: int, kind: StringName) -> int:
+	var by_kind: Dictionary = _supply_reservations_by_cell.get(cell, {})
+	return int(by_kind.get(kind, 0))
+
+
+func _change_supply_reserved_at(cell: int, kind: StringName, delta: int) -> void:
+	if cell == -1 or delta == 0:
+		return
+	var by_kind: Dictionary = _supply_reservations_by_cell.get(cell, {})
+	var next := maxi(int(by_kind.get(kind, 0)) + delta, 0)
+	if next > 0:
+		by_kind[kind] = next
+	else:
+		by_kind.erase(kind)
+	if by_kind.is_empty():
+		_supply_reservations_by_cell.erase(cell)
+	else:
+		_supply_reservations_by_cell[cell] = by_kind
+
+
+func _reserve_supply_shelf(request: SupplyRequest, source: int, amount: int) -> void:
+	if request == null or amount <= 0:
+		return
+	request.source = source
+	request.shelf_reserved += amount
+	request.reserved += amount
+	supply_reserved[request.resource] = int(supply_reserved.get(request.resource, 0)) + amount
+	_change_supply_reserved_at(source, request.resource, amount)
+	Events.resources_changed.emit(&"", 0)
+
+
+func _release_supply_shelf(request: SupplyRequest) -> int:
+	if request == null or request.shelf_reserved <= 0:
+		return 0
+	var released := request.shelf_reserved
+	supply_reserved[request.resource] = maxi(
+		int(supply_reserved.get(request.resource, 0)) - released, 0)
+	_change_supply_reserved_at(request.source, request.resource, -released)
+	request.shelf_reserved = 0
+	request.source = -1
+	Events.resources_changed.emit(&"", 0)
+	return released
+
+
+func _nearest_supply_source(from: int, kind: StringName) -> int:
+	var best := -1
+	var best_dist := 0x7FFFFFFF
+	for raw_cell in _storage_by_cell.keys():
+		var cell := int(raw_cell)
+		if amount_at(cell, kind) - _supply_reserved_at(cell, kind) <= 0:
+			continue
+		var distance := World.grid.dist_sq(from, cell)
+		if distance < best_dist:
+			best_dist = distance
+			best = cell
+	var overflow_at := overflow_cell()
+	if int(overflow.get(kind, 0)) - _supply_reserved_at(overflow_at, kind) > 0 \
+			and World.grid.is_valid_index(overflow_at):
+		var overflow_dist := World.grid.dist_sq(from, overflow_at)
+		if overflow_dist < best_dist:
+			best = overflow_at
+	return best
+
+
+## Claim the highest-priority reachable request and reserve its goods before walking toward it.
+## The return row is deliberately enough to drive a Villager without exposing request objects.
+func claim_supply_request(worker: Villager, from: int, capacity: int) -> Dictionary:
+	if worker == null or capacity <= 0:
+		return {}
+	refresh_supply_requests()
+	var candidates: Array[SupplyRequest] = []
+	for request in supply_requests:
+		var claimant = _supply_claims.get(request.id)
+		if claimant != null and (not is_instance_valid(claimant) or not claimant.alive):
+			var abandoned := _release_supply_shelf(request)
+			request.reserved = maxi(request.reserved - abandoned, 0)
+			# A normal death releases carried goods before leaving the roster. Anything still
+			# committed here belongs to an object that vanished unexpectedly, so unlock it.
+			request.reserved = 0
+			_supply_claims.erase(request.id)
+			claimant = null
+		if claimant != null or request.reserved > 0:
+			continue
+		var destination := _building_at_anchor(request.destination)
+		if destination == null:
+			continue
+		var local := int(destination.input_buffer.get(request.resource, 0))
+		if request.target - local <= 0 or available(request.resource) <= 0:
+			continue
+		if _nearest_supply_source(from, request.resource) != -1:
+			candidates.append(request)
+	if candidates.is_empty():
+		return {}
+	candidates.sort_custom(func(a: SupplyRequest, b: SupplyRequest) -> bool:
+		if a.priority != b.priority:
+			return a.priority > b.priority
+		return World.grid.dist_sq(from, a.destination) < World.grid.dist_sq(from, b.destination)
+	)
+	for request in candidates:
+		var destination := _building_at_anchor(request.destination)
+		if destination == null:
+			continue
+		var source := _nearest_supply_source(from, request.resource)
+		if source == -1:
+			continue
+		var outstanding := maxi(request.target \
+			- int(destination.input_buffer.get(request.resource, 0)) - request.reserved, 0)
+		var local_free := maxi(amount_at(source, request.resource) \
+			- _supply_reserved_at(source, request.resource), 0)
+		var amount := mini(capacity, mini(outstanding, mini(available(request.resource), local_free)))
+		if amount <= 0:
+			continue
+		_supply_claims[request.id] = worker
+		_reserve_supply_shelf(request, source, amount)
+		return {
+			"id": request.id,
+			"source": source,
+			"destination": request.destination,
+			"resource": request.resource,
+			"amount": amount,
+		}
+	return {}
+
+
+func withdraw_supply_request(request_id: int, worker: Villager, cell: int, limit: int) -> int:
+	var request := _supply_request_by_id(request_id)
+	if request == null or _supply_claims.get(request_id) != worker \
+			or request.source != cell or request.shelf_reserved <= 0:
+		return 0
+	var promised := mini(request.shelf_reserved, maxi(limit, 0))
+	var taken := withdraw_at(cell, request.resource, promised)
+	var shelf_total := _release_supply_shelf(request)
+	# The amount picked up remains reserved while it is in transit. Anything the shelf could
+	# not provide is released immediately rather than becoming a phantom promise.
+	request.reserved = maxi(request.reserved - shelf_total + taken, 0)
+	return taken
+
+
+func supply_destination(request_id: int) -> Building:
+	var request := _supply_request_by_id(request_id)
+	return _building_at_anchor(request.destination) if request != null else null
+
+
+func resume_supply_request(request_id: int, worker: Villager, carried: int) -> Building:
+	var request := _supply_request_by_id(request_id)
+	var destination := supply_destination(request_id)
+	if request == null or destination == null or carried <= 0:
+		return null
+	_supply_claims[request_id] = worker
+	request.reserved = maxi(request.reserved, carried)
+	return destination
+
+
+func complete_supply_delivery(request_id: int, amount: int) -> void:
+	var request := _supply_request_by_id(request_id)
+	if request == null or amount <= 0:
+		return
+	request.reserved = maxi(request.reserved - amount, 0)
+	mark_supply_requests_dirty()
+
+
+## Release both legs of a promise. `carried` remains physically in the Villager's arms; only its
+## destination commitment is removed, so ordinary hauling or a death spill can recover it.
+func release_supply_request(request_id: int, worker: Villager, carried: int = 0) -> void:
+	var request := _supply_request_by_id(request_id)
+	if request == null:
+		_supply_claims.erase(request_id)
+		return
+	var claimant = _supply_claims.get(request_id)
+	if claimant != null and claimant != worker:
+		return
+	var shelf := _release_supply_shelf(request)
+	request.reserved = maxi(request.reserved - shelf - maxi(carried, 0), 0)
+	_supply_claims.erase(request_id)
+	mark_supply_requests_dirty()
+
+
+## Save only promises represented by real carried units. A path to a shelf is disposable state;
+## rebuilding it on load prevents stale source reservations without moving or creating stock.
+func pack_supply_requests() -> Array:
+	refresh_supply_requests(true)
+	var rows: Array = []
+	for request in supply_requests:
+		var in_transit := 0
+		for candidate in villagers:
+			var v := candidate as Villager
+			if v != null and is_instance_valid(v) and v.alive \
+					and v._supply_request_id == request.id and v.carry_kind == request.resource:
+				in_transit += maxi(v.carry_amount, 0)
+		var row := request.to_dict()
+		row["reserved"] = in_transit
+		rows.append(row)
+	return rows
+
+
+func restore_supply_requests(rows: Array) -> void:
+	supply_requests.clear()
+	_supply_claims.clear()
+	_supply_reservations_by_cell.clear()
+	_next_supply_request_id = 1
+	for kind in KINDS:
+		supply_reserved[kind] = 0
+	for row: Dictionary in rows:
+		var request := SupplyRequest.from_dict(row)
+		if request.id <= 0 or request.destination < 0 or request.resource.is_empty():
+			continue
+		supply_requests.append(request)
+		_next_supply_request_id = maxi(_next_supply_request_id, request.id + 1)
+	_supply_requests_dirty = true
+
+
+func rebuild_supply_reservations_from_carriers() -> void:
+	_supply_claims.clear()
+	_supply_reservations_by_cell.clear()
+	for kind in KINDS:
+		supply_reserved[kind] = 0
+	for request in supply_requests:
+		request.reserved = 0
+		request.shelf_reserved = 0
+		request.source = -1
+	for candidate in villagers:
+		var v := candidate as Villager
+		if v == null or not is_instance_valid(v) or v._supply_request_id <= 0:
+			continue
+		var request := _supply_request_by_id(v._supply_request_id)
+		if request == null or supply_destination(request.id) == null \
+				or v.carry_amount <= 0 or v.carry_kind != request.resource:
+			v._supply_request_id = 0
+			continue
+		request.reserved += v.carry_amount
+		_supply_claims[request.id] = v
+	refresh_supply_requests(true)
 
 
 # --- Stockpiles ---------------------------------------------------------------------
@@ -815,6 +1188,7 @@ func deposit_building_input(b: Building, kind: StringName, amount: int) -> int:
 	if accepted > 0:
 		buffered[kind] = int(buffered.get(kind, 0)) + accepted
 		_change_stock(kind, accepted)
+		mark_supply_requests_dirty()
 	return accepted
 
 
@@ -828,6 +1202,7 @@ func consume_building_inputs(b: Building, cost: Dictionary) -> bool:
 		var taken := b.withdraw_input_local(kind, int(cost[kind]))
 		buffered[kind] = maxi(int(buffered.get(kind, 0)) - taken, 0)
 		_change_stock(kind, -taken)
+	mark_supply_requests_dirty()
 	return true
 
 
@@ -906,6 +1281,7 @@ func evacuate_inventory(b: Building) -> void:
 		var kind := StringName(raw_kind)
 		overflow[kind] = int(overflow.get(kind, 0)) + int(b.output_buffer.get(kind, 0))
 	b.output_buffer.clear()
+	mark_supply_requests_dirty()
 
 
 func rebuild_stock_cache() -> void:
@@ -1145,6 +1521,267 @@ func distribute_legacy_stock(legacy: Dictionary) -> void:
 		add(StringName(raw_kind), int(legacy.get(raw_kind, 0)))
 
 
+## Drop goods on the ground at `cell`, merging with anything already lying there.
+func create_loose_drop(cell: int, kind: StringName, amount: int,
+		policy: StringName = LooseDrop.POLICY_WORKER, expires_tick: int = -1,
+		source: StringName = &"") -> LooseDrop:
+	if amount <= 0 or kind.is_empty() or not World.grid.is_valid_index(cell):
+		return null
+	for existing: LooseDrop in loose_drops.values():
+		if existing.cell == cell and existing.kind == kind \
+				and existing.collection_policy == policy \
+				and existing.expires_tick == expires_tick and existing.source == source:
+			existing.amount += amount
+			Events.loose_drops_changed.emit(cell)
+			return existing
+	var drop := LooseDrop.new()
+	drop.id = _next_loose_drop_id
+	_next_loose_drop_id += 1
+	drop.cell = cell
+	drop.kind = kind
+	drop.amount = amount
+	drop.collection_policy = policy
+	drop.expires_tick = expires_tick
+	drop.source = source
+	loose_drops[drop.id] = drop
+	Events.loose_drops_changed.emit(cell)
+	return drop
+
+
+func drop_resource(kind: StringName, amount: int, cell: int,
+		source: StringName = &"resource") -> LooseDrop:
+	return create_loose_drop(cell, kind, amount, LooseDrop.POLICY_WORKER, -1, source)
+
+
+## Nearest loose pile, or -1. Walkability is checked here rather than at spill time: a pile can be
+## dropped under a building that is later raised over it, and a pile nobody can stand on is a pile
+## nobody can collect.
+func nearest_worker_drop(from: int) -> int:
+	var best := -1
+	var best_dist := 0x7FFFFFFF
+	for drop: LooseDrop in loose_drops.values():
+		if not drop.can_collect(LooseDrop.POLICY_WORKER):
+			continue
+		if not World.has_walkable_neighbour(drop.cell) and not World.is_walkable(drop.cell):
+			continue
+		var distance := World.grid.dist_sq(from, drop.cell)
+		if distance < best_dist:
+			best_dist = distance
+			best = drop.id
+	return best
+
+
+## Take one kind off a pile, clearing the entry when it empties. Returns {kind, amount}, empty
+## when there was nothing there — a second porter can always beat you to it.
+func take_loose_drop(id: int, limit: int, policy: StringName) -> Dictionary:
+	var drop := loose_drops.get(id) as LooseDrop
+	if drop == null or limit <= 0 or not drop.can_collect(policy):
+		return {}
+	var taken := mini(drop.amount, limit)
+	drop.amount -= taken
+	var changed_cell := drop.cell
+	var kind := drop.kind
+	if drop.amount <= 0:
+		loose_drops.erase(id)
+	Events.loose_drops_changed.emit(changed_cell)
+	return {"kind": kind, "amount": taken}
+
+
+func loose_resource_total() -> int:
+	var total := 0
+	for drop: LooseDrop in loose_drops.values():
+		if drop.can_collect(LooseDrop.POLICY_WORKER):
+			total += drop.amount
+	return total
+
+
+func essence_lifetime_ticks() -> int:
+	return ceili(Sim.cycle_seconds() * Sim.TICK_HZ)
+
+
+func drop_essence(cell: int, amount: int, source: StringName) -> LooseDrop:
+	return create_loose_drop(cell, ESSENCE_KIND, amount, LooseDrop.POLICY_DIVINE,
+		Sim.tick + essence_lifetime_ticks(), source)
+
+
+func maybe_drop_harvest_essence(cell: int) -> bool:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(World.seed_value) ^ (cell * 2654435761) ^ (Sim.tick * 40503)
+	if rng.randf() >= 0.35:
+		return false
+	drop_essence(cell, 1, &"harvest")
+	return true
+
+
+func loose_drop(id: int) -> LooseDrop:
+	return loose_drops.get(id) as LooseDrop
+
+
+func essence_total() -> int:
+	var total := 0
+	for drop: LooseDrop in loose_drops.values():
+		if drop.kind == ESSENCE_KIND and drop.can_collect(LooseDrop.POLICY_DIVINE):
+			total += drop.amount
+	return total
+
+
+func has_essence_near(cell: int, radius: int) -> bool:
+	if not World.grid.is_valid_index(cell):
+		return false
+	for drop: LooseDrop in loose_drops.values():
+		if drop.kind == ESSENCE_KIND and drop.can_collect(LooseDrop.POLICY_DIVINE) \
+				and World.grid.dist_sq(cell, drop.cell) <= radius * radius:
+			return true
+	return false
+
+
+func collect_essence_near(cell: int, radius: int) -> int:
+	if not World.grid.is_valid_index(cell):
+		return 0
+	var collected := 0
+	var ids: Array[int] = []
+	for drop: LooseDrop in loose_drops.values():
+		if drop.kind == ESSENCE_KIND and drop.can_collect(LooseDrop.POLICY_DIVINE) \
+				and World.grid.dist_sq(cell, drop.cell) <= radius * radius:
+			ids.append(drop.id)
+	for id in ids:
+		var load := take_loose_drop(id, 0x7FFFFFFF, LooseDrop.POLICY_DIVINE)
+		collected += int(load.get("amount", 0))
+	return collected
+
+
+func pack_loose_drops() -> Array[Dictionary]:
+	var packed: Array[Dictionary] = []
+	var ids := loose_drops.keys()
+	ids.sort()
+	for id in ids:
+		var drop := loose_drop(int(id))
+		if drop != null:
+			packed.append(drop.to_dict())
+	return packed
+
+
+func restore_loose_drops(rows: Array, next_id: int) -> void:
+	loose_drops.clear()
+	_next_loose_drop_id = maxi(next_id, 1)
+	for row in rows:
+		if not row is Dictionary:
+			continue
+		var drop := LooseDrop.from_dict(row)
+		if drop.id <= 0 or drop.amount <= 0 or not World.grid.is_valid_index(drop.cell):
+			continue
+		loose_drops[drop.id] = drop
+		_next_loose_drop_id = maxi(_next_loose_drop_id, drop.id + 1)
+	Events.loose_drops_changed.emit(-1)
+
+
+func _step_loose_drops(delta: float) -> void:
+	_loose_drop_timer += delta
+	if _loose_drop_timer < LOOSE_DROP_STEP:
+		return
+	_loose_drop_timer = fmod(_loose_drop_timer, LOOSE_DROP_STEP)
+	var changed := false
+	for id in loose_drops.keys():
+		var drop := loose_drop(int(id))
+		if drop != null and drop.expired(Sim.tick):
+			loose_drops.erase(id)
+			changed = true
+	var handled_essence: Dictionary = {}
+	for b in buildings:
+		if is_instance_valid(b) and b.state == Building.State.COMPLETE \
+				and b.def.energy_capacity > 0 and b.def.energy_per_essence > 0 \
+				and b.stored_energy < b.def.energy_capacity:
+			changed = _attract_essence_to(b, handled_essence) or changed
+	if changed:
+		Events.loose_drops_changed.emit(-1)
+
+
+func _attract_essence_to(collector: Building, handled: Dictionary) -> bool:
+	var nearest: LooseDrop = null
+	var nearest_dist := 0x7FFFFFFF
+	var centre := collector.centre_cell()
+	for drop: LooseDrop in loose_drops.values():
+		if drop.kind != ESSENCE_KIND or not drop.can_collect(LooseDrop.POLICY_DIVINE):
+			continue
+		if handled.has(drop.id):
+			continue
+		var distance := World.grid.dist_sq(centre, drop.cell)
+		if distance <= collector.def.energy_radius * collector.def.energy_radius \
+				and distance < nearest_dist:
+			nearest = drop
+			nearest_dist = distance
+	if nearest == null:
+		return false
+	handled[nearest.id] = true
+	if nearest_dist <= ESSENCE_COLLECT_RADIUS * ESSENCE_COLLECT_RADIUS:
+		var room_motes := (collector.def.energy_capacity - collector.stored_energy) \
+			/ collector.def.energy_per_essence
+		if room_motes <= 0:
+			return false
+		var load := take_loose_drop(nearest.id, room_motes, LooseDrop.POLICY_DIVINE)
+		var motes := int(load.get("amount", 0))
+		collector.stored_energy += motes * collector.def.energy_per_essence
+		collector.queue_redraw()
+		return motes > 0
+	var old_cell := nearest.cell
+	var from := World.grid.coord(old_cell)
+	var toward := World.grid.coord(centre)
+	var best := old_cell
+	var best_dist := nearest_dist
+	for y in range(-1, 2):
+		for x in range(-1, 2):
+			if x == 0 and y == 0:
+				continue
+			var candidate_coord := Vector2i(from.x + x, from.y + y)
+			if not World.grid.is_valid_v(candidate_coord):
+				continue
+			var candidate := World.grid.index_v(candidate_coord)
+			var distance := World.grid.dist_sq(candidate, centre)
+			if distance < best_dist:
+				best = candidate
+				best_dist = distance
+	if best == old_cell:
+		return false
+	nearest.cell = best
+	Events.loose_drops_changed.emit(old_cell)
+	Events.loose_drops_changed.emit(best)
+	return true
+
+
+func energy_available_near(cell: int) -> int:
+	var total := 0
+	for b in buildings:
+		if is_instance_valid(b) and b.state == Building.State.COMPLETE \
+				and b.def.energy_capacity > 0 and b.def.energy_radius > 0 \
+				and World.grid.dist_sq(cell, b.centre_cell()) <= b.def.energy_radius * b.def.energy_radius:
+			total += b.stored_energy
+	return total
+
+
+func draw_energy_near(cell: int, amount: int) -> bool:
+	if amount <= 0:
+		return true
+	if energy_available_near(cell) < amount:
+		return false
+	var remaining := amount
+	var collectors: Array[Building] = []
+	for b in buildings:
+		if is_instance_valid(b) and b.state == Building.State.COMPLETE \
+				and b.def.energy_capacity > 0 and b.stored_energy > 0 \
+				and World.grid.dist_sq(cell, b.centre_cell()) <= b.def.energy_radius * b.def.energy_radius:
+			collectors.append(b)
+	collectors.sort_custom(func(a: Building, b: Building) -> bool:
+		return World.grid.dist_sq(cell, a.centre_cell()) < World.grid.dist_sq(cell, b.centre_cell()))
+	for collector in collectors:
+		var drawn := mini(remaining, collector.stored_energy)
+		collector.stored_energy -= drawn
+		remaining -= drawn
+		collector.queue_redraw()
+		if remaining <= 0:
+			break
+	return true
+
+
 func nearest_storage_destination(from: int, kind: StringName) -> int:
 	var best := -1
 	var best_score := 0x7FFFFFFF
@@ -1199,10 +1836,15 @@ func nearest_stockpile(from: int, kind: StringName = &"") -> int:
 func register_building(b: Node) -> void:
 	if not b in buildings:
 		buildings.append(b)
+	mark_supply_requests_dirty()
 
 
 func unregister_building(b: Node) -> void:
 	buildings.erase(b)
+	mark_supply_requests_dirty()
+	# Destruction must release promised shelf stock immediately. A Worker may still be carrying
+	# a load for this anchor; that load remains physical and falls back to ordinary hauling.
+	refresh_supply_requests(true)
 
 
 # --- The Village Center -------------------------------------------------------------------
@@ -1553,6 +2195,11 @@ func nearest_water_source(from: int) -> int:
 			best_dist = d
 			best = cell
 
+	# Frozen shores are not a water source. A well or cistern still is — which is what turns
+	# "I have a river" from a permanent answer into a seasonal one. See Climate.FROZEN_SEASONS.
+	if Climate.shores_frozen():
+		return best
+
 	# Shores are checked for walkability at query time: the index is built once per map, and
 	# a building raised on the waterfront since then would have closed that cell off.
 	for cell in World.shore_cells:
@@ -1565,6 +2212,17 @@ func nearest_water_source(from: int) -> int:
 			best_dist = d
 			best = cell
 	return best
+
+
+## Water that survives a freeze: a well or a cistern, as opposed to the river.
+##
+## Distinct from has_water_access(), which counts the shore and is therefore true right up until
+## the morning it is catastrophically not. This is the one the winter warning asks about.
+func has_sheltered_water() -> bool:
+	for b in buildings:
+		if is_instance_valid(b) and not b.is_site() and b.def.provides_water:
+			return true
+	return false
 
 
 func has_water_access() -> bool:
@@ -1654,14 +2312,26 @@ func nearest_bed(from: int) -> Node:
 	return best
 
 
-func workplace_free(b: Node) -> bool:
-	return b.production_is_available() \
+## Whether a worker of this job could start a shift here right now.
+##
+## The `job` argument is not optional in practice, and leaving it out was a real bug rather than a
+## convenience. production_is_available() answers a WEAKER question without one — is the building
+## finished, unpaused and staffed — while the worker's own tick asks the full question WITH the
+## job: is there room in the output buffer, has the maintain-target already been met.
+##
+## When those two disagreed the villager claimed a slot the moment they released it: claim, walk
+## nowhere, discover the shift is not actually available, release, claim again. A farmer whose
+## barn was full stood on the spot doing that at 10 Hz for the rest of the run, never moving and
+## never looking for other work. Both sides ask the same question now.
+func workplace_free(b: Node, job: JobDef = null) -> bool:
+	return b.production_is_available(job) \
 		and _slot_users(_work_users, b).size() < b.effective_worker_slots()
 
 
-func claim_workplace(b: Node, who: Object) -> bool:
+func claim_workplace(b: Node, who: Object, job: JobDef = null) -> bool:
 	var users := _slot_users(_work_users, b)
-	if not b.production_is_available() or users.size() >= b.effective_worker_slots() or who in users:
+	if not b.production_is_available(job) or users.size() >= b.effective_worker_slots() \
+			or who in users:
 		return false
 	users.append(who)
 	return true
@@ -1676,7 +2346,7 @@ func release_workplace(b: Node, who: Object) -> void:
 ## Nearest finished building that can staff this job. Matched on the building's workplace ROLE, so
 ## a Priest job naming `temple` is served by a Shrine, a Temple or a Sanctum alike — see
 ## BuildingDef.workplace_key.
-func nearest_workplace(building_id: StringName, from: int) -> Node:
+func nearest_workplace(building_id: StringName, from: int, job: JobDef = null) -> Node:
 	var best: Node = null
 	var best_dist := 0x7FFFFFFF
 	for b in buildings:
@@ -1685,7 +2355,7 @@ func nearest_workplace(building_id: StringName, from: int) -> Node:
 		var def: BuildingDef = b.def
 		if def.workplace_key() != building_id:
 			continue
-		if not workplace_free(b):
+		if not workplace_free(b, job):
 			continue
 		var d := World.grid.dist_sq(from, b.anchor)
 		var score: int = d - (b.production_priority - 1) * 400

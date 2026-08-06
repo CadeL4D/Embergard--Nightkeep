@@ -14,6 +14,7 @@ var realm_position: Vector2 = Vector2.ZERO
 var connections: Array[StringName] = []
 var is_heart: bool = false
 var fallen: bool = false
+var purified: bool = false
 var founded_day: int = 1
 var last_advanced_day: int = 1
 var pressure: float = 0.0
@@ -105,6 +106,7 @@ func to_dict() -> Dictionary:
 		"connections": connections.map(func(value: StringName) -> String: return String(value)),
 		"is_heart": is_heart,
 		"fallen": fallen,
+		"purified": purified,
 		"founded_day": founded_day,
 		"last_advanced_day": last_advanced_day,
 		"pressure": pressure,
@@ -125,6 +127,7 @@ static func from_dict(data: Dictionary) -> ColonyLedger:
 		ledger.connections.append(StringName(value))
 	ledger.is_heart = bool(data.get("is_heart", false))
 	ledger.fallen = bool(data.get("fallen", false))
+	ledger.purified = bool(data.get("purified", false))
 	ledger.founded_day = int(data.get("founded_day", 1))
 	ledger.last_advanced_day = int(data.get("last_advanced_day", ledger.founded_day))
 	ledger.pressure = float(data.get("pressure", 0.0))
@@ -231,12 +234,18 @@ func _advance_one_day(day_number: int) -> void:
 	# a display percentage, so reconstitution cannot roll this consequence away.
 	var defense_control: Dictionary = state.get("defense_control", {}).duplicate(true)
 	var cleanse_left := int(defense_control.get("cleanse_dawns_left", 0))
-	if cleanse_left > 0:
+	if purified:
+		cleanse_left = 0
+		defense_control["cleanse_dawns_left"] = 0
+		defense_control["cleanse_completed"] = true
+		state["defense_control"] = defense_control
+	elif cleanse_left > 0:
 		_sleeping_cleanse(state.get("blight", PackedByteArray()), cleanse_left)
 		cleanse_left -= 1
 		defense_control["cleanse_dawns_left"] = cleanse_left
 		if cleanse_left <= 0:
 			defense_control["cleanse_completed"] = true
+			purified = true
 		state["defense_control"] = defense_control
 	else:
 		var nest_mult := _sleeping_nest_multiplier(
@@ -244,13 +253,15 @@ func _advance_one_day(day_number: int) -> void:
 		_advance_blight(state.get("terrain", PackedByteArray()),
 			state.get("blight", PackedByteArray()), rng,
 			roundi((30.0 + pressure * 18.0) * blight_mult * nest_mult))
-	_advance_blight_economy(rng, blight_mult)
+		_advance_blight_economy(rng, blight_mult)
 	var blight: PackedByteArray = state.get("blight", PackedByteArray())
 	var blighted := 0
 	for value in blight:
 		if value > 0:
 			blighted += 1
-	corruption = float(blighted) / float(maxi(blight.size(), 1))
+	corruption = 0.0 if purified else float(blighted) / float(maxi(blight.size(), 1))
+	pressure = 0.0 if purified else Threat.containment_target_for(
+		corruption, state.get("blight_structures", {}).size(), day_number)
 
 	# Intercepted attacks become visible attrition against the shield instead of disappearing.
 	if pressure > 0.0:
@@ -258,7 +269,6 @@ func _advance_one_day(day_number: int) -> void:
 		if rng.randf() < pressure * 0.035 and not villagers.is_empty():
 			var victim: Dictionary = villagers[rng.randi_range(0, villagers.size() - 1)]
 			victim["health"] = maxf(float(victim.get("health", 100.0)) - 16.0, 1.0)
-		pressure *= 0.68
 	else:
 		shield_integrity = minf(shield_integrity + 0.025, 1.0)
 

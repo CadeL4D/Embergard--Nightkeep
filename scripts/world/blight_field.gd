@@ -20,6 +20,15 @@ const SAMPLES_PER_PASS := 256          ## frontier cells examined per pass
 const SEED_INTENSITY := 90
 const RAMP_PER_PASS := 6               ## how fast an infected tile deepens
 const LIGHT_RESIST := 0.9              ## how strongly light suppresses spread
+
+## Chance that ground inside the colony's own sphere simply refuses an advance.
+##
+## Deliberately a resistance and not a wall. At 1.0 the settlement would be permanently immune
+## and the siege would stop being a siege the moment a sphere existed; at 0.0 the light's dawn
+## reclamation is a treadmill, because the frontier retakes by afternoon what first light cleared.
+## At 0.8 the corruption gets in eventually, and slowly, and only where the player let their
+## buildings thin out — which is a decision about where to build rather than a dice roll.
+const INFLUENCE_RESIST := 0.8
 ## Night pressure. Modest, because the Blight is a siege and not a tide — a big night
 ## multiplier made corruption something that happened TO the player between dusk and dawn
 ## rather than something they were losing ground to over a campaign.
@@ -93,12 +102,48 @@ func rebuild_frontier() -> void:
 
 func seed_at(cell: int, intensity: int = SEED_INTENSITY) -> void:
 	var blight: PackedByteArray = _world.blight
-	if not _world.grid.is_valid_index(cell):
+	if _world.region_purified or not _world.grid.is_valid_index(cell):
 		return
 	blight[cell] = maxi(blight[cell], intensity)
 	_mark_pixel(cell, blight[cell])
 	_push_frontier(cell)
 	Events.blight_changed.emit(cell, true)
+
+
+## Ground the colony's light takes back, applied at dawn.
+##
+## Light used to only SLOW corruption — see LIGHT_RESIST, which suppresses spread and nothing
+## more. That made the Blight a ratchet: the sole way to reverse any of it was the Cleanse ritual,
+## an end-game one-shot gated behind clearing every nest. So the map was a backdrop. Nothing was
+## ever WON at night, only lost more slowly, and a night survived changed nothing you could see in
+## the morning.
+##
+## Now a lit tile on the boundary is pushed back each dawn, which makes the edge of the settlement
+## a line that moves in both directions. Holding your torches through a night is worth something,
+## a beacon is territory rather than decoration, and the Ember has a job after dark that competes
+## with the job it has in daylight.
+##
+## Frontier-only, deliberately. That set is exactly the boundary and it is the few hundred cells
+## this class already tracks — reclaiming from anywhere would let one deep beacon hollow the
+## corruption out from behind, which is a very different (and much cheaper) game.
+const RECLAIM_LIGHT := 110             ## light needed before ground begins to clear
+const RECLAIM_PER_DAWN := 22           ## intensity drained from a lit boundary tile each dawn
+
+
+## Returns how many tiles came fully clean, for the morning report.
+func reclaim_lit_ground() -> int:
+	var light: PackedByteArray = _world.light
+	var cleared := 0
+	# Iterated over a copy: purify() edits the frontier as tiles come clean, and mutating the
+	# array underneath the loop would skip the cells that get swapped into the vacated slots.
+	for cell in _frontier.duplicate():
+		if cell < 0 or cell >= light.size() or _in_frontier[cell] == 0:
+			continue
+		if int(light[cell]) < RECLAIM_LIGHT:
+			continue
+		if purify(cell, RECLAIM_PER_DAWN):
+			cleared += 1
+	return cleared
 
 
 ## Drain intensity from a tile (a Cleanser working, or the Ward power). Returns true
@@ -141,6 +186,8 @@ func step(tick: int) -> void:
 	if _image_dirty and tick % 4 == 0:
 		texture.update(image)
 		_image_dirty = false
+	if _world.region_purified:
+		return
 	if tick % STEP_INTERVAL != 0 or _frontier.is_empty():
 		return
 
@@ -189,6 +236,14 @@ func step(tick: int) -> void:
 
 		var target := open[_rng.randi() % open.size()]
 		if _suppression[target] > 0:
+			continue
+		# Standing buildings hold the ground they claim. Without this, dawn reclamation was a
+		# treadmill: the light cleared a tile at first light and the frontier took it back the
+		# same afternoon, so the player did the work and kept none of it. The colony's own
+		# sphere is the right shape for it — it is granted BY buildings, it already grows and
+		# bulges toward wherever the settlement has been built, and the influence overlay means
+		# the player can already SEE the line they are being asked to hold.
+		if _world.resists_blight(target) and _rng.randf() < INFLUENCE_RESIST:
 			continue
 		blight[target] = maxi(blight[target], SEED_INTENSITY)
 		_mark_pixel(target, blight[target])

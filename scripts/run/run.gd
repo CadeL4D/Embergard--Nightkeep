@@ -63,7 +63,7 @@ func _ready() -> void:
 	Events.building_destroyed.connect(_on_building_destroyed)
 	Events.building_completed.connect(_on_building_completed)
 	Events.monster_died.connect(_on_monster_died)
-	Events.realm_victory.connect(_on_realm_victory)
+	Events.heart_shattered.connect(_on_heart_shattered)
 	Events.storyteller_resolved.connect(func(_event_id: StringName, _choice_id: StringName) -> void:
 		_story_events += 1
 	)
@@ -201,7 +201,7 @@ func confirm_site(cell: int) -> void:
 func _found_colony(seed_value: int, site_id: StringName) -> void:
 	Colony.reset()
 	Divine.reset()
-	Threat.reset()
+	Threat.reset(true)
 	# Monsters share the Y-sorted container with villagers and buildings so they
 	# draw in the right order against everything they are attacking.
 	Threat.set_spawn_parent(entities)
@@ -370,7 +370,7 @@ func found_realm_site(site_id: StringName) -> bool:
 	ledger.keep_cell = World.keep_cell
 	Colony.reset()
 	Divine.reset()
-	Threat.reset()
+	Threat.reset(true)
 	Threat.set_spawn_parent(entities)
 	Colony.set_spawn_parent(entities)
 	for kind: StringName in caravan["cargo"]:
@@ -517,11 +517,15 @@ func ascend() -> void:
 		_end_run(true, tr(&"NOTICE_ASCEND"))
 
 
-func _on_realm_victory() -> void:
-	_end_run(true, tr(&"REALM_NOTICE_VICTORY"), true)
+func _on_heart_shattered() -> void:
+	# Breaking the Heart advances the profile but does not terminate the live world.
+	# The player may keep tending the Realm or bank the run explicitly with Ascend.
+	Meta.record_ascension()
+	RunSave.save()
+	Events.notice.emit(tr(&"REALM_NOTICE_HEART_SHATTERED"), 2)
 
 
-func _end_run(ascended: bool, message: String, realm_completed: bool = false) -> void:
+func _end_run(ascended: bool, message: String) -> void:
 	if _ended:
 		return
 	_ended = true
@@ -554,8 +558,6 @@ func _end_run(ascended: bool, message: String, realm_completed: bool = false) ->
 	#
 	# Phase 4 replaces this with closing the ring around the Heart. Voluntarily walking away from a
 	# world you have made safe is the closest thing this version has to completing one.
-	if realm_completed:
-		Meta.record_ascension()
 	Meta.record_run({
 		"seed": Realm.world_seed if Realm.world_seed != 0 else World.seed_value,
 		"difficulty": String(Difficulties.current_id()),
@@ -569,7 +571,7 @@ func _end_run(ascended: bool, message: String, realm_completed: bool = false) ->
 		"events": _story_events,
 		"shards": shards,
 		"ascended": ascended,
-		"realm_completed": realm_completed,
+		"realm_completed": false,
 		"progression_awards": Difficulties.progression_awards(),
 	})
 	RunSave.clear()

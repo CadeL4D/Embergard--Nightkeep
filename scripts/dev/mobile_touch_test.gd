@@ -24,7 +24,7 @@ func _ready() -> void:
 	_test_menu_dropdown(run.get_node("Hud"))
 	_test_center_progression(run.get_node("Hud"))
 	_test_house_branches()
-	_test_hand(run.get_node("GodHand"))
+	_test_hand(run.get_node("GodHand"), camera)
 	_test_line_placement(run.get_node("PlacementController"))
 	_test_accessibility()
 	RunSave.clear()
@@ -283,7 +283,7 @@ func _test_house_branches() -> void:
 		"housing branches trade more capacity for faster rest recovery")
 
 
-func _test_hand(hand: Node) -> void:
+func _test_hand(hand: Node, camera: Camera2D) -> void:
 	Divine.faith = 999.0
 	hand.set_hand_mode(true)
 	var villager: Villager = Colony.villagers[0]
@@ -299,6 +299,33 @@ func _test_hand(hand: Node) -> void:
 	hand._handle_hand_tap(World.grid.to_world_index(destination))
 	_expect(hand.held == null and not villager.held_by_hand,
 		"Hand mode previews and drops the target with a second tap")
+
+	var essence_cell := World.nearest_walkable(World.keep_cell, 5)
+	var screen := camera.get_canvas_transform() * World.grid.to_world_index(essence_cell)
+	Colony.drop_essence(essence_cell, 2, &"mobile_test")
+	var camera_before := camera.position
+	hand._on_touch(_touch(7, screen, true))
+	hand._on_drag(_drag(7, screen + Vector2(28, 0), Vector2(28, 0)))
+	hand._on_touch(_touch(7, screen + Vector2(28, 0), false))
+	_expect(Colony.essence_total() == 0 and camera.position.is_equal_approx(camera_before),
+		"one-finger Essence sweeping collects motes without panning or lifting")
+
+	# The surface consumed finger one, so promotion must seed it into CameraRig exactly once before
+	# the live second finger is allowed through, matching the gather brush contract.
+	Colony.drop_essence(essence_cell, 1, &"mobile_navigation_test")
+	hand._on_touch(_touch(8, screen, true))
+	var second := screen + Vector2(80, 0)
+	hand._on_touch(_touch(9, second, true))
+	camera._handle_paint_touch(_touch(9, second, true))
+	var zoom_before := camera.zoom.x
+	camera._handle_paint_drag(_drag(9, second + Vector2(40, 0), Vector2(40, 0)))
+	_expect(hand._sweep_navigating and not is_equal_approx(camera.zoom.x, zoom_before),
+		"a second finger promotes an Essence sweep to camera navigation")
+	hand._on_touch(_touch(9, second + Vector2(40, 0), false))
+	camera._handle_paint_touch(_touch(9, second + Vector2(40, 0), false))
+	hand._on_touch(_touch(8, screen, false))
+	camera._handle_paint_touch(_touch(8, screen, false))
+	Colony.loose_drops.clear()
 	hand.set_hand_mode(false)
 
 

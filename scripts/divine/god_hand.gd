@@ -60,6 +60,11 @@ var _pending_ember_grab: bool = false
 var _drag_finger: int = -1
 var _touch_start: Vector2 = Vector2.ZERO
 var _touch_start_time: float = 0.0
+var _sweeping_essence: bool = false
+var _sweep_navigating: bool = false
+var _sweep_finger: int = -1
+var _sweep_last_cell: int = -1
+var _sweep_touches: Dictionary = {}
 
 @onready var _camera: Camera2D = get_node("../CameraRig")
 
@@ -96,6 +101,8 @@ func _cancel_desktop_action() -> void:
 
 
 func _on_touch(event: InputEventScreenTouch) -> void:
+	if _handle_essence_touch(event):
+		return
 	if event.pressed:
 		if _dragging_ember or _pending_ember_grab:
 			return
@@ -143,6 +150,8 @@ func _on_touch(event: InputEventScreenTouch) -> void:
 
 
 func _on_drag(event: InputEventScreenDrag) -> void:
+	if _handle_essence_drag(event):
+		return
 	if hand_mode and held != null and event.index == _drag_finger:
 		_update_hand_preview(_to_world(event.position))
 		get_viewport().set_input_as_handled()
@@ -282,6 +291,7 @@ func set_hand_mode(active: bool) -> void:
 	held = null
 	_held_origin_cell = -1
 	_hand_preview_cell = -1
+	_reset_essence_sweep()
 	hand_mode = active
 	if active:
 		disarm()
@@ -302,6 +312,8 @@ func _handle_hand_tap(world_pos: Vector2) -> bool:
 			var building := _pick_building(cell)
 			if building != null and building.def.menu_hidden:
 				picked = building
+		if picked == null and _try_reap(world_pos):
+			return true
 		if picked == null or not _hand_can_lift(picked):
 			Events.notice.emit(tr(&"HAND_INVALID_TARGET"), 1)
 			return true
@@ -327,17 +339,65 @@ func _handle_hand_tap(world_pos: Vector2) -> bool:
 	if not Divine.pay(cost):
 		Events.notice.emit(L10n.t(&"HAND_NEED_FAITH", [ceili(cost)]), 1)
 		return true
+	var drowning := _is_drowning_drop(destination)
 	if held is Building:
 		held.drop_from_hand(destination)
 	else:
 		held.position = World.grid.to_world_index(destination)
 		held.held_by_hand = false
 		held.think_urgent = true
+	if drowning:
+		Events.hand_action.emit(&"drown", World.grid.to_world_index(destination))
+		held.die(&"drowned")
 	Events.hand_action.emit(&"drop", World.grid.to_world_index(destination))
 	held = null
 	_held_origin_cell = -1
 	_hand_preview_cell = -1
 	queue_redraw()
+	return true
+
+
+## Faith to tear a resource out of the ground with your own hands.
+##
+## Priced so it is never the economy — a colony that reaped its way to a Great Hall would have no
+## reason to employ anybody — but cheap enough to be the answer in the ten seconds before dusk
+## when a gate needs one more log and every woodcutter is on the far side of the map.
+const REAP_COST := 7.0
+
+
+## The god doing the colony's work: badly, instantly, and at a price.
+##
+## Deliberately ignores gathering designations and job assignments. Those exist to tell VILLAGERS
+## where to work; this is the player reaching down and taking something, and making it obey the
+## work orders would turn the game's most direct verb into another way of filing a request.
+func _try_reap(world_pos: Vector2) -> bool:
+	var cell := World.grid.to_cell_index(world_pos)
+	if cell == -1:
+		return false
+	var feature := World.feature_at(cell)
+	if not Terrain.is_harvestable(feature):
+		return false
+	var harvest: Dictionary = Terrain.yield_of(feature)
+	if harvest.is_empty():
+		return false
+	if not Divine.pay(REAP_COST):
+		Events.notice.emit(L10n.t(&"HAND_NEED_FAITH", [ceili(REAP_COST)]), 1)
+		return true
+
+	# Straight into the stores rather than onto the ground: the Hand has no arms to haul with,
+	# and a pile nobody is coming for would be a worse answer than none.
+	var taken := PackedStringArray()
+	for kind: StringName in harvest:
+		var amount := int(round(float(harvest[kind]) * Climate.gather_multiplier(feature)))
+		if amount <= 0:
+			continue
+		Colony.add(kind, amount)
+		taken.append(L10n.t(&"COST_ENTRY", [amount, L10n.resource(kind)]))
+	Colony.maybe_drop_harvest_essence(cell)
+	World.clear_feature(cell)
+	Events.hand_action.emit(&"reap", world_pos)
+	if not taken.is_empty():
+		Events.notice.emit(L10n.t(&"HAND_REAPED", [", ".join(taken)]), 0)
 	return true
 
 
@@ -401,7 +461,24 @@ func _hand_drop_valid(destination: int) -> bool:
 		return false
 	if held is Building:
 		return held.can_drop_from_hand(destination)
+	# Water is a legal destination for something hostile, and a fatal one. This is the oldest
+	# verb in the genre and the reason picking a monster up feels like power rather than tidying:
+	# the Hand could already move a Shambler somewhere inconvenient, and now it can end it.
+	if _is_drowning_drop(destination):
+		return true
 	return World.is_walkable(destination)
+
+
+## Villagers are deliberately excluded. Drowning your own people is a real option in the games
+## this borrows from, but this one is played with a thumb on a phone, and a mistap that kills a
+## colonist is a far worse trade than a verb withheld.
+func _is_drowning_drop(destination: int) -> bool:
+	if held is Building or held is Villager or not (held is Agent):
+		return false
+	if not World.grid.is_valid_index(destination):
+		return false
+	var terrain: int = World.terrain[destination]
+	return terrain == Terrain.Type.WATER or terrain == Terrain.Type.DEEP_WATER
 
 
 func _update_hand_preview(world_pos: Vector2) -> void:
@@ -508,6 +585,10 @@ func _draw() -> void:
 		var light_radius := float(def.light_radius * Grid.TILE_SIZE)
 		draw_arc(center, light_radius, 0.0, TAU, 64,
 			Color(1.0, 0.88, 0.48, 0.55), 1.0, true)
+	if def.energy_radius > 0:
+		var energy_radius := float(def.energy_radius * Grid.TILE_SIZE)
+		draw_arc(center, energy_radius, 0.0, TAU, 64,
+			Color(0.48, 0.68, 1.0, 0.65), 1.5, true)
 	if def.workplace_key() == &"maintenance":
 		var repair_radius := 10.0 * Grid.TILE_SIZE
 		draw_arc(center, repair_radius, 0.0, TAU, 64,
@@ -515,6 +596,92 @@ func _draw() -> void:
 
 
 # --- Helpers ----------------------------------------------------------------------------
+
+## Essence uses the same mobile contract as the gather brush: one finger owns the board action,
+## while a second promotes the gesture to camera navigation. Starting away from a mote falls
+## through to ordinary Hand lift/reap behavior, so adding the sweep does not steal existing taps.
+func _handle_essence_touch(event: InputEventScreenTouch) -> bool:
+	if not hand_mode or held != null:
+		return false
+	if event.pressed:
+		_sweep_touches[event.index] = event.position
+	else:
+		_sweep_touches.erase(event.index)
+	if _sweep_navigating:
+		if _sweep_touches.is_empty():
+			_reset_essence_sweep()
+		return true
+	if event.pressed and not _sweeping_essence:
+		var cell := World.grid.to_cell_index(_to_world(event.position))
+		if not Colony.has_essence_near(cell, 2):
+			_sweep_touches.erase(event.index)
+			return false
+		_sweeping_essence = true
+		_sweep_finger = event.index
+		_sweep_last_cell = -1
+		sweep_essence_at(cell)
+		get_viewport().set_input_as_handled()
+		return true
+	if event.pressed and event.index != _sweep_finger:
+		_sweep_navigating = true
+		_sweeping_essence = false
+		_sweep_last_cell = -1
+		if not _camera._touches.has(_sweep_finger):
+			var first := InputEventScreenTouch.new()
+			first.index = _sweep_finger
+			first.position = Vector2(_sweep_touches.get(_sweep_finger, event.position))
+			first.pressed = true
+			_camera._handle_paint_touch(first)
+		return true
+	if not event.pressed and event.index == _sweep_finger:
+		_reset_essence_sweep()
+		get_viewport().set_input_as_handled()
+		return true
+	return _sweeping_essence
+
+
+func _handle_essence_drag(event: InputEventScreenDrag) -> bool:
+	if not hand_mode or held != null or (not _sweeping_essence and not _sweep_navigating):
+		return false
+	_sweep_touches[event.index] = event.position
+	if _sweep_navigating:
+		return true
+	if event.index != _sweep_finger:
+		return true
+	var cell := World.grid.to_cell_index(_to_world(event.position))
+	if not World.grid.is_valid_index(cell):
+		return true
+	if _sweep_last_cell == -1:
+		sweep_essence_at(cell)
+	else:
+		var from := World.grid.coord(_sweep_last_cell)
+		var to := World.grid.coord(cell)
+		var count := maxi(absi(to.x - from.x), absi(to.y - from.y))
+		for i in range(1, count + 1):
+			var point := Vector2(from).lerp(Vector2(to), float(i) / float(maxi(count, 1))).round()
+			sweep_essence_at(World.grid.index(int(point.x), int(point.y)))
+	get_viewport().set_input_as_handled()
+	return true
+
+
+## Public for deterministic behavior tests; all actual input still routes through Hand mode.
+func sweep_essence_at(cell: int) -> int:
+	if not World.grid.is_valid_index(cell):
+		return 0
+	_sweep_last_cell = cell
+	var amount := Colony.collect_essence_near(cell, 1)
+	Divine.absorb_essence(amount)
+	if amount > 0:
+		Events.hand_action.emit(&"essence", World.grid.to_world_index(cell))
+	return amount
+
+
+func _reset_essence_sweep() -> void:
+	_sweeping_essence = false
+	_sweep_navigating = false
+	_sweep_finger = -1
+	_sweep_last_cell = -1
+	_sweep_touches.clear()
 
 func _to_world(screen_pos: Vector2) -> Vector2:
 	return _camera.get_canvas_transform().affine_inverse() * screen_pos

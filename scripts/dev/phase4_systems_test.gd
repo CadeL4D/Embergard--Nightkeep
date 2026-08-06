@@ -98,19 +98,24 @@ func _ready() -> void:
 	_expect(route_copy.route_id == route.route_id and route_copy.path == route.path \
 		and route_copy.arrival_day == route.arrival_day,
 		"TradeRoute round-trips its path schedule cargo and seeded outcome")
+	var saved_essence := Colony.drop_essence(World.grid.index(0, 0), 3, &"schema_test")
 
-	_expect(RunSave.SCHEMA_VERSION == 9 and RunSave.save() and SaveService.flush(),
-		"schema 9 checkpoints GameRules and caravans in transit")
+	_expect(RunSave.SCHEMA_VERSION == 12 and RunSave.save() and SaveService.flush(),
+		"schema 12 checkpoints physical drops, local energy, supply and realm state")
 	run._clear_entities()
 	_expect(RunSave.load_into(run, run.entities),
-		"schema 9 restores the realm with no courier Nodes")
+		"schema 12 restores the realm with no courier Nodes")
 	await get_tree().process_frame
 	var restored: TradeRoute = _route_by_id(route.route_id)
 	_expect(restored != null and restored.status == &"in_transit" \
 		and int(restored.cargo.get(&"food", 0)) == 20,
 		"save/load preserves in-transit cargo and deterministic outcome")
 	_expect(Realm.selected_doctrines == [&"doc_lean_tables", &"doc_forager_levy"],
-		"schema 9 preserves the realm's equipped doctrine choices")
+		"schema 12 preserves the realm's equipped doctrine choices")
+	var restored_essence := Colony.loose_drop(saved_essence.id)
+	_expect(restored_essence != null and restored_essence.amount == 3 \
+			and restored_essence.source == &"schema_test" and restored_essence.expires_tick > Sim.tick,
+		"schema 12 preserves a physical Essence object's amount source and expiry")
 	var expected_lost := ceili(20.0 * lerpf(0.25, 0.65,
 		clampf(restored.risk, 0.0, 0.85) / 0.85)) if restored.intercepted else 0
 	Realm._process_routes(restored.arrival_day)

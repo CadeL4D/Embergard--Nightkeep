@@ -32,6 +32,9 @@ const MAX_WORKERS := 16
 const INITIAL_MASS_PER_NEST := 8
 const WORKER_SPAWN_COST := 5
 const HARVEST_INTENSITY_PER_MASS := 8
+const RECLAIM_TILES_PER_SURGE := 64
+const RECLAIM_SURGE_BUDGET := 2.0
+const RECLAIM_SURGE_CAP_SHARE := 0.25
 
 var blight_mass: int = 0
 var _harvest_claims: Dictionary = {}      # cell -> worker id
@@ -41,6 +44,16 @@ var _economy_timer: float = 0.0
 var night_index: int = 0
 var boss_stage: int = 0
 var _initial_nest_count: int = 0
+var _initial_outpost_count: int = 0
+var _initial_outposts_destroyed: int = 0
+var _regional_boss_spawned: bool = false
+var _regional_boss_defeated: bool = false
+var _heart_warden_spawned: bool = false
+var _heart_warden_defeated: bool = false
+var _core_destroyed: bool = false
+var _reclaimed_tiles_bank: int = 0
+var _reclaim_surge_budget: float = 0.0
+var _reclaim_surge_timer: float = 0.0
 
 var threat_field: FlowField = null
 
@@ -66,9 +79,11 @@ func _ready() -> void:
 	Events.building_completed.connect(_on_structures_changed)
 	Events.building_destroyed.connect(_on_structures_changed)
 	Events.nest_destroyed.connect(_on_nest_destroyed)
+	Events.blight_structure_destroyed.connect(_on_blight_structure_destroyed)
+	Events.monster_died.connect(_on_monster_died)
 
 
-func reset() -> void:
+func reset(seed_initial_works: bool = false) -> void:
 	for m in monsters:
 		if is_instance_valid(m):
 			m.queue_free()
@@ -81,6 +96,16 @@ func reset() -> void:
 	night_index = 0
 	boss_stage = 0
 	_initial_nest_count = World.nest_cells.size()
+	_initial_outpost_count = 0
+	_initial_outposts_destroyed = 0
+	_regional_boss_spawned = false
+	_regional_boss_defeated = false
+	_heart_warden_spawned = false
+	_heart_warden_defeated = false
+	_core_destroyed = World.live_nest_cells().is_empty() and not World.nest_cells.is_empty()
+	_reclaimed_tiles_bank = 0
+	_reclaim_surge_budget = 0.0
+	_reclaim_surge_timer = 0.0
 	pressure = 0.0
 	_growth_progress = 0.0
 	blight_mass = World.live_nest_cells().size() * INITIAL_MASS_PER_NEST
@@ -104,6 +129,8 @@ func reset() -> void:
 	if World.grid.cell_count > 0:
 		threat_field.setup(World)
 	_rng.seed = World.seed_value ^ 0x7A17
+	if seed_initial_works:
+		seed_initial_enemy_works()
 
 
 func set_spawn_parent(node: Node) -> void:
@@ -113,9 +140,123 @@ func set_spawn_parent(node: Node) -> void:
 func step(delta: float) -> void:
 	_update_pressure(delta)
 	_step_field()
+	if World.region_purified:
+		return
+	_try_spawn_progression_bosses()
+	_step_reclamation_surge(delta)
 	_step_waves(delta)
 	_step_enemy_economy()
 	_step_enemy_structures(delta)
+
+
+## Seed the Blight as a physical settlement: one Core plus two to four authored
+## Graveyard outposts. These are campaign-generation structures, not later worker builds.
+func seed_initial_enemy_works() -> void:
+	if World.live_nest_cells().is_empty() or not World.blight_structures.is_empty():
+		return
+	var graveyard := BlightStructures.get_structure(&"graveyard")
+	if graveyard == null:
+		return
+	var core: int = World.live_nest_cells()[0]
+	var core_coord := World.grid.coord(core)
+	var hearth_coord := World.grid.coord(World.keep_cell)
+	var wanted := 2 + absi(World.seed_value) % 3
+	var placed: Array[int] = []
+	var placement_rng := RandomNumberGenerator.new()
+	placement_rng.seed = World.seed_value ^ 0x51A7E
+	for _attempt in 1600:
+		if placed.size() >= wanted:
+			break
+		var angle := placement_rng.randf_range(0.0, TAU)
+		var distance := placement_rng.randf_range(14.0, 28.0)
+		var point := core_coord + Vector2i(roundi(cos(angle) * distance),
+			roundi(sin(angle) * distance))
+		if not World.grid.is_valid_v(point):
+			continue
+		var cell := World.grid.index_v(point)
+		var core_distance := Vector2(point - core_coord).length_squared()
+		if core_distance < 14.0 * 14.0 or core_distance > 28.0 * 28.0 \
+				or Vector2(point - hearth_coord).length_squared() < 28.0 * 28.0:
+			continue
+		var separated := true
+		for other: int in placed:
+			if World.grid.dist_sq(cell, other) < 10 * 10:
+				separated = false
+				break
+		if not separated or World.claimed[cell] != 0 or World.occupancy[cell] != 0 \
+				or World.feature[cell] != Terrain.Feature.NONE \
+				or not Terrain.WALKABLE.get(World.terrain[cell], false):
+			continue
+		World.blight_field.seed_at(cell, 160)
+		if World.add_blight_structure(cell, graveyard, true):
+			placed.append(cell)
+	_initial_outpost_count = placed.size()
+
+
+func progression_state() -> Dictionary:
+	return {
+		"initial_outpost_count": _initial_outpost_count,
+		"initial_outposts_destroyed": _initial_outposts_destroyed,
+		"regional_boss_spawned": _regional_boss_spawned,
+		"regional_boss_defeated": _regional_boss_defeated,
+		"heart_warden_spawned": _heart_warden_spawned,
+		"heart_warden_defeated": _heart_warden_defeated,
+		"core_destroyed": _core_destroyed,
+		"reclaimed_tiles_bank": _reclaimed_tiles_bank,
+		"reclaim_surge_budget": _reclaim_surge_budget,
+	}
+
+
+func restore_progression_state(data: Dictionary) -> void:
+	_initial_outpost_count = int(data.get("initial_outpost_count", 0))
+	_initial_outposts_destroyed = int(data.get("initial_outposts_destroyed", 0))
+	_regional_boss_spawned = bool(data.get("regional_boss_spawned", false))
+	_regional_boss_defeated = bool(data.get("regional_boss_defeated", false))
+	_heart_warden_spawned = bool(data.get("heart_warden_spawned", false))
+	_heart_warden_defeated = bool(data.get("heart_warden_defeated", false))
+	_core_destroyed = bool(data.get("core_destroyed", World.live_nest_cells().is_empty()))
+	_reclaimed_tiles_bank = int(data.get("reclaimed_tiles_bank", 0))
+	_reclaim_surge_budget = float(data.get("reclaim_surge_budget", 0.0))
+	if _initial_outpost_count <= 0:
+		for row: Dictionary in World.blight_structures.values():
+			if bool(row.get("initial_outpost", false)):
+				_initial_outpost_count += 1
+		_initial_outpost_count += _initial_outposts_destroyed
+	_sync_boss_stage()
+
+
+func regional_boss_defeated() -> bool:
+	return _regional_boss_spawned and _regional_boss_defeated
+
+
+func heart_warden_defeated() -> bool:
+	return _heart_warden_spawned and _heart_warden_defeated
+
+
+func note_reclaimed_tiles(cleared: int) -> void:
+	if cleared <= 0 or World.region_purified:
+		return
+	_reclaimed_tiles_bank += cleared
+	var cap := budget_for_night(night_index + 1) * RECLAIM_SURGE_CAP_SHARE
+	while _reclaimed_tiles_bank >= RECLAIM_TILES_PER_SURGE:
+		_reclaimed_tiles_bank -= RECLAIM_TILES_PER_SURGE
+		_reclaim_surge_budget = minf(_reclaim_surge_budget + RECLAIM_SURGE_BUDGET, cap)
+
+
+func _step_reclamation_surge(delta: float) -> void:
+	if _reclaim_surge_budget <= 0.0 or Sim.phase == Sim.Phase.NIGHT \
+			or _spawn_parent == null or at_cap():
+		return
+	_reclaim_surge_timer -= delta
+	if _reclaim_surge_timer > 0.0:
+		return
+	_reclaim_surge_timer = 2.0
+	var pool := Monsters.eligible(maxi(night_index, 1) + Difficulties.monster_night_shift())
+	if pool.is_empty():
+		return
+	var def := _pick(pool)
+	if def != null and _spawn_one(def, 1.0):
+		_reclaim_surge_budget = maxf(_reclaim_surge_budget - def.threat_cost, 0.0)
 
 
 # --- Physical Blight economy ------------------------------------------------------------
@@ -377,8 +518,14 @@ func _goal_cells() -> PackedInt32Array:
 	var goals := PackedInt32Array()
 	# Everything the colony would hate to lose. Multi-source means monsters head
 	# for whatever is nearest rather than all funnelling to one point.
+	#
+	# Barriers are deliberately NOT in this list. A wall that is its own goal cannot funnel
+	# anything — the field's nearest goal for a monster outside the wall was the wall itself,
+	# so WALL_PENALTY never got the chance to route it anywhere and the gate the player left
+	# open was ignored. Walls are pure cost now; what the horde walks toward is what the colony
+	# actually needs. See BuildingDef.is_horde_goal.
 	for b in Colony.buildings:
-		if is_instance_valid(b) and not b.is_site():
+		if is_instance_valid(b) and not b.is_site() and b.def.is_horde_goal():
 			for cell in b.cells:
 				goals.append(cell)
 	if goals.is_empty() and World.keep_cell != -1:
@@ -397,6 +544,10 @@ func _on_structures_changed(_b: Node) -> void:
 # --- Waves ------------------------------------------------------------------------------
 
 func _on_phase_changed(phase: int, _duration: float) -> void:
+	if World.region_purified:
+		_pending_budget = 0.0
+		_pulses_left = 0
+		return
 	if phase == Sim.Phase.NIGHT:
 		_begin_night()
 	elif phase == Sim.Phase.DUSK:
@@ -683,15 +834,58 @@ func resolve_death_burst(origin: Vector2, damage: float, radius_tiles: float,
 
 
 func _on_nest_destroyed(cell: int) -> void:
-	if _initial_nest_count <= 0:
-		_initial_nest_count = World.nest_cells.size()
-	var live := World.live_nest_cells().size()
-	if boss_stage == 0 and live * 2 <= _initial_nest_count:
-		boss_stage = 1
-		_spawn_regional_boss(_regional_boss_id(), cell)
-	elif boss_stage == 1 and live <= 1:
+	_core_destroyed = World.live_nest_cells().is_empty()
+	_try_spawn_progression_bosses(cell)
+
+
+func _on_blight_structure_destroyed(cell: int, _kind: StringName,
+		was_initial_outpost: bool) -> void:
+	if was_initial_outpost:
+		_initial_outposts_destroyed += 1
+	_try_spawn_progression_bosses(cell)
+
+
+func _on_monster_died(monster: Node) -> void:
+	if not monster is Monster:
+		return
+	var dead := monster as Monster
+	if dead.def == null:
+		return
+	var kind: StringName = dead.def.id
+	if kind == _regional_boss_id() and _regional_boss_spawned:
+		_regional_boss_defeated = true
+	elif kind == &"heart_warden" and _heart_warden_spawned:
+		_heart_warden_defeated = true
+	_sync_boss_stage()
+
+
+func _try_spawn_progression_bosses(threatened_cell: int = -1) -> void:
+	if World.region_purified:
+		return
+	var trigger := threatened_cell
+	if trigger == -1:
+		trigger = World.nest_cells[0] if not World.nest_cells.is_empty() else World.keep_cell
+	var half_outposts := ceili(float(_initial_outpost_count) * 0.5)
+	var regional_due := (_initial_outpost_count > 0 \
+		and _initial_outposts_destroyed >= half_outposts) \
+		or (_initial_outpost_count == 0 and _core_destroyed)
+	if regional_due and not _regional_boss_spawned \
+			and _spawn_regional_boss(_regional_boss_id(), trigger):
+		_regional_boss_spawned = true
+	if _core_destroyed and Realm.awake_id == Realm.heart_region_id \
+			and not _heart_warden_spawned \
+			and _spawn_regional_boss(&"heart_warden", trigger):
+		_heart_warden_spawned = true
+	_sync_boss_stage()
+
+
+func _sync_boss_stage() -> void:
+	if _heart_warden_spawned:
 		boss_stage = 2
-		_spawn_regional_boss(&"heart_warden", cell)
+	elif _regional_boss_spawned:
+		boss_stage = 1
+	else:
+		boss_stage = 0
 
 
 func _regional_boss_id() -> StringName:
@@ -773,24 +967,63 @@ func _nearest_corrupt_anchor(from: int) -> int:
 
 # --- Storyteller -------------------------------------------------------------------
 
-## Target tension rises with the day count but is pulled DOWN by how much the player
-## is struggling, so a colony on the ropes gets a breather and a thriving one gets
-## squeezed.
+## Local containment is the only pressure model. Night count still establishes the baseline
+## wave curve; this 0-1 value measures how tightly the player has boxed the Blight below the
+## territory its Core and physical works are trying to hold.
 func _update_pressure(delta: float) -> void:
-	var day := float(Sim.day)
+	if World.region_purified:
+		pressure = 0.0
+		target_pressure = 0.0
+		return
 	var blight_cover: float = World.blight_field.coverage() if World.blight_field else 0.0
-	var pop := float(maxi(Colony.population(), 1))
-
-	# Territory pressure is legible and counter-playable. Confining the Blight below the ground it
-	# wants raises aggression, while razing its actual economy removes that pressure immediately.
-	var desired_territory := clampf(0.08 + day * 0.006, 0.08, 0.34)
-	var boxed_in := maxf(desired_territory - blight_cover, 0.0)
-	var economy_pressure := float(World.blight_structures.size()) * 0.025
-	target_pressure = 0.35 + day * 0.04 + blight_cover * 0.35 \
-		+ boxed_in * 0.9 + economy_pressure
-	var strength := clampf(pop / 20.0, 0.0, 1.5)
-	target_pressure = clampf(target_pressure * (0.6 + strength * 0.4), 0.0, 2.0)
+	target_pressure = containment_target_for(
+		blight_cover, World.blight_structures.size(), Sim.day)
 	pressure = lerpf(pressure, target_pressure, clampf(delta * 0.1, 0.0, 1.0))
+
+
+func containment_target_for(actual_coverage: float, structure_count: int,
+		world_day: int) -> float:
+	var desired := clampf(0.08 + float(world_day) * 0.006 \
+		+ float(mini(structure_count, 12)) * 0.004, 0.08, 0.40)
+	return clampf((desired - actual_coverage) / maxf(desired, 0.01), 0.0, 1.0)
+
+
+func pressure_breakdown() -> Dictionary:
+	var actual := World.blight_field.coverage() if World.blight_field else 0.0
+	var structure_count := World.blight_structures.size()
+	var desired := clampf(0.08 + float(Sim.day) * 0.006 \
+		+ float(mini(structure_count, 12)) * 0.004, 0.08, 0.40)
+	var trend := 0
+	if target_pressure > pressure + 0.02:
+		trend = 1
+	elif target_pressure < pressure - 0.02:
+		trend = -1
+	return {
+		"day_base": clampf(0.08 + float(Sim.day) * 0.006, 0.08, 0.40),
+		"desired_coverage": desired,
+		"actual_coverage": actual,
+		"containment_ratio": containment_target_for(actual, structure_count, Sim.day),
+		"enemy_structure_count": structure_count,
+		"current_pressure": pressure,
+		"target_pressure": target_pressure,
+		"trend": trend,
+		"suppressed": World.region_purified,
+	}
+
+
+func complete_regional_purification() -> void:
+	World.region_purified = true
+	pressure = 0.0
+	target_pressure = 0.0
+	blight_mass = 0
+	_growth_progress = 0.0
+	_pending_budget = 0.0
+	_pulses_left = 0
+	_reclaimed_tiles_bank = 0
+	_reclaim_surge_budget = 0.0
+	_harvest_claims.clear()
+	_construction_claims.clear()
+	_worker_tasks.clear()
 
 
 ## Threat budget for a night, in monster threat-cost points.
@@ -816,7 +1049,7 @@ func _update_pressure(delta: float) -> void:
 ## invisible stat multipliers.
 func budget_for_night(night: int) -> float:
 	var base := 4.0 + float(night) * 2.5 + pow(1.18, float(night)) * 1.5
-	return base * (0.75 + pressure * 0.5) * Meta.threat_dial() \
+	return base * (1.0 + pressure * 0.50) * Meta.threat_dial() \
 		* Difficulties.threat_mult() * Climate.threat_multiplier()
 
 

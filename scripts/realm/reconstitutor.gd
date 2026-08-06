@@ -21,6 +21,7 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 		World.feature = data["feature"].duplicate()
 	if data.has("blight"):
 		World.blight = data["blight"].duplicate()
+	World.region_purified = ledger.purified
 	World.rebuild_nest_hp()
 	for cell in data.get("nest_hp", {}):
 		var at := int(cell)
@@ -38,6 +39,8 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 		Colony.overflow = data.get("overflow", {}).duplicate(true)
 		Colony.overflow_spoilage_progress = data.get("overflow_spoilage", {}).duplicate(true)
 		Colony.overflow_items = data.get("overflow_items", []).duplicate(true)
+		Colony.restore_loose_drops(data.get("loose_drops", []),
+			int(data.get("next_loose_drop_id", 1)))
 		Colony._next_item_serial = int(data.get("next_item_serial", 1))
 	Colony.memorials = data.get("memorials", []).duplicate(true)
 	Colony.reserved = data.get("reserved", {}).duplicate(true)
@@ -53,19 +56,26 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 	Threat.set_growth_progress(float(data.get("blight_growth", 0.0)))
 	Threat.blight_mass = int(data.get("blight_mass",
 		World.live_nest_cells().size() * Threat.INITIAL_MASS_PER_NEST))
-	Threat.boss_stage = int(data.get("blight_boss_stage", 0))
 	DefenseControl.load_dict(data.get("defense_control", {}))
 
 	for cell in data.get("blight_structures", {}):
 		var at := int(cell)
 		var row: Dictionary = data["blight_structures"][cell]
 		var struct_def := BlightStructures.get_structure(StringName(row.get("kind", &"")))
-		if struct_def == null or not World.add_blight_structure(at, struct_def):
+		if struct_def == null or not World.add_blight_structure(at, struct_def,
+				bool(row.get("initial_outpost", false))):
 			continue
 		World.blight_structures[at]["hp"] = float(row.get("hp", struct_def.max_hp))
 		World.blight_structures[at]["cooldown"] = float(row.get("cooldown", 0.0))
+	Threat.restore_progression_state(data.get("blight_progression", {
+		"regional_boss_spawned": int(data.get("blight_boss_stage", 0)) >= 1,
+		"heart_warden_spawned": int(data.get("blight_boss_stage", 0)) >= 2,
+	}))
+	if World.region_purified:
+		Threat.complete_regional_purification()
 
 	_restore_buildings(data.get("buildings", []), entities)
+	Colony.restore_supply_requests(data.get("supply_requests", []))
 	if has_physical_inventory:
 		Colony.rebuild_stock_cache()
 	else:
@@ -73,6 +83,7 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 		# stores deterministically, then keep any excess at the Hearth.
 		Colony.distribute_legacy_stock(data.get("stock", {}))
 	_restore_villagers(data.get("villagers", []), entities)
+	Colony.rebuild_supply_reservations_from_carriers()
 	Colony.refresh_households()
 	_restore_blight_workers(data.get("blight_workers", []), entities)
 	if data.has("taken_up_powers"):
@@ -110,6 +121,7 @@ static func _restore_buildings(rows: Array, entities: Node) -> void:
 		b.spoilage_progress = row.get("spoilage_progress", {}).duplicate(true)
 		b.input_buffer = row.get("input_buffer", {}).duplicate(true)
 		b.output_buffer = row.get("output_buffer", {}).duplicate(true)
+		b.stored_energy = clampi(int(row.get("stored_energy", 0)), 0, def.energy_capacity)
 		b.position = Colony._building_origin(def, b.anchor)
 		entities.add_child(b)
 		if bool(row.get("complete", false)):
@@ -134,6 +146,7 @@ static func _restore_villagers(rows: Array, entities: Node) -> void:
 		v.health = float(row.get("health", v.max_health))
 		v.carry_kind = StringName(row.get("carry_kind", &""))
 		v.carry_amount = int(row.get("carry_amount", 0))
+		v._supply_request_id = int(row.get("supply_request_id", 0))
 		v.pending_loads = row.get("pending_loads", []).duplicate(true)
 		v.statuses = row.get("statuses", {}).duplicate(true)
 		if row.has("record"):

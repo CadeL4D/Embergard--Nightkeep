@@ -116,6 +116,11 @@ extends Resource
 @export var faith_capacity: float = 0.0
 ## Standing Faith burden while this completed structure remains active.
 @export var faith_upkeep: float = 0.0
+## A Collector stores local magical energy converted from physical Essence motes. Consumers must
+## stand inside `energy_radius`; there is deliberately no realm-wide energy wallet.
+@export var energy_capacity: int = 0
+@export var energy_radius: int = 0
+@export var energy_per_essence: int = 0
 ## Phase-3 physical inventory metadata. Phase 1 still uses the aggregate cache,
 ## but content declares its eventual capacity and accepted categories now.
 @export var inventory_capacity: int = 0
@@ -161,6 +166,26 @@ extends Resource
 func workplace_key() -> StringName:
 	return workplace_role if not workplace_role.is_empty() else id
 
+
+## Whether the horde's flow field should treat this as somewhere worth walking TO.
+##
+## This is what makes a wall a wall. The field already prices crossing a barrier at WALL_PENALTY
+## so that a horde routes around a palisade and pours through whatever gap the player left — but
+## that pricing can only route a monster if there is somewhere ELSE to route it to. While every
+## building cell was a goal, the nearest goal for anything standing outside the wall was the wall,
+## so the detour never happened and the gate this class's header describes as "deliberately a
+## funnel" was decoration. Walls became hit points instead of geometry.
+##
+## Derived rather than declared, per this class's header: the question is "would losing this hurt
+## the colony", and the properties that answer it are already here. A tower counts because it is a
+## structure in the way that shoots back; a spike barricade does not, because it is floor.
+func is_horde_goal() -> bool:
+	if center_tier > 0 or is_stockpile or sleep_slots > 0 or worker_slots > 0 \
+			or provides_water or faith_capacity > 0.0 or energy_capacity > 0 \
+			or tome_slots > 0 or work_aura > 0.0:
+		return true
+	return attack_damage > 0.0 and blocks_movement
+
 @export_group("Defence")
 ## Damage per shot. Zero means the building does not fight.
 @export var attack_damage: float = 0.0
@@ -174,6 +199,8 @@ func workplace_key() -> StringName:
 @export var knockback_tiles: float = 0.0
 @export var ammo_kind: StringName = &""
 @export var ammo_per_shot: int = 0
+## Local Collector energy consumed by each shot. Zero keeps ordinary weapons purely physical.
+@export var energy_per_shot: int = 0
 @export var default_target_policy: StringName = &"nearest"
 @export var target_tags: Array[StringName] = []
 @export var requires_line_of_fire: bool = true

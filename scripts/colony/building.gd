@@ -84,6 +84,8 @@ var item_inventory: Array[Dictionary] = []
 var spoilage_progress: Dictionary = {}
 var input_buffer: Dictionary = {}
 var output_buffer: Dictionary = {}
+## Collector charge. It belongs to this physical building and is lost if the building falls.
+var stored_energy: int = 0
 
 @onready var _sprite: Sprite2D = $Sprite
 @onready var _progress_back: ColorRect = $Progress/Back
@@ -317,6 +319,7 @@ func begin_upgrade(next: BuildingDef) -> bool:
 	_sprite.texture = next.sprite
 	_sprite.offset = Vector2(0, -next.tile_size().y)
 	z_index = -2 if not next.blocks_movement else 0
+	Colony.mark_supply_requests_dirty()
 	_refresh_visuals()
 	return true
 
@@ -335,6 +338,7 @@ func complete() -> void:
 	work_done = def.build_work
 	hp = def.max_hp
 	_apply_effects()
+	Colony.mark_supply_requests_dirty()
 
 	_refresh_visuals()
 	completed.emit(self)
@@ -806,9 +810,17 @@ func _fire_at_structure(cell: int) -> bool:
 
 
 func _consume_ammo() -> bool:
+	if not def.ammo_kind.is_empty() and def.ammo_per_shot > 0 \
+			and int(input_buffer.get(def.ammo_kind, 0)) < def.ammo_per_shot:
+		return false
+	if def.energy_per_shot > 0 and not Colony.draw_energy_near(centre_cell(), def.energy_per_shot):
+		return false
 	if def.ammo_kind.is_empty() or def.ammo_per_shot <= 0:
 		return true
-	return Colony.spend_near(centre_cell(), {def.ammo_kind: def.ammo_per_shot})
+	# A tower fires from its own magazine, never from an aggregate store on the far side of
+	# the colony. consume_building_inputs also updates the stock and committed-buffer caches,
+	# keeping the shot inside the same conservation ledger as workshop production.
+	return Colony.consume_building_inputs(self, {def.ammo_kind: def.ammo_per_shot})
 
 
 func _shot_damage() -> float:
@@ -964,6 +976,27 @@ func _draw() -> void:
 		var output_fill := clampf(float(_buffer_used(output_buffer)) / float(def.output_capacity), 0.0, 1.0)
 		draw_rect(Rect2(0, y, width, 2), Color(0.08, 0.07, 0.06, 0.8))
 		draw_rect(Rect2(0, y, width * output_fill, 2), Color(0.34, 0.78, 0.48, 0.95))
+		y += 3.0
+	if def.energy_capacity > 0:
+		var energy_fill := clampf(float(stored_energy) / float(def.energy_capacity), 0.0, 1.0)
+		draw_rect(Rect2(0, y, width, 2), Color(0.05, 0.07, 0.14, 0.85))
+		draw_rect(Rect2(0, y, width * energy_fill, 2), Color(0.48, 0.62, 1.0, 0.98))
+		y += 3.0
+
+	# Damage, shown only once it exists. A permanent green health bar over every hut is noise;
+	# a red one over the two buildings the night chewed on is information.
+	if needs_repair():
+		var health := clampf(hp / maxf(def.max_hp, 1.0), 0.0, 1.0)
+		draw_rect(Rect2(0, y, width, 2), Color(0.1, 0.05, 0.05, 0.85))
+		draw_rect(Rect2(0, y, width * health, 2), Color(0.95, 0.32, 0.26, 0.95))
+		y += 3.0
+
+	# A workplace that has quietly stopped producing. This is the state that stranded farmers at
+	# a full barn for a whole run: from the outside the building looked fine, the workers looked
+	# busy, and nothing anywhere said the shift had ended. An amber bar says it.
+	if def.worker_slots > 0 and (production_paused
+			or (def.output_capacity > 0 and output_free() <= 0)):
+		draw_rect(Rect2(0, y, width, 2), Color(0.96, 0.72, 0.18, 0.9))
 
 
 # --- Damage -----------------------------------------------------------------------------

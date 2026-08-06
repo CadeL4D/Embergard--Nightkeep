@@ -234,9 +234,11 @@ func _draw_overview(alpha: float) -> void:
 		var marker := Color("f6bd5a")
 		if ledger.fallen:
 			marker = Color("6f5963")
+		elif ledger.purified:
+			marker = Color("8fd5a6")
 		elif id == Realm.awake_id:
 			marker = Color("fff0b0")
-		if ledger.corruption > 0.005:
+		if not ledger.purified and ledger.corruption > 0.005:
 			var corruption_alpha := clampf(0.10 + ledger.corruption * 0.34, 0.10, 0.28) * alpha
 			draw_arc(center, radius + 3.5, -PI * 0.8,
 				-PI * 0.8 + TAU * clampf(ledger.corruption * 1.8, 0.12, 0.94),

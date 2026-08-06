@@ -12,49 +12,49 @@ const DEFINITIONS := {
 	&"coast": {
 		"name": &"BIOME_COAST",
 		"hazard": &"BIOME_COAST_HAZARD",
-		"nest_count": 3, "nest_min": 31, "nest_span": 7.0,
+		"nest_count": 1, "nest_min": 31, "nest_span": 7.0,
 		"forest_bonus": -0.03, "stone_bonus": -0.01, "food_bonus": 0.05,
 		"threat": 0.92, "blight": 0.90,
 	},
 	&"grassland": {
 		"name": &"BIOME_GRASSLAND",
 		"hazard": &"BIOME_GRASSLAND_HAZARD",
-		"nest_count": 4, "nest_min": 30, "nest_span": 8.0,
+		"nest_count": 1, "nest_min": 30, "nest_span": 8.0,
 		"forest_bonus": -0.02, "stone_bonus": -0.02, "food_bonus": 0.07,
 		"threat": 1.00, "blight": 1.00,
 	},
 	&"forest": {
 		"name": &"BIOME_FOREST",
 		"hazard": &"BIOME_FOREST_HAZARD",
-		"nest_count": 4, "nest_min": 29, "nest_span": 8.0,
+		"nest_count": 1, "nest_min": 29, "nest_span": 8.0,
 		"forest_bonus": 0.15, "stone_bonus": -0.05, "food_bonus": 0.01,
 		"threat": 1.04, "blight": 1.08,
 	},
 	&"marsh": {
 		"name": &"BIOME_MARSH",
 		"hazard": &"BIOME_MARSH_HAZARD",
-		"nest_count": 5, "nest_min": 28, "nest_span": 7.0,
+		"nest_count": 1, "nest_min": 28, "nest_span": 7.0,
 		"forest_bonus": 0.03, "stone_bonus": -0.12, "food_bonus": 0.10,
 		"threat": 1.10, "blight": 1.20,
 	},
 	&"highland": {
 		"name": &"BIOME_HIGHLAND",
 		"hazard": &"BIOME_HIGHLAND_HAZARD",
-		"nest_count": 3, "nest_min": 32, "nest_span": 6.0,
+		"nest_count": 1, "nest_min": 32, "nest_span": 6.0,
 		"forest_bonus": -0.10, "stone_bonus": 0.18, "food_bonus": -0.04,
 		"threat": 0.96, "blight": 0.82,
 	},
 	&"badlands": {
 		"name": &"BIOME_BADLANDS",
 		"hazard": &"BIOME_BADLANDS_HAZARD",
-		"nest_count": 5, "nest_min": 28, "nest_span": 7.0,
+		"nest_count": 1, "nest_min": 28, "nest_span": 7.0,
 		"forest_bonus": -0.17, "stone_bonus": 0.08, "food_bonus": -0.10,
 		"threat": 1.13, "blight": 0.92,
 	},
 	&"tundra": {
 		"name": &"BIOME_TUNDRA",
 		"hazard": &"BIOME_TUNDRA_HAZARD",
-		"nest_count": 4, "nest_min": 31, "nest_span": 7.0,
+		"nest_count": 1, "nest_min": 31, "nest_span": 7.0,
 		"forest_bonus": -0.08, "stone_bonus": 0.08, "food_bonus": -0.08,
 		"threat": 1.03, "blight": 0.74,
 	},
@@ -74,7 +74,7 @@ static func hazard_key(id: StringName) -> StringName:
 
 
 static func nest_count(id: StringName) -> int:
-	return int(definition(id).get("nest_count", 4))
+	return int(definition(id).get("nest_count", 1))
 
 
 static func nest_min_distance(id: StringName) -> int:
