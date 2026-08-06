@@ -257,6 +257,7 @@ func _clear_entities() -> void:
 		# the next frame.
 		child.free()
 	Colony.villagers.clear()
+	Colony.golems.clear()
 	Colony.buildings.clear()
 
 

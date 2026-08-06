@@ -38,6 +38,8 @@ signal resources_changed(kind: StringName, amount: int)
 signal loose_drops_changed(cell: int)
 signal villager_spawned(villager: Node)
 signal villager_died(villager: Node, cause: StringName)
+signal golem_spawned(golem: Node)
+signal golem_died(golem: Node, cause: StringName)
 signal migrant_arrived(cell: int)
 ## A band is waiting at the edge for an answer.
 signal migrants_arrived(count: int)

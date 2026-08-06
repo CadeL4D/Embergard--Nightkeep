@@ -232,6 +232,15 @@ func _find_target() -> Node:
 			best = v
 	if best != null:
 		return best
+	for golem in Colony.golems:
+		if not is_instance_valid(golem) or not golem.alive:
+			continue
+		var golem_distance := position.distance_squared_to(golem.position)
+		if golem_distance <= best_dist:
+			best_dist = golem_distance
+			best = golem
+	if best != null:
+		return best
 
 	# Melee creatures chew through whatever blocks them; ranged ones do so little
 	# structural damage that it is not worth stopping for.

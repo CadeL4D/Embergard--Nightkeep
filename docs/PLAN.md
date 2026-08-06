@@ -1445,8 +1445,29 @@ The required smoke, requested-behavior, mobile-touch and Realm suites are green.
 - Campaign persistence is schema 12 with no migration. Focused behavior, save/load and mobile
   gesture tests cover expiry, conservation, attraction, range, atomic spending and camera yield.
 
-Golems remain next because their path and simulation budgets now have both required foundations:
-physical delivery tasks and a local magical power source.
+## Mobile Golems - landed 2026-08-06
+
+- Labor Effigy and Ash Sentinel now create persistent mobile agents instead of disguised hidden
+  buildings. Their existing unlocks, casting costs, cooldowns, Burden, per-power limit and ongoing
+  Faith upkeep remain intact; all Golems additionally share a twelve-agent performance cap.
+- Labor Golems use the physical logistics layer directly. They prioritize building supply requests,
+  repairs, construction and loose-resource recovery, reserving and releasing the same conserved
+  loads as Workers. They have no food, water, rest, mood, equipment, housing or reproduction.
+- Ash Golems attack only enemies standing inside painted guard territory. With no guard zone they
+  say why they are dormant instead of independently roaming the map.
+- Both types can be selected, inspected, lifted with the Hand and dismissed through a 44-pixel
+  confirmation target. Hostiles can attack them, carried goods spill on death and moving agents
+  carry their authored light source with them.
+- Sleeping colonies abstract Labor Golems into a six-percent production/logistics multiplier each
+  and Ash Golems into defence strength. Save schema 13 preserves power identity, health, carried
+  goods and in-transit supply commitments.
+- Diagnostics records the path-queue baseline before the first Golem, the peak while Golems are
+  active and the maximum live count. Focused tests cover strict guard zones, physical recovery,
+  dormant claim release, the shared cap, upkeep, dismissal, sleeping abstraction and save/load.
+
+The cohesion roadmap's seven load-bearing milestones are now implemented. The optional tail remains
+deliberately separate: ruins and caches, elite combat texture, physical migration/couriers and
+wildlife can each be evaluated without destabilizing the causal core.
 
 ## Reference
 - [World Map — Rise to Ruins Wiki](https://rise-to-ruins.fandom.com/wiki/World_Map)

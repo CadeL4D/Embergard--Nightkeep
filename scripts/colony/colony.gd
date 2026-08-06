@@ -33,6 +33,9 @@ const KIND_GROUPS: Array = [
 const REBALANCE_INTERVAL := 3.0
 
 const VILLAGER_SCENE := preload("res://scenes/entities/villager.tscn")
+const GOLEM_SCENE := preload("res://scenes/entities/golem.tscn")
+## Mobile divine constructs share one hard budget because they use the same path queue as people.
+const GOLEM_CAP := 12
 
 # --- Migration ---------------------------------------------------------------------------
 #
@@ -136,12 +139,13 @@ var buffered: Dictionary = {}             ## workshop inputs committed but not c
 var supply_reserved: Dictionary = {}       ## StringName -> int still reserved on shelves
 var supply_requests: Array[SupplyRequest] = []
 var _supply_reservations_by_cell: Dictionary = {}   ## cell -> {kind: amount}
-var _supply_claims: Dictionary = {}        ## request id -> Villager
+var _supply_claims: Dictionary = {}        ## request id -> Agent carrier
 var _next_supply_request_id: int = 1
 var _supply_requests_dirty: bool = true
 var _supply_refresh_tick: int = -1
 var quotas: Dictionary = {}               ## job id -> headcount the player wants
 var villagers: Array = []
+var golems: Array = []
 var buildings: Array = []
 var memorials: Array = []
 
@@ -224,6 +228,7 @@ func reset() -> void:
 	_supply_refresh_tick = -1
 	quotas.clear()
 	villagers.clear()
+	golems.clear()
 	buildings.clear()
 	memorials.clear()
 	stockpiles = PackedInt32Array()
@@ -618,6 +623,39 @@ func spawn_villager(cell: int, born: bool = false) -> Node:
 	return v
 
 
+## The one creation path for mobile divine constructs. Limits live here as well as in Divine's
+## placement preview so restoration and internal callers cannot bypass the shared path budget.
+func spawn_golem(def: PowerDef, cell: int) -> Golem:
+	if _spawn_parent == null or def == null or def.construct_role.is_empty() \
+			or golem_count() >= GOLEM_CAP \
+			or (def.persistent_limit > 0 and golem_count(def.id) >= def.persistent_limit) \
+			or not World.grid.is_valid_index(cell) \
+			or not World.is_walkable(cell):
+		return null
+	var golem: Golem = GOLEM_SCENE.instantiate()
+	golem.setup(def)
+	golem.position = World.grid.to_world_index(cell)
+	_spawn_parent.add_child(golem)
+	Diagnostics.record_golem_count(golem_count())
+	return golem
+
+
+func golem_count(power_id: StringName = &"") -> int:
+	var count := 0
+	for golem in golems:
+		if not is_instance_valid(golem) or not golem.alive:
+			continue
+		if power_id.is_empty() or golem.power_id == power_id:
+			count += 1
+	return count
+
+
+func _supply_carriers() -> Array:
+	var out := villagers.duplicate()
+	out.append_array(golems)
+	return out
+
+
 func _eligible_birth_pair() -> Array:
 	var by_id: Dictionary = {}
 	for v in villagers:
@@ -939,8 +977,8 @@ func _nearest_supply_source(from: int, kind: StringName) -> int:
 
 
 ## Claim the highest-priority reachable request and reserve its goods before walking toward it.
-## The return row is deliberately enough to drive a Villager without exposing request objects.
-func claim_supply_request(worker: Villager, from: int, capacity: int) -> Dictionary:
+## The return row is deliberately enough to drive any physical carrier without exposing requests.
+func claim_supply_request(worker: Agent, from: int, capacity: int) -> Dictionary:
 	if worker == null or capacity <= 0:
 		return {}
 	refresh_supply_requests()
@@ -998,7 +1036,7 @@ func claim_supply_request(worker: Villager, from: int, capacity: int) -> Diction
 	return {}
 
 
-func withdraw_supply_request(request_id: int, worker: Villager, cell: int, limit: int) -> int:
+func withdraw_supply_request(request_id: int, worker: Agent, cell: int, limit: int) -> int:
 	var request := _supply_request_by_id(request_id)
 	if request == null or _supply_claims.get(request_id) != worker \
 			or request.source != cell or request.shelf_reserved <= 0:
@@ -1017,7 +1055,7 @@ func supply_destination(request_id: int) -> Building:
 	return _building_at_anchor(request.destination) if request != null else null
 
 
-func resume_supply_request(request_id: int, worker: Villager, carried: int) -> Building:
+func resume_supply_request(request_id: int, worker: Agent, carried: int) -> Building:
 	var request := _supply_request_by_id(request_id)
 	var destination := supply_destination(request_id)
 	if request == null or destination == null or carried <= 0:
@@ -1035,9 +1073,9 @@ func complete_supply_delivery(request_id: int, amount: int) -> void:
 	mark_supply_requests_dirty()
 
 
-## Release both legs of a promise. `carried` remains physically in the Villager's arms; only its
+## Release both legs of a promise. `carried` remains physically in the carrier's arms; only its
 ## destination commitment is removed, so ordinary hauling or a death spill can recover it.
-func release_supply_request(request_id: int, worker: Villager, carried: int = 0) -> void:
+func release_supply_request(request_id: int, worker: Agent, carried: int = 0) -> void:
 	var request := _supply_request_by_id(request_id)
 	if request == null:
 		_supply_claims.erase(request_id)
@@ -1058,11 +1096,11 @@ func pack_supply_requests() -> Array:
 	var rows: Array = []
 	for request in supply_requests:
 		var in_transit := 0
-		for candidate in villagers:
-			var v := candidate as Villager
-			if v != null and is_instance_valid(v) and v.alive \
-					and v._supply_request_id == request.id and v.carry_kind == request.resource:
-				in_transit += maxi(v.carry_amount, 0)
+		for carrier in _supply_carriers():
+			if is_instance_valid(carrier) and carrier.alive \
+					and carrier._supply_request_id == request.id \
+					and carrier.carry_kind == request.resource:
+				in_transit += maxi(carrier.carry_amount, 0)
 		var row := request.to_dict()
 		row["reserved"] = in_transit
 		rows.append(row)
@@ -1094,17 +1132,16 @@ func rebuild_supply_reservations_from_carriers() -> void:
 		request.reserved = 0
 		request.shelf_reserved = 0
 		request.source = -1
-	for candidate in villagers:
-		var v := candidate as Villager
-		if v == null or not is_instance_valid(v) or v._supply_request_id <= 0:
+	for carrier in _supply_carriers():
+		if not is_instance_valid(carrier) or carrier._supply_request_id <= 0:
 			continue
-		var request := _supply_request_by_id(v._supply_request_id)
+		var request := _supply_request_by_id(carrier._supply_request_id)
 		if request == null or supply_destination(request.id) == null \
-				or v.carry_amount <= 0 or v.carry_kind != request.resource:
-			v._supply_request_id = 0
+				or carrier.carry_amount <= 0 or carrier.carry_kind != request.resource:
+			carrier._supply_request_id = 0
 			continue
-		request.reserved += v.carry_amount
-		_supply_claims[request.id] = v
+		request.reserved += carrier.carry_amount
+		_supply_claims[request.id] = carrier
 	refresh_supply_requests(true)
 
 

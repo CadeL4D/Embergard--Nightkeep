@@ -99,23 +99,32 @@ func _ready() -> void:
 		and route_copy.arrival_day == route.arrival_day,
 		"TradeRoute round-trips its path schedule cargo and seeded outcome")
 	var saved_essence := Colony.drop_essence(World.grid.index(0, 0), 3, &"schema_test")
+	var golem_cell := World.nearest_walkable(World.keep_cell, 6)
+	var saved_golem := Colony.spawn_golem(Powers.get_power(&"labor_effigy"), golem_cell)
+	if saved_golem != null:
+		saved_golem.health = 43.0
 
-	_expect(RunSave.SCHEMA_VERSION == 12 and RunSave.save() and SaveService.flush(),
-		"schema 12 checkpoints physical drops, local energy, supply and realm state")
+	_expect(saved_golem != null and RunSave.SCHEMA_VERSION == 13 \
+		and RunSave.save() and SaveService.flush(),
+		"schema 13 checkpoints physical drops, local energy, mobile Golems and realm state")
 	run._clear_entities()
 	_expect(RunSave.load_into(run, run.entities),
-		"schema 12 restores the realm with no courier Nodes")
+		"schema 13 restores the realm with no courier Nodes")
 	await get_tree().process_frame
 	var restored: TradeRoute = _route_by_id(route.route_id)
 	_expect(restored != null and restored.status == &"in_transit" \
 		and int(restored.cargo.get(&"food", 0)) == 20,
 		"save/load preserves in-transit cargo and deterministic outcome")
 	_expect(Realm.selected_doctrines == [&"doc_lean_tables", &"doc_forager_levy"],
-		"schema 12 preserves the realm's equipped doctrine choices")
+		"schema 13 preserves the realm's equipped doctrine choices")
 	var restored_essence := Colony.loose_drop(saved_essence.id)
 	_expect(restored_essence != null and restored_essence.amount == 3 \
-			and restored_essence.source == &"schema_test" and restored_essence.expires_tick > Sim.tick,
-		"schema 12 preserves a physical Essence object's amount source and expiry")
+		and restored_essence.source == &"schema_test" and restored_essence.expires_tick > Sim.tick,
+		"schema 13 preserves a physical Essence object's amount source and expiry")
+	var restored_golem: Golem = Colony.golems[0] if not Colony.golems.is_empty() else null
+	_expect(restored_golem != null and restored_golem.power_id == &"labor_effigy" \
+		and is_equal_approx(restored_golem.health, 43.0),
+		"schema 13 restores a Golem's stable power identity and integrity")
 	var expected_lost := ceili(20.0 * lerpf(0.25, 0.65,
 		clampf(restored.risk, 0.0, 0.85) / 0.85)) if restored.intercepted else 0
 	Realm._process_routes(restored.arrival_day)

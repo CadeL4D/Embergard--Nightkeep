@@ -35,7 +35,9 @@ const DRAG_COMMIT_PX := 10.0
 signal armed_changed(power: PowerDef)
 signal hand_mode_changed(active: bool)
 
-var selected: Villager = null
+## Friendly mobile selection. Villagers accept ground orders; Golems expose status and dismissal
+## but remain zone/task driven so the mobile UI does not acquire a second command mode.
+var selected: Node = null
 
 ## The building the player has tapped, if any. Mutually exclusive with `selected` — one selection,
 ## one card, so the bottom of a phone screen is never fighting itself.
@@ -246,7 +248,8 @@ func _handle_tap(world_pos: Vector2) -> bool:
 	# destination, and "walk over there" must not turn into "inspect that hut" because the
 	# destination happened to have a stockpile on it.
 	if selected != null and is_instance_valid(selected):
-		selected.command_to(cell)
+		if selected is Villager:
+			(selected as Villager).command_to(cell)
 		_select(null)
 		return true
 
@@ -263,9 +266,9 @@ func _handle_tap(world_pos: Vector2) -> bool:
 ## Nearest villager within a zoom-independent radius. Never hit-tests the sprite's
 ## actual pixels — a 12px figure is far below a usable touch target, and requiring
 ## precision on a moving unit would make the God Hand feel broken.
-func _pick_villager(world_pos: Vector2) -> Villager:
+func _pick_villager(world_pos: Vector2) -> Node:
 	var radius := _world_radius(VILLAGER_SELECT_PX)
-	var best: Villager = null
+	var best: Node = null
 	var best_dist := radius * radius
 	for v: Villager in Colony.villagers:
 		if not is_instance_valid(v) or not v.alive or v.is_sheltered():
@@ -274,6 +277,13 @@ func _pick_villager(world_pos: Vector2) -> Villager:
 		if d <= best_dist:
 			best_dist = d
 			best = v
+	for golem in Colony.golems:
+		if not is_instance_valid(golem) or not golem.alive:
+			continue
+		var golem_distance: float = golem.position.distance_squared_to(world_pos)
+		if golem_distance <= best_dist:
+			best_dist = golem_distance
+			best = golem
 	return best
 
 
@@ -320,7 +330,10 @@ func _handle_hand_tap(world_pos: Vector2) -> bool:
 		held = picked
 		_held_origin_cell = _held_cell()
 		if held is Agent:
-			held.stop()
+			if held is Golem:
+				(held as Golem).prepare_hand_lift()
+			else:
+				held.stop()
 			held.held_by_hand = true
 		else:
 			held.begin_hand_move()
@@ -415,9 +428,9 @@ func _pick_light_hostile(world_pos: Vector2) -> Agent:
 	return best
 
 
-func _pick_villager_for_hand(world_pos: Vector2) -> Villager:
+func _pick_villager_for_hand(world_pos: Vector2) -> Agent:
 	var radius := _world_radius(Accessibility.MIN_TOUCH_TARGET_PX)
-	var best: Villager = null
+	var best: Agent = null
 	var best_dist := radius * radius
 	for villager: Villager in Colony.villagers:
 		if not is_instance_valid(villager) or not villager.alive or villager.is_sheltered():
@@ -426,13 +439,20 @@ func _pick_villager_for_hand(world_pos: Vector2) -> Villager:
 		if distance <= best_dist:
 			best_dist = distance
 			best = villager
+	for golem in Colony.golems:
+		if not is_instance_valid(golem) or not golem.alive:
+			continue
+		var golem_distance: float = golem.position.distance_squared_to(world_pos)
+		if golem_distance <= best_dist:
+			best_dist = golem_distance
+			best = golem
 	return best
 
 
 func _hand_can_lift(candidate: Node) -> bool:
 	if candidate is Building:
 		return candidate.def != null and candidate.def.menu_hidden and not candidate.is_site()
-	if candidate is Villager or candidate is BlightWorker:
+	if candidate is Villager or candidate is Golem or candidate is BlightWorker:
 		return true
 	return candidate.max_health <= 55.0 and not candidate.has_behavior(&"boss") \
 		and not candidate.has_behavior(&"rooted")
@@ -443,6 +463,8 @@ func _hand_weight(candidate: Node) -> float:
 		return 8.0 + float(candidate.cells.size()) * 1.5
 	if candidate is Villager:
 		return 5.0 + float(candidate.carry_amount) * 0.2
+	if candidate is Golem:
+		return 7.0 + float(candidate.carry_amount) * 0.2
 	if candidate is BlightWorker:
 		return 4.0 + float(candidate.carry_mass) * 0.5
 	return 3.0 + candidate.max_health * 0.08
@@ -473,7 +495,7 @@ func _hand_drop_valid(destination: int) -> bool:
 ## this borrows from, but this one is played with a thumb on a phone, and a mistap that kills a
 ## colonist is a far worse trade than a verb withheld.
 func _is_drowning_drop(destination: int) -> bool:
-	if held is Building or held is Villager or not (held is Agent):
+	if held is Building or held is Villager or held is Golem or not (held is Agent):
 		return false
 	if not World.grid.is_valid_index(destination):
 		return false
@@ -534,13 +556,18 @@ func _pick_building_near(world_pos: Vector2) -> Building:
 	return best
 
 
-func _select(v: Villager) -> void:
+func _select(v: Node) -> void:
 	if selected != null and is_instance_valid(selected):
-		selected.selected = false
+		selected.set("selected", false)
 	selected = v
 	if v != null:
-		v.selected = true
+		v.set("selected", true)
 		_select_building(null)
+
+
+func clear_selection() -> void:
+	_select(null)
+	queue_redraw()
 
 
 func _select_building(b: Building) -> void:

@@ -3,6 +3,7 @@ extends Node
 
 const RUN_SCENE := preload("res://scenes/run/run.tscn")
 const BUILDING_SCENE := preload("res://scenes/entities/building.tscn")
+const MONSTER_SCENE := preload("res://scenes/entities/monster.tscn")
 
 var _failures := PackedStringArray()
 
@@ -24,6 +25,7 @@ func _ready() -> void:
 	await _check_physical_supply(run)
 	_check_loose_drops_are_recovered()
 	_check_essence_and_local_energy(run)
+	await _check_mobile_golems(run)
 	_check_two_day_cycles()
 
 	Colony.supply_requests.clear()
@@ -741,6 +743,118 @@ func _check_two_day_cycles() -> void:
 			Sim.phase_elapsed = Difficulties.phase_duration(phase)
 			Sim._advance_phase(0.01)
 	_expect(Sim.day == start_day + 2, "two complete day/night cycles advance the calendar")
+
+
+func _check_mobile_golems(run: Node2D) -> void:
+	var cell := World.nearest_walkable(World.keep_cell, 6)
+	var labor_def := Powers.get_power(&"labor_effigy")
+	var ash_def := Powers.get_power(&"ash_sentinel")
+	var upkeep_before := Divine.building_upkeep()
+	Divine.faith = 100.0
+	var labor := Colony.spawn_golem(labor_def, cell)
+	_expect(labor != null and labor.role == &"labor" and not labor.has_method("_decay_needs"),
+		"Labor Effigy is a mobile agent with no villager needs")
+	_expect(labor != null and is_equal_approx(Divine.building_upkeep() - upkeep_before,
+		labor_def.upkeep), "a mobile Golem preserves its authored standing Faith upkeep")
+
+	if labor != null:
+		var drop := Colony.drop_resource(&"wood", 4, labor.cell(), &"golem_test")
+		var claimed := labor._begin_loose_drop_fetch()
+		labor._tick_fetching()
+		_expect(claimed and Colony.loose_drop(drop.id) == null \
+			and labor.carry_kind == &"wood" and labor.carry_amount == 4,
+			"a Labor Golem physically recovers a loose resource load")
+		var claim_cell := _unmarked_walkable_near(cell)
+		Colony.claim(claim_cell, labor)
+		labor._target_cell = claim_cell
+		Divine.faith = 0.0
+		labor.think(1.0)
+		_expect(Colony.is_claimable(claim_cell) and labor.state == Golem.State.IDLE,
+			"a dormant Golem releases its work and supply claims instead of locking them")
+		Divine.faith = 100.0
+		var hand: Node = run.get_node("GodHand")
+		var hud: CanvasLayer = run.get_node("Hud")
+		hand._select(labor)
+		hud._refresh_selection()
+		hud._refresh_selection()
+		await get_tree().process_frame
+		var card_rect: Rect2 = hud._selection_card.get_global_rect()
+		var viewport_rect: Rect2 = get_viewport().get_visible_rect()
+		_expect(hud._selection_card.visible and hud._sel_who.text.contains("Labor Effigy") \
+			and hud._equipment_policy.custom_minimum_size.y >= 44.0 \
+			and viewport_rect.encloses(card_rect),
+			"a selected Golem has a mobile-safe status and dismissal card")
+		hand.clear_selection()
+
+	var ash := Colony.spawn_golem(ash_def, cell)
+	var old_guard := DefenseControl.guard.duplicate()
+	var old_guard_count := DefenseControl._guard_count
+	DefenseControl.guard.fill(0)
+	DefenseControl.guard[cell] = 1
+	DefenseControl._guard_count = 1
+	var hostile: Monster = MONSTER_SCENE.instantiate()
+	hostile.setup(Monsters.get_monster(&"shambler"), 1.0, cell)
+	hostile.position = World.grid.to_world_index(cell)
+	run.entities.add_child(hostile)
+	var guarded_hp := hostile.health
+	if ash != null:
+		ash._work_progress = 0.0
+		ash.think(1.0)
+	_expect(ash != null and hostile.health < guarded_hp,
+		"an Ash Golem attacks a hostile standing inside its painted guard zone")
+	var outside := _unmarked_walkable_near(cell)
+	hostile.position = World.grid.to_world_index(outside)
+	var outside_hp := hostile.health
+	if ash != null:
+		ash._work_progress = 0.0
+		ash.think(1.0)
+	_expect(outside != cell and is_equal_approx(hostile.health, outside_hp),
+		"an Ash Golem refuses targets outside the painted guard zone")
+	hostile.free()
+	DefenseControl.guard = old_guard
+	DefenseControl._guard_count = old_guard_count
+
+	for _slot in Colony.GOLEM_CAP:
+		if Colony.golem_count() >= Colony.GOLEM_CAP:
+			break
+		var next_def: PowerDef = labor_def \
+			if Colony.golem_count(labor_def.id) < labor_def.persistent_limit else ash_def
+		if Colony.spawn_golem(next_def, cell) == null:
+			break
+	_expect(Colony.golem_count() == Colony.GOLEM_CAP \
+		and Colony.spawn_golem(labor_def, cell) == null,
+		"per-power limits feed a shared twelve-agent path budget")
+	_expect(int(Diagnostics.current.get("maximum_golems", 0)) == Colony.GOLEM_CAP \
+		and int(Diagnostics.current.get("path_queue_before_golems", -1)) >= 0,
+		"Diagnostics records the Golem count and path queue baseline")
+
+	var sleeping := ColonyLedger.new()
+	sleeping.state = {"villagers": [], "buildings": [], "golems": [
+		{"power": &"labor_effigy"}, {"power": &"ash_sentinel"}]}
+	_expect(is_equal_approx(sleeping.sleeping_labor_multiplier(), 1.06) \
+		and sleeping.defense_strength() > 0.0,
+		"sleeping colonies abstract Labor into production and Ash into defence")
+
+	var count_before_dismiss := Colony.golem_count()
+	var dismissible := Colony.golems.back() as Golem
+	_expect(dismissible.dismiss() and Colony.golem_count() == count_before_dismiss - 1,
+		"a mobile construct can be dismissed and immediately releases its cap slot")
+	for golem in Colony.golems.duplicate():
+		if is_instance_valid(golem):
+			golem.free()
+
+
+func _unmarked_walkable_near(origin_cell: int) -> int:
+	var origin := World.grid.coord(origin_cell)
+	for radius in range(1, 8):
+		for offset in [Vector2i(radius, 0), Vector2i(-radius, 0),
+				Vector2i(0, radius), Vector2i(0, -radius)]:
+			var point: Vector2i = origin + offset
+			if World.grid.is_valid_v(point):
+				var candidate := World.grid.index_v(point)
+				if World.is_walkable(candidate) and not DefenseControl.is_guard_cell(candidate):
+					return candidate
+	return origin_cell
 
 
 func _expect(condition: bool, description: String) -> void:

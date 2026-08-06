@@ -4,6 +4,7 @@ extends RefCounted
 
 const BUILDING_SCENE := preload("res://scenes/entities/building.tscn")
 const VILLAGER_SCENE := preload("res://scenes/entities/villager.tscn")
+const GOLEM_SCENE := preload("res://scenes/entities/golem.tscn")
 const BLIGHT_WORKER_SCENE := preload("res://scenes/entities/blight_worker.tscn")
 
 
@@ -83,6 +84,7 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 		# stores deterministically, then keep any excess at the Hearth.
 		Colony.distribute_legacy_stock(data.get("stock", {}))
 	_restore_villagers(data.get("villagers", []), entities)
+	_restore_golems(data.get("golems", []), entities)
 	Colony.rebuild_supply_reservations_from_carriers()
 	Colony.refresh_households()
 	_restore_blight_workers(data.get("blight_workers", []), entities)
@@ -151,6 +153,25 @@ static func _restore_villagers(rows: Array, entities: Node) -> void:
 		v.statuses = row.get("statuses", {}).duplicate(true)
 		if row.has("record"):
 			v.restore_profile(row.get("record", {}))
+
+
+static func _restore_golems(rows: Array, entities: Node) -> void:
+	for row: Dictionary in rows:
+		var def := Powers.get_power(StringName(row.get("power", &"")))
+		if def == null or def.construct_role.is_empty() or Colony.golem_count() >= Colony.GOLEM_CAP \
+				or (def.persistent_limit > 0 \
+				and Colony.golem_count(def.id) >= def.persistent_limit):
+			continue
+		var golem: Golem = GOLEM_SCENE.instantiate()
+		golem.setup(def)
+		golem.position = Vector2(float(row.get("x", 0.0)), float(row.get("y", 0.0)))
+		entities.add_child(golem)
+		golem.health = clampf(float(row.get("health", golem.max_health)), 1.0,
+			golem.max_health)
+		golem.carry_kind = StringName(row.get("carry_kind", &""))
+		golem.carry_amount = maxi(int(row.get("carry_amount", 0)), 0)
+		golem._supply_request_id = int(row.get("supply_request_id", 0))
+		Diagnostics.record_golem_count(Colony.golem_count())
 
 
 static func _restore_blight_workers(rows: Array, entities: Node) -> void:

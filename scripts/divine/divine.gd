@@ -248,6 +248,12 @@ func building_upkeep() -> float:
 	for building in Colony.buildings:
 		if is_instance_valid(building) and not building.is_site():
 			total += building.def.faith_upkeep
+	for golem in Colony.golems:
+		if not is_instance_valid(golem) or not golem.alive:
+			continue
+		var def := Powers.get_power(golem.power_id)
+		if def != null:
+			total += def.upkeep
 	return total
 
 
@@ -946,6 +952,13 @@ func _cast_hallow(def: PowerDef, world_pos: Vector2) -> void:
 
 
 func _can_place_construct(def: PowerDef, centre: int) -> bool:
+	if not def.construct_role.is_empty():
+		if Colony.golem_count() >= Colony.GOLEM_CAP \
+				or (def.persistent_limit > 0 \
+				and Colony.golem_count(def.id) >= def.persistent_limit):
+			return false
+		return World.grid.is_valid_index(centre) and World.is_walkable(centre) \
+			and World.in_influence(centre)
 	var construct := Buildings.get_building(def.construct_id)
 	if construct == null:
 		return false
@@ -960,6 +973,9 @@ func _can_place_construct(def: PowerDef, centre: int) -> bool:
 
 
 func _cast_construct(def: PowerDef, centre: int) -> void:
+	if not def.construct_role.is_empty():
+		Colony.spawn_golem(def, centre)
+		return
 	Colony.place_divine_construct(Buildings.get_building(def.construct_id), centre)
 
 

@@ -43,6 +43,7 @@ static func capture(ledger: ColonyLedger) -> void:
 		"threat_pressure": Threat.pressure,
 		"defense_control": DefenseControl.to_dict(),
 		"villagers": _pack_villagers(),
+		"golems": _pack_golems(),
 		"buildings": _pack_buildings(),
 	}
 	ledger.state = state
@@ -75,6 +76,23 @@ static func _pack_villagers() -> Array:
 			"pending_loads": v.pending_loads.duplicate(true),
 			"statuses": v.statuses.duplicate(true),
 			"record": v.profile_dict(),
+		})
+	return out
+
+
+static func _pack_golems() -> Array:
+	var out: Array = []
+	for golem in Colony.golems:
+		if not is_instance_valid(golem) or not golem.alive:
+			continue
+		out.append({
+			"power": golem.power_id,
+			"x": golem.position.x,
+			"y": golem.position.y,
+			"health": golem.health,
+			"carry_kind": golem.carry_kind,
+			"carry_amount": golem.carry_amount,
+			"supply_request_id": golem._supply_request_id,
 		})
 	return out
 

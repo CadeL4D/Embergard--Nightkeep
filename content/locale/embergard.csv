@@ -888,9 +888,20 @@ POWER_CONJURE_MATERIAL_DESC,Creates a small emergency stack of stone when terrai
 POWER_HALLOW_WALL,Hallow Wall
 POWER_HALLOW_WALL_DESC,Repairs nearby structures and temporarily halves Blight damage against them.
 POWER_LABOR_EFFIGY,Labor Effigy
-POWER_LABOR_EFFIGY_DESC,Calls a persistent work aura. Up to eight may stand and each continuously consumes Faith.
+POWER_LABOR_EFFIGY_DESC,Shapes a mobile Labor Golem that hauls supplies and loose goods and builds and repairs. Up to eight; twelve Golems total. Each continuously consumes Faith.
 POWER_ASH_SENTINEL,Ash Sentinel
-POWER_ASH_SENTINEL_DESC,Calls a persistent holy defender. Up to eight may stand and each continuously consumes Faith.
+POWER_ASH_SENTINEL_DESC,Shapes a mobile Ash Golem that attacks only inside painted guard zones. Up to eight; twelve Golems total. Each continuously consumes Faith.
+SELECT_GOLEM,Golem
+GOLEM_IDENTITY,{0} · divine construct
+GOLEM_INTEGRITY,Integrity {0}/{1} · no needs or equipment
+GOLEM_DORMANT,Dormant — needs positive Faith
+GOLEM_NEEDS_GUARD_ZONE,Dormant — paint a guard zone
+GOLEM_STATE_IDLE,Waiting for work
+GOLEM_STATE_FETCHING,Collecting supplies
+GOLEM_STATE_DELIVERING,Delivering supplies
+GOLEM_STATE_BUILDING,Building or repairing
+GOLEM_STATE_HAULING,Recovering loose goods
+GOLEM_STATE_GUARDING,Guarding the painted zone
 POWER_BANISH,Banish
 POWER_BANISH_DESC,Damages and throws every light enemy away from the chosen center.
 POWER_CHARM,Charm

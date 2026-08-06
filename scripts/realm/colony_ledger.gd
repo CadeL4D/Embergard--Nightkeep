@@ -27,6 +27,19 @@ func population() -> int:
 	return state.get("villagers", []).size()
 
 
+func golem_count(role: StringName = &"") -> int:
+	var count := 0
+	for row: Dictionary in state.get("golems", []):
+		var def := Powers.get_power(StringName(row.get("power", &"")))
+		if def != null and (role.is_empty() or def.construct_role == role):
+			count += 1
+	return count
+
+
+func sleeping_labor_multiplier() -> float:
+	return 1.0 + float(golem_count(&"labor")) * 0.06
+
+
 func stock_of(kind: StringName) -> int:
 	return int(state.get("stock", {}).get(kind, 0))
 
@@ -81,6 +94,11 @@ func defense_strength() -> float:
 	if fallen:
 		return 0.0
 	var strength := float(population()) * 0.035
+	for row: Dictionary in state.get("golems", []):
+		var power := Powers.get_power(StringName(row.get("power", &"")))
+		if power != null and power.construct_role == &"guard":
+			strength += clampf(power.construct_attack_damage \
+				/ maxf(power.construct_attack_cooldown, 0.1) / 75.0, 0.08, 0.24)
 	for row: Dictionary in state.get("buildings", []):
 		if not bool(row.get("complete", false)):
 			continue
@@ -164,6 +182,9 @@ func _advance_one_day(day_number: int) -> void:
 	var thirst_mult := float(climate_effects.get("thirst", 1.0))
 	var mood_offset := float(climate_effects.get("mood", 0.0))
 	var blight_mult := float(climate_effects.get("blight", 1.0))
+	# Labor Golems become logistics strength while this colony sleeps. They do not invent a new
+	# job or consume food; they make the assigned people and completed workshops more effective.
+	var labor_scale := sleeping_labor_multiplier()
 	if int(state.get("physical_inventory", 0)) > 0:
 		_apply_sleeping_spoilage(stock)
 
@@ -171,20 +192,21 @@ func _advance_one_day(day_number: int) -> void:
 	# guarantees that returning to the colony shows the trees and rocks they used are gone.
 	_harvest(feature, Terrain.Feature.TREE, &"wood",
 		mini(int(quotas.get(&"woodcutting", 0)), villagers.size()), stock, rng,
-		gather_mult * Biomes.yield_multiplier(biome_id, Terrain.Feature.TREE))
+		gather_mult * labor_scale * Biomes.yield_multiplier(biome_id, Terrain.Feature.TREE))
 	_harvest(feature, Terrain.Feature.STONE, &"stone",
 		mini(int(quotas.get(&"quarrying", 0)), villagers.size()), stock, rng,
-		gather_mult * Biomes.yield_multiplier(biome_id, Terrain.Feature.STONE))
+		gather_mult * labor_scale * Biomes.yield_multiplier(biome_id, Terrain.Feature.STONE))
 	_harvest(feature, Terrain.Feature.BERRIES, &"food",
 		mini(int(quotas.get(&"foraging", 0)), villagers.size()), stock, rng,
-		gather_mult * Biomes.yield_multiplier(biome_id, Terrain.Feature.BERRIES))
+		gather_mult * labor_scale * Biomes.yield_multiplier(biome_id, Terrain.Feature.BERRIES))
 
 	# Workshops use the same input/output declarations as the live jobs. A worker only receives
 	# credit when its completed workplace is present.
-	_run_cycles(&"farming", &"farm", quotas, villagers.size(), stock, 2, farm_mult)
-	_run_cycles(&"sawing", &"sawmill", quotas, villagers.size(), stock, 2)
-	_run_cycles(&"stonecutting", &"stonecutter", quotas, villagers.size(), stock, 2)
-	_run_cycles(&"toolmaking", &"toolsmith", quotas, villagers.size(), stock, 1)
+	_run_cycles(&"farming", &"farm", quotas, villagers.size(), stock, 2,
+		farm_mult * labor_scale)
+	_run_cycles(&"sawing", &"sawmill", quotas, villagers.size(), stock, 2, labor_scale)
+	_run_cycles(&"stonecutting", &"stonecutter", quotas, villagers.size(), stock, 2, labor_scale)
+	_run_cycles(&"toolmaking", &"toolsmith", quotas, villagers.size(), stock, 1, labor_scale)
 
 	var meals_needed := villagers.size() * 2
 	var eaten: int = mini(int(stock.get(&"food", 0)), meals_needed)

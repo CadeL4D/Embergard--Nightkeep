@@ -55,6 +55,8 @@ func _ready() -> void:
 	var tower: Building = _force_raise(Buildings.get_building(&"bow_tower"), entities)
 	_expect(tower != null, "an ammunition tower can be raised")
 	if tower != null:
+		tower.input_buffer[tower.def.ammo_kind] = 2
+		Colony.rebuild_stock_cache()
 		var arrows_before := Colony.amount_of(&"arrows")
 		_expect(tower._consume_ammo(), "a loaded tower can take one shot")
 		_expect(Colony.amount_of(&"arrows") == arrows_before - 1,
@@ -69,7 +71,7 @@ func _ready() -> void:
 		_expect(tower.hp > hp_before and Colony.amount_of(&"boards") < wood_before,
 			"repair work spends its declared material and restores health")
 
-	var workshop: Building = _raise(Buildings.get_building(&"bowyer"), entities)
+	var workshop: Building = _force_raise(Buildings.get_building(&"bowyer"), entities)
 	_expect(workshop != null, "a policy-controlled workshop can be raised")
 	if workshop != null:
 		workshop.production_worker_limit = 1
@@ -85,8 +87,7 @@ func _ready() -> void:
 
 	var temple: Building = _force_raise(shrine, entities)
 	var effigy_power := Powers.get_power(&"labor_effigy")
-	var effigy_def := Buildings.get_building(&"divine_labor_effigy")
-	var effigy_cell := _valid_anchor(effigy_def)
+	var effigy_cell := _valid_golem_cell()
 	var upkeep_before := Divine.building_upkeep()
 	Divine.taken_up.append(effigy_power.id)
 	Divine.faith = 100.0
@@ -110,22 +111,20 @@ func _ready() -> void:
 	_expect(not Divine.auto_manage_library and Divine.tomes.size() == 2 \
 		and Divine.tomes[0].installed and Divine.tomes[0].locked,
 		"manual library mode and Tome state survive serialization")
-	var effigy: Building = null
-	for candidate in Colony.buildings:
-		if is_instance_valid(candidate) and candidate.def.id == &"divine_labor_effigy":
-			effigy = candidate
-			break
+	var effigy: Golem = Colony.golems[0] if not Colony.golems.is_empty() else null
 	if effigy != null:
-		var effigy_from := effigy.anchor
-		_expect(effigy.begin_hand_move(), "the Hand can lift a persistent friendly construct")
-		hand.held = effigy
-		hand._held_origin_cell = effigy_from
-		var effigy_drop := _valid_anchor(effigy_def)
+		var effigy_from := effigy.cell()
+		hand.set_hand_mode(true)
+		hand._handle_hand_tap(effigy.position)
+		_expect(hand.held == effigy and effigy.held_by_hand,
+			"the Hand can lift a persistent friendly construct")
+		var effigy_drop := _different_walkable(effigy_from)
 		var faith_before_construct := Divine.faith
 		_expect(effigy_drop != -1 and hand._handle_hand_tap(
-			World.grid.to_world_index(effigy_drop)) and effigy.anchor == effigy_drop \
+			World.grid.to_world_index(effigy_drop)) and effigy.cell() == effigy_drop \
 			and not effigy.held_by_hand and Divine.faith < faith_before_construct,
-			"construct relocation previews validity and atomically moves its footprint")
+			"construct relocation previews validity and moves the mobile agent")
+		hand.set_hand_mode(false)
 
 	var bridge_cell := _shallow_water_cell()
 	_expect(bridge_cell != -1, "the generated map contains shallow water for a bridge check")
@@ -159,6 +158,13 @@ func _valid_anchor(def: BuildingDef) -> int:
 		return -1
 	for cell in World.grid.cell_count:
 		if bool(Colony.check_placement(def, cell).get("ok", false)):
+			return cell
+	return -1
+
+
+func _valid_golem_cell() -> int:
+	for cell in World.grid.cell_count:
+		if World.is_walkable(cell) and World.in_influence(cell):
 			return cell
 	return -1
 

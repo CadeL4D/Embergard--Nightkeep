@@ -176,6 +176,7 @@ var _tap_frame: int = -1
 ## Demolition is irreversible and refunds 40%, so it arms on the first press like Ascend does.
 var _demolish_armed: bool = false
 var _demolish_timer: float = 0.0
+var _selected_golem_id: int = 0
 var _management_pause_owned: bool = false
 var _management_pause_suppressed: bool = false
 var _upgrade_widgets: Dictionary = {}
@@ -1781,38 +1782,53 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Reuses Villager.describe(), which had been written, commented, and never called by
 ## anything: selecting a villager used to toggle a ring and tell the player nothing.
 func _refresh_selection() -> void:
-	# Typed as Villager, not Node: every field read below (alive, job, food, water, rest, mood,
-	# describe) lives on Villager and none of them on Node, so a Node-typed local would make the
-	# whole block unchecked.
-	var who: Villager = _god_hand.selected if _god_hand != null else null
+	var who: Agent = _god_hand.selected as Agent if _god_hand != null else null
 	if who == null or not is_instance_valid(who) or not who.alive or _action_panel_open():
+		if _selected_golem_id != 0:
+			_selected_golem_id = 0
+			_demolish_armed = false
 		_selection_card.visible = false
 		return
+	if who is Golem:
+		var golem_id := who.get_instance_id()
+		if _selected_golem_id != golem_id:
+			_selected_golem_id = golem_id
+			_demolish_armed = false
+		_refresh_golem_selection(who)
+		return
+	if _selected_golem_id != 0:
+		_selected_golem_id = 0
+		_demolish_armed = false
+	if not who is Villager:
+		_selection_card.visible = false
+		return
+	var villager := who as Villager
 
 	_selection_card.visible = true
-	var role := tr(&"SELECT_CHILD") if not who.is_adult() else (
-		tr(&"SELECT_SURVIVOR") if who.job == &"" else tr(Jobs.get_job(who.job).display_name))
+	var role := tr(&"SELECT_CHILD") if not villager.is_adult() else (
+		tr(&"SELECT_SURVIVOR") if villager.job == &"" \
+		else tr(Jobs.get_job(villager.job).display_name))
 	_sel_who.text = L10n.t(&"SELECT_IDENTITY",
-		[who.profile.display_name, who.profile.age_days, role])
-	_sel_doing.text = who.describe()
+		[villager.profile.display_name, villager.profile.age_days, role])
+	_sel_doing.text = villager.describe()
 	# Why they are standing there, straight from the decision that came back empty. This is the
 	# question the player was previously left to answer by watching, and it is the one they ask
 	# every time somebody appears to be doing nothing. See Villager.idle_reason.
-	var idle := who.idle_text()
-	if not idle.is_empty() and not who.is_moving():
+	var idle := villager.idle_text()
+	if not idle.is_empty() and not villager.is_moving():
 		_sel_doing.text += "\n" + L10n.t(&"SELECT_IDLE_REASON", [idle])
-	var danger := who.danger_text()
+	var danger := villager.danger_text()
 	if not danger.is_empty():
 		_sel_doing.text += "\n" + L10n.t(&"SELECT_DANGER", [danger])
 	# Time served, which is the one number on a villager that answers to what they have done.
-	var mastery := who.profile.mastery_of(who.job)
+	var mastery := villager.profile.mastery_of(villager.job)
 	if mastery > 0.01:
-		var job_def := Jobs.get_job(who.job)
+		var job_def := Jobs.get_job(villager.job)
 		_sel_doing.text += "\n" + L10n.t(&"SELECT_MASTERY", [
-			tr(job_def.display_name) if job_def != null else String(who.job),
+			tr(job_def.display_name) if job_def != null else String(villager.job),
 			int(mastery * 100.0)])
 	var gear: PackedStringArray = []
-	for row in who.profile.equipment.values():
+	for row in villager.profile.equipment.values():
 		if typeof(row) != TYPE_DICTIONARY:
 			continue
 		var item_def := Items.get_item(StringName(row.get("def", &"")))
@@ -1821,31 +1837,60 @@ func _refresh_selection() -> void:
 	if not gear.is_empty():
 		_sel_doing.text += L10n.t(&"SELECT_EQUIPMENT", [", ".join(gear)])
 	_sel_needs.text = L10n.t(&"SELECT_NEEDS",
-		[int(who.health), int(who.max_health), int(who.food), int(who.water),
-			int(who.rest), int(who.mood)])
-	_equipment_policy.visible = who.is_adult()
+		[int(villager.health), int(villager.max_health), int(villager.food), int(villager.water),
+			int(villager.rest), int(villager.mood)])
+	_equipment_policy.visible = villager.is_adult()
 	_equipment_policy.text = tr({
 		&"best_available": &"EQUIP_BEST",
 		&"preserve_durability": &"EQUIP_PRESERVE",
 		&"none": &"EQUIP_NONE",
-	}.get(who.profile.equipment_policy, &"EQUIP_BEST"))
+	}.get(villager.profile.equipment_policy, &"EQUIP_BEST"))
 	# Colour the needs line by its worst value, so a starving villager is visible without
 	# the player having to read four numbers.
-	var health_percent := who.health / maxf(who.max_health, 1.0) * 100.0
-	var worst: float = minf(minf(minf(who.food, who.water), who.rest), health_percent)
+	var health_percent := villager.health / maxf(villager.max_health, 1.0) * 100.0
+	var worst: float = minf(minf(minf(villager.food, villager.water), villager.rest), health_percent)
 	var tint := UiPalette.TEXT_DIM
 	if worst <= Villager.HUNGER_URGENT:
 		tint = UiPalette.DANGER if worst <= 15.0 else UiPalette.WARN
 	_sel_needs.add_theme_color_override("font_color", tint)
 
 
+func _refresh_golem_selection(golem: Golem) -> void:
+	_selection_card.visible = true
+	_sel_who.text = L10n.t(&"GOLEM_IDENTITY", [golem.display_name()])
+	_sel_doing.text = golem.describe()
+	_sel_needs.text = L10n.t(&"GOLEM_INTEGRITY", [int(golem.health), int(golem.max_health)])
+	var health_percent := golem.health / maxf(golem.max_health, 1.0) * 100.0
+	_sel_needs.add_theme_color_override("font_color",
+		UiPalette.DANGER if health_percent <= 15.0 else (
+		UiPalette.WARN if health_percent <= 35.0 else UiPalette.TEXT_DIM))
+	_equipment_policy.visible = true
+	_equipment_policy.text = tr(&"UI_DISMISS_CONFIRM" if _demolish_armed else &"UI_DISMISS")
+
+
 func _on_equipment_policy() -> void:
-	var who: Villager = _god_hand.selected if _god_hand != null else null
-	if who == null or not is_instance_valid(who) or not who.is_adult():
+	var who: Agent = _god_hand.selected as Agent if _god_hand != null else null
+	if who == null or not is_instance_valid(who):
+		return
+	if who is Golem:
+		if not _demolish_armed:
+			_demolish_armed = true
+			_demolish_timer = 3.0
+			_refresh_selection()
+			return
+		_demolish_armed = false
+		(who as Golem).dismiss()
+		_god_hand.clear_selection()
+		_refresh_selection()
+		return
+	if not who is Villager:
+		return
+	var villager := who as Villager
+	if not villager.is_adult():
 		return
 	var policies: Array[StringName] = [&"best_available", &"preserve_durability", &"none"]
-	var at := policies.find(who.profile.equipment_policy)
-	who.set_equipment_policy(policies[(maxi(at, 0) + 1) % policies.size()])
+	var at := policies.find(villager.profile.equipment_policy)
+	villager.set_equipment_policy(policies[(maxi(at, 0) + 1) % policies.size()])
 	_refresh_selection()
 
 

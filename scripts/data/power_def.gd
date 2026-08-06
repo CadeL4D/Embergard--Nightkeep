@@ -50,6 +50,21 @@ enum Kind {
 @export var weather_id: StringName = &""
 @export var persistent_limit: int = 0
 
+@export_group("Mobile Construct")
+## Non-empty turns CONSTRUCT into a mobile agent rather than a hidden BuildingDef. `labor` and
+## `guard` are behavior capabilities consumed by Golem; the stable power id remains its identity.
+@export var construct_role: StringName = &""
+@export var construct_move_speed: float = 25.0
+@export var construct_max_health: float = 80.0
+@export var construct_work_rate: float = 1.0
+@export var construct_carry_capacity: int = 10
+@export var construct_attack_damage: float = 0.0
+@export var construct_attack_range: float = 1.5
+@export var construct_attack_cooldown: float = 1.0
+@export var construct_attack_type: StringName = &"holy"
+@export var construct_resistances: Dictionary = {}
+@export var construct_light_radius: int = 0
+
 @export_group("Buff")
 ## Mood added outright to every villager in radius. Feeds straight back into Faith generation,
 ## which is why Blessing is the power that pays for itself.

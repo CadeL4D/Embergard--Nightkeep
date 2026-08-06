@@ -499,7 +499,7 @@ theme_override_font_sizes/font_size = 8
 text = "health 72/72  food 80  water 80  rest 80  mood 70"
 
 [node name="EquipmentPolicy" type="Button" parent="SafeArea/Layout/BottomRow/SelectionCard/Rows"]
-custom_minimum_size = Vector2(112, 24)
+custom_minimum_size = Vector2(112, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
 text = "EQUIP_BEST"
@@ -718,4 +718,3 @@ custom_minimum_size = Vector2(70, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "UI_BUILD"
-

@@ -12,6 +12,8 @@ var _fps_sum: float = 0.0
 var _fps_samples: int = 0
 var _pressure_sum: float = 0.0
 var _pressure_samples: int = 0
+var _path_queue_sum: float = 0.0
+var _path_queue_samples: int = 0
 
 
 func _ready() -> void:
@@ -34,6 +36,8 @@ func _begin_run(seed_value: int) -> void:
 		"mode": String(Difficulties.current.id) if Difficulties.current != null else "",
 		"deaths": {}, "miracles": {}, "resource_starvation": {},
 		"idle_agent_seconds": 0.0, "path_cells": 0, "paths": 0,
+		"path_queue_before_golems": -1, "path_queue_peak_with_golems": 0,
+		"maximum_golems": 0,
 		"tower_damage": 0.0, "peak_corruption_pressure": 0.0,
 		"abandoned": false, "completed": false,
 	}
@@ -41,6 +45,8 @@ func _begin_run(seed_value: int) -> void:
 	_fps_samples = 0
 	_pressure_sum = 0.0
 	_pressure_samples = 0
+	_path_queue_sum = 0.0
+	_path_queue_samples = 0
 
 
 func _finish_run(victory: bool, shards: int) -> void:
@@ -54,6 +60,7 @@ func _finish_run(victory: bool, shards: int) -> void:
 	current["average_fps"] = _fps_sum / maxf(float(_fps_samples), 1.0)
 	current["average_corruption_pressure"] = \
 		_pressure_sum / maxf(float(_pressure_samples), 1.0)
+	current["average_path_queue"] = _path_queue_sum / maxf(float(_path_queue_samples), 1.0)
 	_append(current)
 	current = {}
 
@@ -72,6 +79,17 @@ func record_path(cell_count: int) -> void:
 		return
 	current["path_cells"] = int(current.get("path_cells", 0)) + cell_count
 	current["paths"] = int(current.get("paths", 0)) + 1
+
+
+## Capture the queue at the moment the first mobile construct joins it, then retain a peak. The
+## cap is a tuning guardrail, not permission to silently delete agents from a running colony.
+func record_golem_count(count: int) -> void:
+	if current.is_empty():
+		return
+	if count > 0 and int(current.get("path_queue_before_golems", -1)) < 0:
+		current["path_queue_before_golems"] = World.paths.last_queue_length \
+			if World.paths != null else 0
+	current["maximum_golems"] = maxi(int(current.get("maximum_golems", 0)), count)
 
 
 func record_resource_starvation(kind: StringName) -> void:
@@ -114,6 +132,13 @@ func _process(delta: float) -> void:
 	_fps_samples += 1
 	_pressure_sum += Threat.pressure
 	_pressure_samples += 1
+	if World.paths != null:
+		var queue := World.paths.last_queue_length
+		_path_queue_sum += queue
+		_path_queue_samples += 1
+		if Colony.golem_count() > 0:
+			current["path_queue_peak_with_golems"] = maxi(
+				int(current.get("path_queue_peak_with_golems", 0)), queue)
 	current["peak_corruption_pressure"] = maxf(
 		float(current.get("peak_corruption_pressure", 0.0)), Threat.pressure)
 	var idle := 0

@@ -264,6 +264,14 @@ static func faith() -> Report:
 		r.terms.append(Term.new(
 			L10n.t(&"LEDGER_UPKEEP", [L10n.label(building.def.display_name)]),
 			-building.def.faith_upkeep))
+	for golem in Colony.golems:
+		if not is_instance_valid(golem) or not golem.alive:
+			continue
+		var def := Powers.get_power(golem.power_id)
+		if def == null or def.upkeep <= 0.0:
+			continue
+		r.terms.append(Term.new(
+			L10n.t(&"LEDGER_UPKEEP", [L10n.label(def.display_name)]), -def.upkeep))
 
 	# A deficit reports its RUNWAY, not its rate. "three minutes until your powers go dark" is
 	# actionable; "-0.31 per second" is arithmetic the player has to do themselves under pressure.

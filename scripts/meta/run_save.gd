@@ -6,7 +6,7 @@ extends RefCounted
 ## purification, the regrowing Heart, and physical building-supply requests. This project has no
 ## released save contract, so older schemas are deliberately invalidated rather than guessed into
 ## the new progression or logistics state.
-const SCHEMA_VERSION := 12
+const SCHEMA_VERSION := 13
 
 
 static func has_save() -> bool:
