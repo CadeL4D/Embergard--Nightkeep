@@ -93,4 +93,5 @@ signal notice(text: String, urgency: int)           ## 0 info, 1 warning, 2 alar
 signal realm_changed()
 signal colony_awakened(colony_id: StringName)
 signal trade_route_updated(route_id: int, status: StringName)
+signal migration_ready(order, ledger)
 signal heart_shattered()

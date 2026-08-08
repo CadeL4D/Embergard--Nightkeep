@@ -2,16 +2,16 @@
 [ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
 [resource]
 script = ExtResource("1")
-id = &"labor_effigy"
-display_name = "POWER_LABOR_EFFIGY"
-description = "POWER_LABOR_EFFIGY_DESC"
+id = &"labor_golem"
+display_name = "POWER_LABOR_GOLEM"
+description = "POWER_LABOR_GOLEM_DESC"
 kind = 10
 faith_cost = 30.0
 cooldown = 8.0
-construct_id = &"divine_labor_effigy"
+construct_id = &"labor_golem"
 persistent_entity = true
 dismissible = true
-upkeep = 0.8
+maintenance_influence = 0.8
 persistent_limit = 8
 construct_role = &"labor"
 construct_move_speed = 27.0

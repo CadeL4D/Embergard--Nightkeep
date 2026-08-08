@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"courier_golem"
+display_name = "POWER_COURIER_GOLEM"
+description = "POWER_COURIER_GOLEM_DESC"
+kind = 10
+faith_cost = 22.0
+cooldown = 7.0
+persistent_entity = true
+dismissible = true
+persistent_limit = 6
+maintenance_influence = 0.5
+construct_role = &"courier"
+construct_move_speed = 35.0
+construct_max_health = 55.0
+construct_work_rate = 0.5
+construct_carry_capacity = 18
+construct_resistances = {&"blight": 0.1}
+required_temple_tier = 1
+burden = 0.05
+color = Color(0.95, 0.81, 0.42, 1)
+order = 17

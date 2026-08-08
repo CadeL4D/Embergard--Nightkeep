@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/hut.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"standard_house"
+display_name = "BUILDING_STANDARD_HOUSE"
+description = "BUILDING_STANDARD_HOUSE_DESC"
+sprite = ExtResource("2_tex")
+category = &"housing"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = true
+max_blight = 40
+cost = {&"boards": 8, &"cut_stone": 6, &"wood": 8}
+build_work = 36.0
+max_hp = 230.0
+repair_cost = {&"boards": 1, &"cut_stone": 1}
+upgrades_from = &"hut"
+min_population = 7
+light_radius = 4
+influence_radius = 6
+sleep_slots = 7
+sleep_recovery_multiplier = 1.35
+order = 13
+color = Color(0.72, 0.67, 0.56, 1)

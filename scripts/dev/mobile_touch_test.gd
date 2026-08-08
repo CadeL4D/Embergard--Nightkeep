@@ -19,9 +19,7 @@ func _ready() -> void:
 	var camera: Camera2D = run.get_node("CameraRig")
 	_test_camera(camera)
 	await _test_camera_input_route(camera)
-	_test_drawer_exclusivity(run.get_node("Hud"))
-	await _test_drawer_fits_on_screen(run.get_node("Hud"))
-	_test_menu_dropdown(run.get_node("Hud"))
+	_test_workspaces(run)
 	_test_center_progression(run.get_node("Hud"))
 	_test_house_branches()
 	_test_hand(run.get_node("GodHand"), camera)
@@ -40,6 +38,37 @@ func _ready() -> void:
 		for failure in _failures:
 			print("FAIL: %s" % failure)
 		get_tree().quit(1)
+
+
+func _test_workspaces(run: Node) -> void:
+	var hud: CanvasLayer = run.get_node("Hud")
+	var workspace: CanvasLayer = run.get_node("MobileWorkspace")
+	var tabs: GridContainer = workspace._screen.get_node(
+		"Safe/Layout/WorkspaceTabs")
+	_expect(tabs.get_child_count() == 8, "all eight touch workspaces are present")
+	for id: StringName in workspace.WORKSPACE_IDS:
+		hud._select_menu_tab(id)
+		_expect(workspace.is_open() and workspace.current == id,
+			"%s opens as a full-screen touch workspace" % id)
+	workspace.open(&"terrain")
+	workspace._choose_terrain_tool(WorkOrder.Kind.DIG, false)
+	_expect(not workspace.is_open() and WorkOrders.active_kind == WorkOrder.Kind.DIG \
+		and workspace._tool_bar.visible, "terrain tools hand off to a persistent map toolbar")
+	WorkOrders.toggle_active_shape()
+	_expect(WorkOrders.active_shape == WorkOrder.Shape.SQUARE,
+		"terrain tools support a square brush")
+	workspace._finish_tool()
+	workspace.open(&"harvest")
+	workspace._begin_harvest(&"woodcutting")
+	DefenseControl.toggle_gather_shape()
+	_expect(DefenseControl.gather_shape == WorkOrder.Shape.SQUARE,
+		"harvest tools support a square brush")
+	workspace._finish_tool()
+	workspace.open(&"terrain")
+	workspace._choose_terrain_tool(WorkOrder.Kind.DISMANTLE, true)
+	_expect(workspace._destructive_pending == WorkOrder.Kind.DISMANTLE,
+		"destructive terrain tools require confirmation")
+	workspace.cancel_all()
 
 
 func _test_safe_areas() -> void:

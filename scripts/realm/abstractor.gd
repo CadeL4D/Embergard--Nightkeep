@@ -35,6 +35,7 @@ static func capture(ledger: ColonyLedger) -> void:
 		"quotas": Colony.quotas.duplicate(true),
 		"migration_progress": Colony.migration_progress,
 		"faith": Divine.faith,
+		"divine_ledger": DivineLedger.to_dict(),
 		"ember_cell": Divine.ember_cell,
 		"taken_up_powers": Divine.taken_up.duplicate(),
 		"tomes": Divine.pack_library(),
@@ -42,8 +43,10 @@ static func capture(ledger: ColonyLedger) -> void:
 		"night_index": Threat.night_index,
 		"threat_pressure": Threat.pressure,
 		"defense_control": DefenseControl.to_dict(),
+		"work_orders": WorkOrders.to_dict(),
 		"villagers": _pack_villagers(),
 		"golems": _pack_golems(),
+		"animals": _pack_animals(),
 		"buildings": _pack_buildings(),
 	}
 	ledger.state = state
@@ -69,6 +72,11 @@ static func _pack_villagers() -> Array:
 			"water": v.water,
 			"rest": v.rest,
 			"mood": v.mood,
+			"faith_need": v.profile.faith,
+			"thermal_comfort": v.profile.thermal_comfort,
+			"panic": v.profile.panic,
+			"confusion": v.profile.confusion,
+			"stress": v.profile.stress,
 			"health": v.health,
 			"carry_kind": v.carry_kind,
 			"carry_amount": v.carry_amount,
@@ -94,6 +102,16 @@ static func _pack_golems() -> Array:
 			"carry_amount": golem.carry_amount,
 			"supply_request_id": golem._supply_request_id,
 		})
+	return out
+
+
+static func _pack_animals() -> Array:
+	var out: Array = []
+	for animal in Colony.animals:
+		if not is_instance_valid(animal) or not animal.alive:
+			continue
+		out.append({"kind": animal.animal_kind, "x": animal.position.x,
+			"y": animal.position.y, "health": animal.health})
 	return out
 
 
@@ -140,6 +158,7 @@ static func _pack_blight_workers() -> Array:
 			"y": worker.position.y,
 			"home": worker.home_cell,
 			"carry": worker.carry_mass,
+			"jailed_anchor": worker.jailed_anchor,
 			"task": Threat.worker_task_for_save(worker),
 		})
 	return out

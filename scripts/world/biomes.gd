@@ -6,9 +6,33 @@ extends RefCounted
 ## authored consequences: how many nests a region supports, which resources thrive there,
 ## which ground is tiring to cross, and how readily the Blight takes hold.
 
-const DEFAULT_ID := &"grassland"
+const DEFAULT_ID := &"forest"
 
 const DEFINITIONS := {
+	&"desert": {
+		"name": &"BIOME_DESERT", "hazard": &"BIOME_DESERT_HAZARD",
+		"nest_count": 1, "nest_min": 28, "nest_span": 7.0,
+		"forest_bonus": -0.18, "stone_bonus": 0.08, "food_bonus": -0.12,
+		"threat": 1.12, "blight": 0.92,
+	},
+	&"dry_lands": {
+		"name": &"BIOME_DRY_LANDS", "hazard": &"BIOME_DRY_LANDS_HAZARD",
+		"nest_count": 1, "nest_min": 29, "nest_span": 7.0,
+		"forest_bonus": -0.12, "stone_bonus": 0.12, "food_bonus": -0.08,
+		"threat": 1.10, "blight": 0.96,
+	},
+	&"haven": {
+		"name": &"BIOME_HAVEN", "hazard": &"BIOME_HAVEN_HAZARD",
+		"nest_count": 1, "nest_min": 32, "nest_span": 8.0,
+		"forest_bonus": 0.04, "stone_bonus": -0.02, "food_bonus": 0.10,
+		"threat": 0.90, "blight": 0.86,
+	},
+	&"outlands": {
+		"name": &"BIOME_OUTLANDS", "hazard": &"BIOME_OUTLANDS_HAZARD",
+		"nest_count": 1, "nest_min": 29, "nest_span": 8.0,
+		"forest_bonus": 0.01, "stone_bonus": 0.04, "food_bonus": -0.01,
+		"threat": 1.08, "blight": 1.06,
+	},
 	&"coast": {
 		"name": &"BIOME_COAST",
 		"hazard": &"BIOME_COAST_HAZARD",
@@ -101,6 +125,14 @@ static func blight_multiplier(id: StringName) -> float:
 ## modest: biome selection should matter without making a poor region unable to bootstrap.
 static func yield_multiplier(id: StringName, feature: int) -> float:
 	match id:
+		&"desert":
+			return 1.14 if feature in [Terrain.Feature.STONE, Terrain.Feature.DARK_CRYSTAL] else 0.82
+		&"dry_lands":
+			return 1.18 if feature in [Terrain.Feature.STONE, Terrain.Feature.RUIN_WALL] else 0.86
+		&"haven":
+			return 1.18 if feature == Terrain.Feature.BERRIES else 1.04
+		&"outlands":
+			return 1.16 if feature == Terrain.Feature.DARK_CRYSTAL else 0.96
 		&"forest":
 			return 1.24 if feature == Terrain.Feature.TREE else 0.94
 		&"marsh":
@@ -124,6 +156,12 @@ static func yield_multiplier(id: StringName, feature: int) -> float:
 ## ascent is a stronger strategic improvement than paving open grass.
 static func movement_multiplier(id: StringName, terrain_type: int) -> float:
 	match id:
+		&"desert", &"dry_lands":
+			return 0.90 if terrain_type in [Terrain.Type.DIRT, Terrain.Type.RUBBLE] else 0.96
+		&"outlands":
+			return 0.92 if terrain_type in [Terrain.Type.ROCK, Terrain.Type.RUBBLE] else 0.97
+		&"haven":
+			return 1.02
 		&"marsh":
 			return 0.80 if terrain_type in [Terrain.Type.DIRT, Terrain.Type.SAND] else 0.92
 		&"highland":

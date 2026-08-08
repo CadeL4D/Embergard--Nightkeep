@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"tumbler_worker"
+display_name = "JOB_TUMBLER_WORKER"
+workplace = &"rock_tumbler"
+cycle_yield = {&"cut_stone": 3, &"stone_balls": 2}
+cycle_cost = {&"stone": 6}
+cycle_work = 12.0
+work_rate = 1.0
+carry_capacity = 10
+priority = 3
+default_quota = 0
+color = Color(0.62, 0.64, 0.69, 1)

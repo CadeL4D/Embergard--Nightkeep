@@ -49,6 +49,13 @@ enum Kind {
 @export var terrain_effect: StringName = &""
 @export var weather_id: StringName = &""
 @export var persistent_limit: int = 0
+@export var creates_nephilim: bool = false
+
+@export_group("Villager Reaction")
+@export var villager_faith_delta: float = 1.0
+@export var villager_panic_delta: float = 0.0
+@export var villager_confusion_delta: float = 1.0
+@export var maintenance_influence: float = 0.0
 
 @export_group("Mobile Construct")
 ## Non-empty turns CONSTRUCT into a mobile agent rather than a hidden BuildingDef. `labor` and

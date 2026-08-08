@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/gate.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"cullis_gate"
+display_name = "BUILDING_CULLIS_GATE"
+description = "BUILDING_CULLIS_GATE_DESC"
+sprite = ExtResource("2")
+category = &"defence"
+tier = 3
+footprint = Vector2i(1, 1)
+blocks_movement = false
+blocks_monsters_only = true
+cost = {&"cut_stone": 12, &"iron_ingot": 6, &"crylithium": 3}
+build_work = 32.0
+max_hp = 320.0
+repair_cost = {&"cut_stone": 2, &"iron_ingot": 1}
+light_radius = 5
+influence_radius = 6
+destroys_drones = true
+drone_essence_yield = 8
+order = 35
+color = Color(0.58, 0.46, 0.76, 1)

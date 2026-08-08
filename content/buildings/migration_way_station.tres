@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/longhouse.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"migration_way_station"
+display_name = "BUILDING_MIGRATION_WAY_STATION"
+description = "BUILDING_MIGRATION_WAY_STATION_DESC"
+sprite = ExtResource("2")
+category = &"logistics"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"boards": 16, &"cut_stone": 8, &"rations": 12, &"tools": 2}
+build_work = 36.0
+max_hp = 220.0
+repair_cost = {&"boards": 2, &"cut_stone": 1}
+is_stockpile = true
+inventory_capacity = 240
+storage_tags = Array[StringName]([&"food", &"rations", &"materials"])
+influence_radius = 7
+worker_slots = 2
+workplace_role = &"ancillary"
+enables_migration = true
+order = 14
+color = Color(0.72, 0.61, 0.43, 1)

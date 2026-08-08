@@ -36,6 +36,7 @@ var gather_designations: Dictionary = {}
 var gather_job: StringName = &""
 var gather_erasing: bool = false
 var gather_radius: int = 2
+var gather_shape: WorkOrder.Shape = WorkOrder.Shape.CIRCLE
 
 var _work_count := 0
 var _guard_count := 0
@@ -72,6 +73,7 @@ func reset_for_map() -> void:
 	gather_job = &""
 	gather_erasing = false
 	gather_radius = 2
+	gather_shape = WorkOrder.Shape.CIRCLE
 	_work_count = 0
 	_guard_count = 0
 	changed.emit()
@@ -94,6 +96,7 @@ func to_dict() -> Dictionary:
 		"cleanse_completed": cleanse_completed,
 		"stockpile_rules": stockpile_rules.duplicate(true),
 		"gather_designations": packed_gather,
+		"gather_shape": int(gather_shape),
 	}
 
 
@@ -107,6 +110,8 @@ func load_dict(data: Dictionary) -> void:
 	cleanse_dawns_left = int(data.get("cleanse_dawns_left", 0))
 	cleanse_completed = bool(data.get("cleanse_completed", false))
 	stockpile_rules = data.get("stockpile_rules", {}).duplicate(true)
+	gather_shape = clampi(int(data.get("gather_shape", WorkOrder.Shape.CIRCLE)),
+		0, WorkOrder.Shape.size() - 1) as WorkOrder.Shape
 	var saved_gather: Dictionary = data.get("gather_designations", {})
 	for raw_job_id in saved_gather:
 		var job_id := StringName(raw_job_id)
@@ -210,6 +215,19 @@ func adjust_gather_radius(delta: int) -> void:
 	changed.emit()
 
 
+func set_gather_shape(value: WorkOrder.Shape) -> void:
+	if gather_shape == value:
+		return
+	gather_shape = value
+	gather_mode_changed.emit(gather_job, gather_erasing, gather_radius)
+	changed.emit()
+
+
+func toggle_gather_shape() -> void:
+	set_gather_shape(WorkOrder.Shape.SQUARE if gather_shape == WorkOrder.Shape.CIRCLE \
+		else WorkOrder.Shape.CIRCLE)
+
+
 ## Apply the current circular brush. Adding only marks resources that this job can
 ## actually harvest; erasing clears every marked cell under the brush.
 func paint_gather(center_cell: int, erase_override: int = -1) -> bool:
@@ -231,7 +249,8 @@ func paint_gather(center_cell: int, erase_override: int = -1) -> bool:
 			mask.resize(World.grid.cell_count)
 		for dy in range(-gather_radius, gather_radius + 1):
 			for dx in range(-gather_radius, gather_radius + 1):
-				if dx * dx + dy * dy > gather_radius * gather_radius:
+				if gather_shape == WorkOrder.Shape.CIRCLE \
+						and dx * dx + dy * dy > gather_radius * gather_radius:
 					continue
 				var point := center + Vector2i(dx, dy)
 				if not World.grid.is_valid_v(point):
@@ -281,6 +300,32 @@ func gathering_count(job_id: StringName) -> int:
 		if value != 0:
 			total += 1
 	return total
+
+
+## Direct brush API used by WorkOrders and touch workspaces without changing the currently
+## selected HUD tool. Only features the chosen job can actually harvest are marked.
+func designate_gather_cells(job_id: StringName, cells: PackedInt32Array,
+		erasing: bool = false) -> bool:
+	var job := Jobs.get_job(job_id)
+	if job == null or job.target_features.is_empty():
+		return false
+	if not gather_designations.has(job_id):
+		var created := PackedByteArray()
+		created.resize(World.grid.cell_count)
+		gather_designations[job_id] = created
+	var mask: PackedByteArray = gather_designations[job_id]
+	var any := false
+	for cell in cells:
+		if not World.grid.is_valid_index(cell):
+			continue
+		var value := 0 if erasing else (1 if job.harvests(World.feature_at(cell)) else 0)
+		if mask[cell] != value:
+			mask[cell] = value
+			any = true
+	gather_designations[job_id] = mask
+	if any:
+		changed.emit()
+	return any
 
 
 func _on_terrain_changed(cell: int) -> void:

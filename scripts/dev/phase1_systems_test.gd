@@ -20,14 +20,26 @@ func _ready() -> void:
 
 	_expect(Buildings.all().size() >= 44, "the expanded launch catalog loads")
 	_expect(Jobs.all().size() >= 17, "the expanded job catalog loads")
-	_expect(Colony.KINDS.size() == 14, "all fourteen Phase-1 resources are registered")
+	_expect(Colony.KINDS.size() == 27, "all twenty-seven Update 2d resources are registered")
+	_expect(BalanceCatalog.is_valid() and BalanceCatalog.ledger_entries.size() >= 350,
+		"the versioned parity ledger validates every implemented catalog family")
+	_expect(not BalanceCatalog.verification_blockers().is_empty(),
+		"unverified numeric rows remain explicit test-blocking parity work")
+	var occultist := Jobs.get_job(&"occultist")
+	var collector := Buildings.get_building(&"essence_collector")
+	var vessel_maker := Jobs.get_job(&"vessel_maker")
+	_expect(occultist.loose_yield_amount == 3 and collector.energy_per_essence == 3,
+		"Update 2d prayer creates three Essence worth three Energy each")
+	_expect(vessel_maker.cycle_yield == {&"empty_vessel": 1} \
+			and vessel_maker.cycle_cost == {&"iron_ingot": 1, &"gold_ingot": 1},
+		"an Empty Eerie Vessel costs exactly one iron and one gold ingot")
 	var watchtower := Buildings.get_building(&"watchtower")
 	var shrine := Buildings.get_building(&"shrine")
 	_expect(watchtower != null and watchtower.tier == 1 and watchtower.unlock_cost == 0,
 		"Watchtower is available on the first run")
 	_expect(shrine != null and shrine.tier == 1 and shrine.unlock_cost == 0,
 		"Shrine is available on the first run")
-	_expect(Powers.all().size() == 20, "the complete twenty-miracle roster loads")
+	_expect(Powers.all().size() >= 24, "the expanded miracle and Golem roster loads")
 	_expect(DamageTypes.apply(100.0, {&"piercing": 0.4}, &"piercing") == 60.0,
 		"typed resistance reduces incoming damage")
 	_expect(DamageTypes.apply(100.0, {&"fire": -0.25}, &"fire") == 125.0,
@@ -75,27 +87,27 @@ func _ready() -> void:
 	_expect(workshop != null, "a policy-controlled workshop can be raised")
 	if workshop != null:
 		workshop.production_worker_limit = 1
-		workshop.production_target = Colony.amount_of(&"arrows")
+		workshop.production_target = mini(Colony.amount_of(&"arrows"), Colony.amount_of(&"bolts"))
 		var fletching := Jobs.get_job(&"fletching")
 		_expect(workshop.effective_worker_slots() == 1,
 			"workshop worker limits are enforced")
 		_expect(not workshop.production_is_available(fletching),
 			"maintain-stock policy pauses completed output")
-		workshop.production_target += 1
+		workshop.production_target = maxi(Colony.amount_of(&"arrows"), Colony.amount_of(&"bolts")) + 1
 		_expect(workshop.production_is_available(fletching),
 			"maintain-stock policy resumes below target")
 
 	var temple: Building = _force_raise(shrine, entities)
-	var effigy_power := Powers.get_power(&"labor_effigy")
+	var effigy_power := Powers.get_power(&"labor_golem")
 	var effigy_cell := _valid_golem_cell()
-	var upkeep_before := Divine.building_upkeep()
+	var upkeep_before := DivineLedger.reserved
 	Divine.taken_up.append(effigy_power.id)
 	Divine.faith = 100.0
 	_expect(temple != null and effigy_cell != -1 \
 		and Divine.cast(effigy_power, World.grid.to_world_index(effigy_cell)),
-		"a persistent Labor Effigy can be called onto valid ground")
-	_expect(Divine.building_upkeep() > upkeep_before,
-		"persistent constructs reserve ongoing Faith through building upkeep")
+		"a persistent Labor Golem can be called onto valid ground")
+	_expect(DivineLedger.reserved > upkeep_before,
+		"persistent constructs reserve ongoing Influence in the Divine Ledger")
 	Divine.set_library_auto_manage(false)
 	for i in 4:
 		var tome := Divine.Tome.new()
@@ -138,6 +150,26 @@ func _ready() -> void:
 			bridge.destroy()
 			World.rebuild_move_cost()
 			_expect(not World.is_walkable(bridge_cell), "removing a bridge closes the water cell again")
+
+	# A full live cap must defer threat, not erase it or inflate the health of actors already
+	# present. The carry also belongs to save state so quitting cannot make a hard wave cheaper.
+	var old_pending := Threat._pending_budget
+	var old_body_cap := Threat._night_body_cap
+	Threat._pending_budget = 7.5
+	Threat._night_body_cap = 0
+	Threat._spawn_pulse(7.5)
+	_expect(is_equal_approx(Threat._pending_budget, 7.5),
+		"a full concurrent hostile cap retains unspent threat as reinforcements")
+	Threat._pending_budget = old_pending
+	Threat._night_body_cap = old_body_cap
+	var original_progression := Threat.progression_state()
+	var queued_fixture := original_progression.duplicate(true)
+	queued_fixture["queued_reinforcement_budget"] = 17.5
+	Threat.restore_progression_state(queued_fixture)
+	_expect(is_equal_approx(float(Threat.progression_state().get(
+		"queued_reinforcement_budget", 0.0)), 17.5),
+		"queued reinforcement threat survives progression serialization")
+	Threat.restore_progression_state(original_progression)
 
 	RunSave.clear()
 	_report()

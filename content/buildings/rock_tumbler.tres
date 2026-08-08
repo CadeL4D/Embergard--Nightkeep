@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/stonecutter.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"rock_tumbler"
+display_name = "BUILDING_ROCK_TUMBLER"
+description = "BUILDING_ROCK_TUMBLER_DESC"
+sprite = ExtResource("2")
+category = &"production"
+tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = true
+cost = {&"boards": 8, &"cut_stone": 10, &"tools": 1}
+build_work = 28.0
+max_hp = 180.0
+repair_cost = {&"cut_stone": 2}
+input_capacity = 72
+output_capacity = 72
+influence_radius = 5
+worker_slots = 3
+order = 24
+color = Color(0.62, 0.62, 0.66, 1)

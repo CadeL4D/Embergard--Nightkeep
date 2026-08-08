@@ -23,6 +23,7 @@ inventory_capacity = 220
 storage_tags = Array[StringName]([&"wood", &"boards"])
 influence_radius = 6
 worker_slots = 5
+harvest_speed_multiplier = 1.20
 workplace_role = &"lumber_lodge"
 order = 15
 color = Color(0.5, 0.7, 0.36, 1)

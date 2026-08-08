@@ -4,7 +4,7 @@ extends Agent
 ## hunger, sleep, mood, equipment, household, job quota or reproduction hooks. They reuse only the
 ## colony's physical claims, delivery ledgers and building work APIs.
 
-enum State { IDLE, FETCHING, DELIVERING, BUILDING, HAULING, GUARDING }
+enum State { IDLE, FETCHING, DELIVERING, BUILDING, HAULING, GUARDING, HARVESTING }
 
 const REACH_SQ := 700.0
 
@@ -34,6 +34,7 @@ var _path_serial: int = 0
 var _path_requested_tick: int = 0
 var _light_handle: int = 0
 var _light_cell: int = -1
+var _maintenance_reserved: float = 0.0
 
 @onready var _sprite: Sprite2D = $Sprite
 @onready var _ring: Sprite2D = $SelectionRing
@@ -57,9 +58,14 @@ func _ready() -> void:
 		queue_free()
 		return
 	setup(_power)
+	if _power.maintenance_influence > 0.0:
+		if not DivineLedger.reserve(_power.maintenance_influence):
+			queue_free()
+			return
+		_maintenance_reserved = _power.maintenance_influence
 	_ring.visible = false
 	_sprite.modulate = _power.color
-	_sprite.frame = 5 if role == &"guard" else 1
+	_sprite.frame = 5 if role in [&"guard", &"holy"] else 1
 	_carry.hframes = Colony.KINDS.size()
 	_carry.visible = false
 	Colony.golems.append(self)
@@ -77,6 +83,9 @@ func _exit_tree() -> void:
 	if _light_handle != 0 and World.light_field != null:
 		World.light_field.remove_source(_light_handle)
 		_light_handle = 0
+	if _maintenance_reserved > 0.0:
+		DivineLedger.release(_maintenance_reserved)
+		_maintenance_reserved = 0.0
 	super()
 
 
@@ -100,15 +109,9 @@ func think(delta: float) -> void:
 		_cancel_path_request()
 		_release_task()
 		state = State.IDLE
-	if Divine.faith <= 0.0:
-		stop()
-		_cancel_path_request()
-		_release_task()
-		state = State.IDLE
-		return
 	if _awaiting_path:
 		return
-	if role == &"guard":
+	if role in [&"guard", &"holy"]:
 		_tick_guard(delta)
 	else:
 		_tick_labor(delta)
@@ -128,6 +131,9 @@ func _tick_labor(delta: float) -> void:
 		State.HAULING:
 			_tick_hauling()
 			return
+		State.HARVESTING:
+			_tick_harvesting(delta)
+			return
 		_:
 			pass
 	if is_moving():
@@ -146,9 +152,76 @@ func _tick_labor(delta: float) -> void:
 		_fetch_from = int(assignment["source"])
 		_request_path(_fetch_from, State.FETCHING)
 		return
-	if _try_claim_repair() or _try_claim_site() or _begin_loose_drop_fetch():
+	if role in [&"wood", &"stone", &"crystal"] and _try_claim_resource():
+		return
+	if role == &"labor" and (_try_claim_repair() or _try_claim_site()):
+		return
+	if _begin_loose_drop_fetch():
 		return
 	state = State.IDLE
+
+
+func _try_claim_resource() -> bool:
+	var job := _resource_job()
+	if job == null:
+		return false
+	var target := World.resources.nearest(cell(), job, func(candidate: int) -> bool:
+		return DefenseControl.allows_work(candidate) and Colony.is_claimable(candidate) \
+			and World.has_walkable_neighbour(candidate))
+	if target == -1 or not Colony.claim(target, self):
+		return false
+	_target_cell = target
+	_work_progress = 0.0
+	var approach := World.nearest_walkable(target)
+	if approach == -1:
+		_release_task()
+		return false
+	_request_path(approach, State.HARVESTING)
+	return true
+
+
+func _tick_harvesting(delta: float) -> void:
+	if is_moving():
+		return
+	var job := _resource_job()
+	if job == null or _target_cell == -1 or not _within_reach(_target_cell):
+		_release_task()
+		state = State.IDLE
+		return
+	var feature := World.feature_at(_target_cell)
+	if not job.harvests(feature) \
+			or not DefenseControl.gathering_is_designated(job.id, _target_cell):
+		_release_task()
+		state = State.IDLE
+		return
+	_work_progress += maxf(_power.construct_work_rate, 0.1) * Divine.work_bonus(cell()) \
+		* Colony.global_harvest_multiplier() * delta
+	if _work_progress < Terrain.work_for(feature):
+		return
+	var yields := Terrain.yield_of(feature)
+	var primary: StringName = role
+	for kind: StringName in yields:
+		var amount := maxi(roundi(float(yields[kind]) * Climate.gather_multiplier(feature)), 1)
+		if kind == primary and carry_amount == 0:
+			carry_kind = kind
+			carry_amount = mini(amount, carry_capacity())
+			if amount > carry_amount:
+				Colony.drop_resource(kind, amount - carry_amount, _target_cell, &"golem_harvest")
+		else:
+			Colony.drop_resource(kind, amount, _target_cell, &"golem_harvest")
+	Colony.maybe_drop_harvest_essence(_target_cell)
+	World.clear_feature(_target_cell)
+	_release_task()
+	if not _begin_haul():
+		state = State.IDLE
+
+
+func _resource_job() -> JobDef:
+	match role:
+		&"wood": return Jobs.get_job(&"woodcutting")
+		&"stone": return Jobs.get_job(&"quarrying")
+		&"crystal": return Jobs.get_job(&"crystal_harvester")
+	return null
 
 
 func carry_capacity() -> int:
@@ -417,7 +490,7 @@ func _request_path(destination: int, next_state: State) -> void:
 		if not alive:
 			return
 		if path.is_empty() or not DefenseControl.path_allowed(path,
-				role == &"guard", role == &"labor"):
+				role in [&"guard", &"holy"], role != &"holy"):
 			_release_task()
 			state = State.IDLE
 			think_urgent = true
@@ -496,8 +569,6 @@ func display_name() -> String:
 
 
 func describe() -> String:
-	if Divine.faith <= 0.0:
-		return tr(&"GOLEM_DORMANT")
-	if role == &"guard" and not DefenseControl.has_guard_zone():
+	if role in [&"guard", &"holy"] and not DefenseControl.has_guard_zone():
 		return tr(&"GOLEM_NEEDS_GUARD_ZONE")
 	return tr(StringName("GOLEM_STATE_" + State.keys()[state]))

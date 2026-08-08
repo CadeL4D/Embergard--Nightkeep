@@ -1,6 +1,6 @@
 class_name Resources
 extends RefCounted
-## Lazy data catalog for the fourteen launch resources.
+## Lazy data catalog for the Update 2d redesign's physical resource graph.
 
 const RESOURCE_DIR := "res://content/resources"
 static var _catalog: Dictionary = {}

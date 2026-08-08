@@ -57,8 +57,14 @@ func _draw() -> void:
 	var brush_color := Color(0.96, 0.34, 0.30, 0.92) \
 		if DefenseControl.gather_erasing or _mouse_erasing else Color(color, 0.92)
 	var radius_px := (float(DefenseControl.gather_radius) + 0.52) * tile
-	draw_circle(cursor, radius_px, Color(brush_color, 0.055))
-	draw_arc(cursor, radius_px, 0.0, TAU, 64, brush_color, 1.5)
+	if DefenseControl.gather_shape == WorkOrder.Shape.CIRCLE:
+		draw_circle(cursor, radius_px, Color(brush_color, 0.055))
+		draw_arc(cursor, radius_px, 0.0, TAU, 64, brush_color, 1.5)
+	else:
+		var rect := Rect2(cursor - Vector2(radius_px, radius_px),
+			Vector2(radius_px, radius_px) * 2.0)
+		draw_rect(rect, Color(brush_color, 0.055), true)
+		draw_rect(rect, brush_color, false, 1.5)
 	draw_line(cursor - Vector2(4, 0), cursor + Vector2(4, 0), brush_color, 1.0)
 	draw_line(cursor - Vector2(0, 4), cursor + Vector2(0, 4), brush_color, 1.0)
 

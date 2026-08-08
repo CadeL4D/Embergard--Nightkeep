@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="ResourceDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/resource_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"empty_vessel"
+display_name = "RESOURCE_EMPTY_VESSEL"
+category = &"made"
+storage_tags = Array[StringName]([&"spiritual"])
+display_order = 25

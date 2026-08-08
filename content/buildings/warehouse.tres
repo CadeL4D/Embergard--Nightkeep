@@ -19,7 +19,8 @@ max_hp = 170.0
 repair_cost = {&"boards": 2, &"cut_stone": 1}
 is_stockpile = true
 inventory_capacity = 420
+building_cap_bonus = 4
+workforce_cap_bonus = 1
 influence_radius = 5
 order = 11
 color = Color(0.62, 0.58, 0.5, 1)
-

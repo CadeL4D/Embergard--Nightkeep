@@ -23,11 +23,11 @@ const BUILD_CARD := preload("res://scenes/ui/build_card.tscn")
 ## button would open, and a hold-drag radial switcher). Each had its own idea of what "open" meant,
 ## and mutual exclusion was enforced by every panel explicitly un-pressing the other four.
 const MENU_IDS: Array[StringName] = [
-	&"jobs", &"build", &"concerns", &"powers", &"control", &"library", &"hand", &"realm",
+	&"jobs", &"construction", &"harvest", &"terrain", &"spells", &"console", &"world", &"goals",
 ]
 const MENU_LABELS: Array[StringName] = [
-	&"UI_JOBS", &"UI_BUILD", &"UI_CONCERNS", &"UI_POWER_UPS", &"UI_CONTROL", &"UI_LIBRARY",
-	&"UI_HAND", &"UI_REALM",
+	&"UI_JOBS", &"UI_CONSTRUCTION", &"UI_HARVEST", &"UI_TERRAIN", &"UI_SPELLS",
+	&"UI_CONSOLE", &"UI_WORLD", &"UI_GOALS",
 ]
 
 @onready var _safe_area: MarginContainer = $SafeArea
@@ -444,6 +444,15 @@ func _on_menus_toggled(pressed: bool) -> void:
 
 
 func _select_menu_tab(id: StringName) -> void:
+	var workspace := get_node_or_null("../MobileWorkspace")
+	if workspace != null and workspace.has_method("open"):
+		_menu_tab = id
+		_menu_panel.visible = false
+		_menus_button.set_pressed_no_signal(false)
+		_apply_menu_tab()
+		workspace.open(id)
+		_sync_management_pause()
+		return
 	if id == &"realm":
 		# The Realm map is a screen of its own, not a drawer. Opening it closes the dropdown
 		# rather than leaving a panel stranded underneath a full-screen map — and _menu_tab is
@@ -1631,14 +1640,17 @@ func _refresh_phase() -> void:
 		cause = &"THREAT_ENEMY_WORKS"
 	elif Sim.day > 1:
 		cause = &"THREAT_WORLD_DAY"
-	_phase_label.text = "%s · %s · %s %s" % [Climate.name_of_season(),
-		L10n.t(&"HUD_DAY_MINIMAL", [Sim.day]), arrow, tr(cause)]
-	_phase_label.tooltip_text = L10n.t(&"THREAT_TOOLTIP", [
+	var phases := ["Day", "Dusk", "Night", "Dawn"]
+	var phase_name: String = phases[Sim.phase]
+	_phase_label.text = "%s %.0f°C · %s %d%% · %s · %s · %s %s" % [
+		Climate.name_of_season(), Climate.ambient_temperature_c(), phase_name,
+		int(Sim.phase_progress() * 100.0), L10n.t(&"HUD_DAY_MINIMAL", [Sim.day]),
+		"Paused" if Sim.paused else "%dx" % int(Sim.time_scale), arrow, tr(cause)]
+	_phase_label.tooltip_text = "Threat %d%% · resistance %d%% · footprint %d%% · enemy level %d · expected bodies %d" % [
 		int(round(float(threat_info.get("current_pressure", 0.0)) * 100.0)),
-		int(round(float(threat_info.get("desired_coverage", 0.0)) * 100.0)),
+		int(round(float(threat_info.get("containment_ratio", 0.0)) * 100.0)),
 		int(round(float(threat_info.get("actual_coverage", 0.0)) * 100.0)),
-		int(threat_info.get("enemy_structure_count", 0)),
-	])
+		int(threat_info.get("enemy_level", 1)), int(threat_info.get("expected_bodies", 0))]
 	_phase_label.add_theme_font_size_override("font_size", 9)
 	_phase_label.add_theme_color_override("font_color", UiPalette.TEXT)
 
@@ -1757,14 +1769,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed(&"game_jobs"):
 		_select_menu_tab(&"jobs")
 	elif event.is_action_pressed(&"game_build"):
-		_select_menu_tab(&"build")
+		_select_menu_tab(&"construction")
 	elif event.is_action_pressed(&"game_realm"):
-		_select_menu_tab(&"realm")
+		_select_menu_tab(&"world")
 	elif event.is_action_pressed(&"game_cancel"):
 		if _placement != null and _placement.active:
 			_placement.cancel()
 		elif DefenseControl.gather_job != &"":
 			DefenseControl.cancel_gather_paint()
+		elif WorkOrders.active_kind >= 0:
+			WorkOrders.cancel_tool()
 		else:
 			_breakdown.visible = false
 			_close_menus()
@@ -1839,6 +1853,10 @@ func _refresh_selection() -> void:
 	_sel_needs.text = L10n.t(&"SELECT_NEEDS",
 		[int(villager.health), int(villager.max_health), int(villager.food), int(villager.water),
 			int(villager.rest), int(villager.mood)])
+	_sel_needs.text += "\nFaith %d • comfort %d • stress %d • panic %d • confusion %d" % [
+		int(villager.profile.faith), int(villager.profile.thermal_comfort),
+		int(villager.profile.stress), int(villager.profile.panic),
+		int(villager.profile.confusion)]
 	_equipment_policy.visible = villager.is_adult()
 	_equipment_policy.text = tr({
 		&"best_available": &"EQUIP_BEST",
@@ -1897,7 +1915,10 @@ func _on_equipment_policy() -> void:
 ## Only one large drawer is allowed in the thumb zone. This is both a readability
 ## rule and a hard layout guarantee for the 360 px-tall mobile viewport.
 func _action_panel_open() -> bool:
-	return _breakdown.visible or _job_panel.visible or _build_panel.visible \
+	var workspace := get_node_or_null("../MobileWorkspace")
+	var workspace_open: bool = workspace != null and workspace.has_method("is_open") \
+		and workspace.is_open()
+	return workspace_open or _breakdown.visible or _job_panel.visible or _build_panel.visible \
 		or _control_panel.visible or _library_panel.visible or _placement_bar.visible \
 		or _gather_bar.visible \
 		or _migrant_prompt.visible
@@ -1966,20 +1987,34 @@ func _refresh_resources() -> void:
 			"accessible": L10n.t(&"HUD_BOTTLED_WATER_ACCESSIBLE", [waterskins]),
 		})
 
-	# Faith carries its ceiling: a reservoir that scales with population means "faith 91" says
-	# nothing without knowing whether that is nearly full or barely started. And its rate, because
-	# a number that silently depends on morale is indistinguishable from a broken one.
-	var population_text := "%d%s" % [Colony.population(), _growth_text()]
+	var population_text := "%d/%d%s" % [Colony.population(),
+		Colony.population() + Colony.beds_free(), _growth_text()]
 	var water_text := "%d%s" % [int(_average_water()), _rate_per_second(_water_rate)]
 	var mood_text := "%d%s" % [int(Colony.average_mood()), _rate_per_second(_mood_rate)]
-	var faith_text := "%d/%d%s" % [int(Divine.faith), int(Divine.faith_max()),
-		_rate_per_second(RateLedger.faith().total)]
+	var influence_text := "%d/%d (-%d)" % [int(DivineLedger.available),
+		int(DivineLedger.total_capacity()), int(DivineLedger.reserved)]
+	var faith_total := 0.0
+	var faith_count := 0
+	var energy_total := 0
+	for villager in Colony.villagers:
+		if is_instance_valid(villager) and villager.alive:
+			faith_total += villager.profile.faith
+			faith_count += 1
+	for building in Colony.buildings:
+		if is_instance_valid(building) and not building.is_site():
+			energy_total += building.stored_energy
+	var personal_faith := int(faith_total / float(maxi(faith_count, 1)))
 	entries.append_array([
 		{"kind": &"population", "text": population_text,
 			"accessible": "population " + population_text},
 		{"kind": &"water", "text": water_text, "accessible": "water " + water_text},
 		{"kind": &"mood", "text": mood_text, "accessible": "mood " + mood_text},
-		{"kind": &"faith", "text": faith_text, "accessible": "faith " + faith_text},
+		{"kind": &"faith", "text": "Influence " + influence_text,
+			"accessible": "Influence " + influence_text},
+		{"kind": &"personal_faith", "text": "Faith %d" % personal_faith,
+			"accessible": "average personal Faith %d" % personal_faith},
+		{"kind": &"energy", "text": "Energy %d" % energy_total,
+			"accessible": "stored Energy %d" % energy_total},
 	])
 	_resources.set_rows([{"label": "", "entries": entries}])
 
@@ -2108,4 +2143,4 @@ func _refresh_counts() -> void:
 		# Amber when the colony cannot meet the order — the player needs to see
 		# "you asked for more people than you have" without opening a tutorial.
 		count.add_theme_color_override("font_color",
-			UiPalette.WARN if have < want else UiPalette.TEXT_DIM)
+			UiPalette.DANGER if have < want else UiPalette.TEXT_DIM)

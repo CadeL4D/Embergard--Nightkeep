@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/shrine.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"crystillery"
+display_name = "BUILDING_CRYSTILLERY"
+description = "BUILDING_CRYSTILLERY_DESC"
+sprite = ExtResource("2")
+category = &"production"
+tier = 3
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"cut_stone": 14, &"iron_ingot": 6, &"crystal": 10, &"tools": 2}
+build_work = 42.0
+max_hp = 240.0
+repair_cost = {&"cut_stone": 2, &"iron_ingot": 1}
+input_capacity = 90
+output_capacity = 60
+influence_radius = 6
+worker_slots = 3
+order = 27
+color = Color(0.64, 0.48, 0.89, 1)

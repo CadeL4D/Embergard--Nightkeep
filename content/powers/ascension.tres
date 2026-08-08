@@ -13,6 +13,7 @@ cooldown = 120.0
 radius = 7
 amount = 0.0
 duration = 0.0
+creates_nephilim = true
 mood_boost = 30.0
 speed_boost = 0.45
 damage_boost = 0.8

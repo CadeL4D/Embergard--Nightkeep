@@ -42,8 +42,8 @@ var _outline: Sprite2D = null
 func setup(monster_def: MonsterDef, stat_scale: float = 1.0, spawn_home: int = -1,
 		is_empowered: bool = false) -> void:
 	def = monster_def
-	# The director converts unspendable budget into stat multipliers rather than
-	# more bodies, so late nights get harder without exceeding the entity cap.
+	# Authored creature and regional-level scaling live here. Wave overflow is never folded
+	# into this value: bodies that do not fit the concurrent cap wait as reinforcements.
 	max_health = def.max_health * stat_scale
 	move_speed = def.move_speed
 	home_cell = spawn_home

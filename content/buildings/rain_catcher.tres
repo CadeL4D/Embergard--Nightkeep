@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/well.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"rain_catcher"
+display_name = "BUILDING_RAIN_CATCHER"
+description = "BUILDING_RAIN_CATCHER_DESC"
+sprite = ExtResource("2")
+category = &"production"
+tier = 1
+footprint = Vector2i(2, 2)
+blocks_movement = false
+cost = {&"wood": 16}
+build_work = 12.0
+max_hp = 90.0
+repair_cost = {&"wood": 1}
+is_stockpile = true
+inventory_capacity = 120
+storage_tags = Array[StringName]([&"water"])
+input_capacity = 0
+output_capacity = 96
+influence_radius = 4
+worker_slots = 2
+order = 19
+color = Color(0.35, 0.58, 0.76, 1)

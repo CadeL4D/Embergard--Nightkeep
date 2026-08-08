@@ -251,6 +251,14 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 		elevation_bias = (float(region_profile.get("elevation", 0.5)) - 0.5) * 0.30
 		moisture_bias = (float(region_profile.get("moisture", 0.5)) - 0.5) * 0.42
 	match biome_id:
+		&"desert", &"dry_lands":
+			elevation_bias += 0.025
+			moisture_bias -= 0.20
+		&"haven":
+			moisture_bias += 0.07
+		&"outlands":
+			elevation_bias += 0.05
+			moisture_bias -= 0.03
 		&"coast":
 			elevation_bias -= 0.055
 			moisture_bias += 0.08
@@ -318,6 +326,17 @@ static func _fill_terrain(grid: Grid, res: Result, seed_value: int,
 			# tidal cuts, scree and dry rubble make the biome readable before one resource is
 			# harvested, while the keep flattening pass below still guarantees a safe opening.
 			match biome_id:
+				&"desert", &"dry_lands":
+					if t == Terrain.Type.GRASS:
+						t = Terrain.Type.DIRT
+					elif t == Terrain.Type.DIRT and h > 0.76:
+						t = Terrain.Type.RUBBLE
+				&"haven":
+					if t == Terrain.Type.DIRT and m > 0.42:
+						t = Terrain.Type.GRASS
+				&"outlands":
+					if t in [Terrain.Type.GRASS, Terrain.Type.DIRT] and h > 0.68:
+						t = Terrain.Type.ROCK
 				&"coast":
 					if not has_macro_source and r > 0.38 and r < 0.82 \
 							and absf(h - 0.50) < 0.030 \

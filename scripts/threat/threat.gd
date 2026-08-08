@@ -6,9 +6,8 @@ const MONSTER_SCENE := preload("res://scenes/entities/monster.tscn")
 const BLIGHT_WORKER_SCENE := preload("res://scenes/entities/blight_worker.tscn")
 
 ## Hard ceiling on live monsters. A performance safety valve that exists from day
-## one deliberately: budget that cannot be spent on bodies is converted into stat
-## multipliers on the monsters that DO spawn, so late-run difficulty has somewhere
-## to go that does not melt the phone.
+## one deliberately. Threat that cannot fit remains a deterministic reinforcement
+## budget; it is never turned into invisible health or silently discarded.
 const MAX_MONSTERS := 120
 
 ## Cells of flow field rebuilt per tick. The whole map is ~16k cells, so this
@@ -24,6 +23,8 @@ const FIELD_BUDGET := 900
 ## Waves arrive in pulses rather than one blob — better tension curve, and it
 ## flattens the spawn-frame cost spike.
 const PULSES := 3
+const REINFORCEMENT_INTERVAL := 1.5
+const REINFORCEMENT_PULSE_BUDGET := 12.0
 
 var monsters: Array = []
 var workers: Array = []
@@ -65,6 +66,7 @@ var target_pressure: float = 0.0
 
 var _spawn_parent: Node = null
 var _pending_budget: float = 0.0
+var _queued_reinforcement_budget: float = 0.0
 var _pulses_left: int = 0
 var _pulse_timer: float = 0.0
 var _night_body_cap: int = 0
@@ -120,6 +122,7 @@ func reset(seed_initial_works: bool = false) -> void:
 	World.blight_structures.clear()
 	target_pressure = 0.0
 	_pending_budget = 0.0
+	_queued_reinforcement_budget = 0.0
 	_pulses_left = 0
 	_pulse_timer = 0.0
 	_night_body_cap = 0
@@ -204,6 +207,10 @@ func progression_state() -> Dictionary:
 		"core_destroyed": _core_destroyed,
 		"reclaimed_tiles_bank": _reclaimed_tiles_bank,
 		"reclaim_surge_budget": _reclaim_surge_budget,
+		# Active monsters are intentionally not serialized. Preserve the unspawned remainder as
+		# next-wave reinforcements when a player saves during the night.
+		"queued_reinforcement_budget": _queued_reinforcement_budget \
+			+ (_pending_budget if Sim.phase == Sim.Phase.NIGHT else 0.0),
 	}
 
 
@@ -217,6 +224,8 @@ func restore_progression_state(data: Dictionary) -> void:
 	_core_destroyed = bool(data.get("core_destroyed", World.live_nest_cells().is_empty()))
 	_reclaimed_tiles_bank = int(data.get("reclaimed_tiles_bank", 0))
 	_reclaim_surge_budget = float(data.get("reclaim_surge_budget", 0.0))
+	_queued_reinforcement_budget = maxf(
+		float(data.get("queued_reinforcement_budget", 0.0)), 0.0)
 	if _initial_outpost_count <= 0:
 		for row: Dictionary in World.blight_structures.values():
 			if bool(row.get("initial_outpost", false)):
@@ -301,6 +310,32 @@ func unregister_worker(worker: BlightWorker) -> void:
 	release_harvest_claim(worker)
 	workers.erase(worker)
 	hostiles.erase(worker)
+
+
+func jail_worker(worker: BlightWorker, jail: Building) -> bool:
+	if worker == null or jail == null or not jail.def.jails_drones:
+		return false
+	cancel_worker_task(worker)
+	release_harvest_claim(worker)
+	worker.jail_at(jail)
+	return true
+
+
+func cull_worker(worker: BlightWorker, gate: Building) -> bool:
+	if worker == null or gate == null or not gate.def.destroys_drones:
+		return false
+	Colony.drop_essence(gate.centre_cell(), gate.def.drone_essence_yield, &"cullis_gate")
+	worker.held_by_hand = false
+	worker.die(&"culled")
+	return true
+
+
+func release_jailed_at(jail: Building) -> void:
+	if jail == null:
+		return
+	for worker in workers:
+		if is_instance_valid(worker) and worker.jailed_anchor == jail.anchor:
+			worker.release_from_jail(jail.centre_cell())
 
 
 func claim_harvest_cell(worker: BlightWorker, home: int) -> int:
@@ -564,7 +599,8 @@ func _begin_night() -> void:
 	# The Blight's own settlement pays into the night on top of the curve, so a player who leaves
 	# enemy ground uncontested faces a harder night than the difficulty curve says they should —
 	# and that extra difficulty is a consequence of a decision rather than a number going up.
-	_pending_budget = wave_budget_for_night(night_index)
+	_pending_budget = wave_budget_for_night(night_index) + _queued_reinforcement_budget
+	_queued_reinforcement_budget = 0.0
 	_night_body_cap = body_cap_for_night(night_index)
 	_spawned_this_night = 0
 	_pulses_left = PULSES
@@ -693,6 +729,9 @@ func _end_night() -> void:
 				continue
 			fled += 1
 			m.die(&"dawn")
+	# Bodies that could not enter because the device's concurrent cap was full remain real
+	# threat. They lead the next wave instead of disappearing or becoming a hidden stat buff.
+	_queued_reinforcement_budget += _pending_budget
 	_pending_budget = 0.0
 	_pulses_left = 0
 
@@ -713,23 +752,29 @@ func _end_night() -> void:
 
 
 func _step_waves(delta: float) -> void:
-	if _pulses_left <= 0 or Sim.phase != Sim.Phase.NIGHT:
+	if _pending_budget <= 0.0 or Sim.phase != Sim.Phase.NIGHT:
 		return
 	_pulse_timer -= delta
 	if _pulse_timer > 0.0:
 		return
-	# Spread the pulses across the first two thirds of the night, so the last third
-	# is spent fighting rather than waiting for more arrivals.
-	_pulse_timer = (Sim.PHASE_DURATION[Sim.Phase.NIGHT] * 0.66) / float(PULSES)
-	_spawn_pulse(_pending_budget / float(_pulses_left))
-	_pulses_left -= 1
+	if _pulses_left > 0:
+		# Spread the authored wave across the first two thirds of the night. Once those
+		# pulses are spent, any budget held back by the live cap enters in small batches.
+		_spawn_pulse(_pending_budget / float(_pulses_left))
+		_pulses_left -= 1
+		_pulse_timer = REINFORCEMENT_INTERVAL if _pulses_left == 0 \
+			else (Sim.PHASE_DURATION[Sim.Phase.NIGHT] * 0.66) / float(PULSES)
+	else:
+		_spawn_pulse(minf(_pending_budget, REINFORCEMENT_PULSE_BUDGET))
+		_pulse_timer = REINFORCEMENT_INTERVAL
 
 
 func _spawn_pulse(budget: float) -> void:
 	if _spawn_parent == null:
 		return
-	if _spawned_this_night >= _night_body_cap:
-		_pending_budget = 0.0
+	var concurrent_cap := mini(_night_body_cap,
+		mini(MAX_MONSTERS, Difficulties.max_hostiles()))
+	if monsters.size() >= concurrent_cap:
 		return
 	# The night shift is what lets a hard tier feel different rather than merely bigger:
 	# Forsaken draws from a roster two nights ahead, so the player meets Spitters before
@@ -742,17 +787,16 @@ func _spawn_pulse(budget: float) -> void:
 	var guard := 0
 	while spent < budget and guard < 200:
 		guard += 1
-		if _spawned_this_night >= _night_body_cap:
-			_pending_budget = 0.0
+		if monsters.size() >= concurrent_cap:
+			_pending_budget = maxf(_pending_budget - spent, 0.0)
 			return
 		var def := _pick(pool)
 		if def == null:
 			break
 		if at_cap():
-			# Out of body budget: bank the rest into stat scaling instead of
-			# spawning past the cap. This is the pressure valve that keeps late
-			# nights hard without the framerate paying for it.
-			_apply_overflow(budget - spent)
+			# Only the bodies already spawned are consumed. The rest of _pending_budget
+			# remains queued and _step_waves retries once a live slot becomes available.
+			_pending_budget = maxf(_pending_budget - spent, 0.0)
 			return
 		if _spawn_one(def, 1.0):
 			_spawned_this_night += 1
@@ -772,16 +816,6 @@ func _pick(pool: Array[MonsterDef]) -> MonsterDef:
 		if roll <= 0.0:
 			return def
 	return pool[pool.size() - 1]
-
-
-func _apply_overflow(leftover: float) -> void:
-	if leftover <= 0.0 or monsters.is_empty():
-		return
-	var scale := 1.0 + clampf(leftover / float(monsters.size()) * 0.1, 0.0, 1.5)
-	for m in monsters:
-		if is_instance_valid(m):
-			m.max_health *= scale
-			m.health *= scale
 
 
 func _spawn_one(def: MonsterDef, stat_scale: float) -> bool:
@@ -983,23 +1017,36 @@ func _update_pressure(delta: float) -> void:
 
 func containment_target_for(actual_coverage: float, structure_count: int,
 		world_day: int) -> float:
-	var desired := clampf(0.08 + float(world_day) * 0.006 \
-		+ float(mini(structure_count, 12)) * 0.004, 0.08, 0.40)
+	var desired := desired_corruption_coverage(structure_count, world_day)
 	return clampf((desired - actual_coverage) / maxf(desired, 0.01), 0.0, 1.0)
+
+
+func desired_corruption_coverage(structure_count: int, world_day: int) -> float:
+	return clampf(0.08 * pow(1.045, float(maxi(world_day - 1, 0))) \
+		+ float(mini(structure_count, 16)) * 0.005, 0.08, 0.65)
+
+
+func enemy_level() -> int:
+	return 1 + maxi(night_index - 1, 0) / 3 + floori(pressure * 4.0)
+
+
+func expected_wave_bodies() -> int:
+	var next_night := maxi(night_index + 1, 1)
+	return mini(body_cap_for_night(next_night),
+		ceili((wave_budget_for_night(next_night) + _queued_reinforcement_budget) / 2.0))
 
 
 func pressure_breakdown() -> Dictionary:
 	var actual := World.blight_field.coverage() if World.blight_field else 0.0
 	var structure_count := World.blight_structures.size()
-	var desired := clampf(0.08 + float(Sim.day) * 0.006 \
-		+ float(mini(structure_count, 12)) * 0.004, 0.08, 0.40)
+	var desired := desired_corruption_coverage(structure_count, Sim.day)
 	var trend := 0
 	if target_pressure > pressure + 0.02:
 		trend = 1
 	elif target_pressure < pressure - 0.02:
 		trend = -1
 	return {
-		"day_base": clampf(0.08 + float(Sim.day) * 0.006, 0.08, 0.40),
+		"day_base": desired_corruption_coverage(0, Sim.day),
 		"desired_coverage": desired,
 		"actual_coverage": actual,
 		"containment_ratio": containment_target_for(actual, structure_count, Sim.day),
@@ -1007,6 +1054,10 @@ func pressure_breakdown() -> Dictionary:
 		"current_pressure": pressure,
 		"target_pressure": target_pressure,
 		"trend": trend,
+		"enemy_level": enemy_level(),
+		"expected_bodies": expected_wave_bodies(),
+		"queued_reinforcement_budget": _pending_budget if Sim.phase == Sim.Phase.NIGHT \
+			else _queued_reinforcement_budget,
 		"suppressed": World.region_purified,
 	}
 
@@ -1018,6 +1069,7 @@ func complete_regional_purification() -> void:
 	blight_mass = 0
 	_growth_progress = 0.0
 	_pending_budget = 0.0
+	_queued_reinforcement_budget = 0.0
 	_pulses_left = 0
 	_reclaimed_tiles_bank = 0
 	_reclaim_surge_budget = 0.0
@@ -1026,7 +1078,6 @@ func complete_regional_purification() -> void:
 	_worker_tasks.clear()
 
 
-## Threat budget for a night, in monster threat-cost points.
 ## Threat budget for a night, in monster threat-cost points.
 ##
 ## The original curve was `3 + 1.32^night * 2`, which doubles every two and a half nights:
@@ -1044,9 +1095,8 @@ func complete_regional_purification() -> void:
 ##     night   1     5      10     12     15     20
 ##     budget  8     19      36     44     58     87
 ##
-## Every night is meaningfully harder than the last, and night twenty is a real fight rather
-## than a wall — and it now sits inside the 120-body cap instead of overflowing it by 5x into
-## invisible stat multipliers.
+## Every night is meaningfully harder than the last. Threat cost is intentionally independent
+## of the concurrent 120-body safety cap: bodies that do not fit wait as reinforcements.
 func budget_for_night(night: int) -> float:
 	var base := 4.0 + float(night) * 2.5 + pow(1.18, float(night)) * 1.5
 	return base * (1.0 + pressure * 0.50) * Meta.threat_dial() \
@@ -1134,7 +1184,7 @@ func _colony_near(origin: int, radius: int) -> bool:
 ## opening a tooltip can never change which monsters arrive.
 func next_night_forecast() -> Dictionary:
 	var next_night := night_index + 1
-	var budget := wave_budget_for_night(next_night)
+	var budget := wave_budget_for_night(next_night) + _queued_reinforcement_budget
 	var pool := Monsters.eligible(next_night + Difficulties.monster_night_shift())
 	var names := PackedStringArray()
 	var average_cost := 1.0
@@ -1174,7 +1224,8 @@ func unregister(monster: Node) -> void:
 	monsters.erase(monster)
 	hostiles.erase(monster)
 	Events.monster_died.emit(monster)
-	if monsters.is_empty() and Sim.phase == Sim.Phase.NIGHT and _pulses_left <= 0:
+	if monsters.is_empty() and Sim.phase == Sim.Phase.NIGHT and _pulses_left <= 0 \
+			and _pending_budget <= 0.0:
 		Events.wave_cleared.emit(night_index)
 		Events.notice.emit(tr(&"NOTICE_NIGHT_HOLDS"), 0)
 

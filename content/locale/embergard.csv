@@ -1,4 +1,5 @@
 keys,en
+POWER_CORRUPTED_TARGET,Divine powers cannot be cast on corrupted ground.
 UI_CONTINUE,Continue
 UI_NEW_WORLD,New World
 UI_DOCTRINES,Doctrines (choose up to three)
@@ -10,6 +11,25 @@ UI_BACK,Back
 UI_CANCEL,Cancel
 UI_BUILD,Build
 UI_JOBS,Jobs
+UI_CONSTRUCTION,Construction
+UI_HARVEST,Harvest
+UI_TERRAIN,Terrain
+UI_SPELLS,Spells
+UI_CONSOLE,Console
+UI_WORLD,World
+UI_GOALS,Goals
+POWER_WOOD_GOLEM,Wood Golem
+POWER_WOOD_GOLEM_DESC,Harvests designated forests and carries physical wood to storage.
+POWER_STONE_GOLEM,Stone Golem
+POWER_STONE_GOLEM_DESC,Harvests designated stone and carries it to storage.
+POWER_CRYSTAL_GOLEM,Crystal Golem
+POWER_CRYSTAL_GOLEM_DESC,Harvests designated dark crystal deposits and carries crystal to storage.
+POWER_LABOR_GOLEM,Labor Golem
+POWER_LABOR_GOLEM_DESC,Builds repairs and fulfills physical delivery requests.
+POWER_HOLY_GOLEM,Holy Golem
+POWER_HOLY_GOLEM_DESC,Emits holy light and defends painted guard zones.
+POWER_COURIER_GOLEM,Courier Golem
+POWER_COURIER_GOLEM_DESC,Fast dedicated transport for physical supply requests and loose goods.
 UI_POWER_UPS,Powers
 UI_BOTTOM_MENU_HINT,Tap to cycle menus. Hold and drag to choose one.
 UI_BOTTOM_MENU_OPEN,Show every menu
@@ -1002,3 +1022,60 @@ BUILDING_RESONANT_COLLECTOR,Resonant Collector
 BUILDING_RESONANT_COLLECTOR_DESC,"An upgraded Collector holding 300 local energy within the same clear 12-tile network."
 BUILDING_CROWN_COLLECTOR,Crown Collector
 BUILDING_CROWN_COLLECTOR_DESC,"The final Collector holds 500 local energy for a heavily enchanted district."
+BUILDING_STANDARD_HOUSE,Standard House
+BUILDING_STANDARD_HOUSE_DESC,"A balanced housing upgrade with seven beds, sturdier walls, and better recovery."
+RESOURCE_DIRTY_WATER,Dirty Water
+RESOURCE_CLEAN_WATER,Clean Water
+RESOURCE_CRYSTAL,Crystal
+RESOURCE_CRYLITHIUM,Crylithium
+RESOURCE_IRON_ORE,Iron Ore
+RESOURCE_IRON_INGOT,Iron Ingot
+RESOURCE_GOLD_ORE,Gold Ore
+RESOURCE_GOLD_INGOT,Gold Ingot
+RESOURCE_STONE_BALLS,Stone Balls
+RESOURCE_TRASH,Trash
+RESOURCE_EMPTY_VESSEL,Empty Vessel
+RESOURCE_FILLED_VESSEL,Filled Vessel
+RESOURCE_GHOST_DUST,Ghost Dust
+JOB_ORGANIZER,Organizer
+JOB_WAYMAKER,Waymaker
+JOB_RAIN_COLLECTOR,Rain Collector
+JOB_WATER_MASTER,Water Master
+JOB_TUMBLER_WORKER,Tumbler Worker
+JOB_CRYLITHIUM_REFINER,Crystal Refiner
+JOB_SMITH,Smith
+JOB_GOLDSMITH,Goldsmith
+JOB_VESSEL_MAKER,Vessel Maker
+JOB_RELIQUARY_KEEPER,Reliquary Keeper
+JOB_CRYSTAL_HARVESTER,Crystal Harvester
+BUILDING_ANCILLARY,Ancillary
+BUILDING_ANCILLARY_DESC,"Organizers coordinate dedicated hauling from this logistics office. Upgrades building and workforce capacity."
+BUILDING_RAIN_CATCHER,Rain Catcher
+BUILDING_RAIN_CATCHER_DESC,"Collects dirty water during rain and storms for later purification."
+BUILDING_WATER_PURIFIER,Water Purifier
+BUILDING_WATER_PURIFIER_DESC,"Water Masters turn dirty water and fuel into safe clean water."
+BUILDING_ROCK_TUMBLER,Rock Tumbler
+BUILDING_ROCK_TUMBLER_DESC,"Cuts stone and produces physical stone-ball ammunition."
+BUILDING_CRYSTILLERY,Crystillery
+BUILDING_CRYSTILLERY_DESC,"Refines crystal and clean water into Crylithium."
+BUILDING_FOUNDRY,Foundry
+BUILDING_FOUNDRY_DESC,"Smelts separate iron and gold material chains for advanced construction."
+BUILDING_RELIQUARY,Reliquary
+BUILDING_RELIQUARY_DESC,"Crafts vessels and binds ghost dust into filled vessels for divine use."
+BUILDING_DRONE_JAIL,Drone Jail
+BUILDING_DRONE_JAIL_DESC,"A held Drone can be dropped here. It remains alive and continues occupying the Blight workforce slot."
+BUILDING_CULLIS_GATE,Cullis Gate
+BUILDING_CULLIS_GATE_DESC,"Drop a captured Drone onto the gate to destroy it and release physical Essence."
+BIOME_DESERT,Desert
+BIOME_DESERT_HAZARD,"Extreme heat and scarce rain punish unprepared settlements."
+BIOME_DRY_LANDS,Dry Lands
+BIOME_DRY_LANDS_HAZARD,"Dry soil and exposed mineral fields demand water logistics."
+BIOME_HAVEN,Haven
+BIOME_HAVEN_HAZARD,"Gentler weather supports food, but valuable minerals are scarce."
+BIOME_OUTLANDS,Outlands
+BIOME_OUTLANDS_HAZARD,"Hybrid borderlands mix resources, terrain, and elevated Blight pressure."
+BUILDING_MIGRATION_WAY_STATION,Migration Way Station
+BUILDING_MIGRATION_WAY_STATION_DESC,"Plans regional migration. Requires more than fifteen healthy adults; parties and Courier Golems depart at the next dawn."
+REALM_REASON_WAY_STATION,Build a Migration Way Station first.
+REALM_REASON_PERMANENT_LOSS,This region was lost permanently in this world.
+REALM_MIGRATION_SCHEDULED,"Migration scheduled for dawn of day {0}."

@@ -48,6 +48,8 @@ extends Resource
 ## This workplace draws from any reachable well or river before completing a
 ## cycle. Used by bottling so stocked water still depends on actual water access.
 @export var requires_water_access: bool = false
+## Optional weather gate used by rain collection and other environmental production.
+@export var required_weather: Array[StringName] = []
 
 ## Villager-seconds per cycle.
 @export var cycle_work: float = 8.0
@@ -88,6 +90,8 @@ extends Resource
 @export var repairs: bool = false
 ## Future clinics use the same task-routing hook without adding an id branch.
 @export var heals: bool = false
+## Waymakers claim spatial WorkOrders rather than a feature or production cycle.
+@export var handles_work_orders: bool = false
 @export var catchment_radius: int = 0
 @export var equipment_tags: Array[StringName] = []
 @export var supports_production_policy: bool = true

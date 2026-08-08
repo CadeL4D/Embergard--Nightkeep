@@ -148,6 +148,7 @@ func _exit_tree() -> void:
 	# reload or by queue_free from anywhere else cannot leave its footprint locked out
 	# of placement for the rest of the run.
 	World.release_cells(cells, get_instance_id())
+	Threat.release_jailed_at(self)
 	Colony.unregister_building(self)
 
 
@@ -579,8 +580,17 @@ func effective_worker_slots() -> int:
 	return clampi(production_worker_limit, 0, def.worker_slots)
 
 
+## Whether this completed building can retain an allocated worker. Pausing is intentionally not
+## part of this answer: Update 2d pause keeps the allocation while the worker recovers inside.
+func staffing_is_available() -> bool:
+	return state == State.COMPLETE and effective_worker_slots() > 0
+
+
 func production_is_available(job: JobDef = null) -> bool:
-	if state != State.COMPLETE or production_paused or effective_worker_slots() <= 0:
+	if not staffing_is_available() or production_paused:
+		return false
+	if job != null and not job.required_weather.is_empty() \
+			and Climate.weather not in job.required_weather:
 		return false
 	if job != null and not job.cycle_yield.is_empty() and def.output_capacity > 0:
 		var output_needed := 0

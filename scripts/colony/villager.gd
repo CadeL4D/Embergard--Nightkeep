@@ -119,6 +119,15 @@ const ROUGH_MOOD_PENALTY := 18.0
 ## of a day left before they die, so a famine gives the player time to react — and
 ## the first death is a warning rather than the start of a rout.
 const STARVE_DAMAGE := 0.35
+const TEMPERATURE_IDEAL_C := 20.0
+const TEMPERATURE_COMFORT_PER_DEGREE := 5.0
+const TEMPERATURE_DRIFT := 0.45
+const TEMPERATURE_DAMAGE := 0.30
+const FAITH_DRIFT := 0.16
+const STRESS_WORK_RATE := 0.08
+const STRESS_RECOVERY_RATE := 0.18
+const PANIC_DECAY := 0.28
+const CONFUSION_DECAY := 0.20
 
 ## How long a direct player command outranks the villager's own priorities. Player
 ## intent must beat the AI, but not permanently — a villager pinned forever by a
@@ -194,6 +203,8 @@ var selected: bool = false:
 
 var _target_cell: int = -1
 var _work_progress: float = 0.0
+var _work_order_id: int = 0
+var _work_order_required: float = 0.0
 var _site: Node = null
 var _bed: Node = null
 var _bed_claimed: bool = false
@@ -225,6 +236,7 @@ var _awaiting_path: bool = false
 var _path_request_serial: int = 0
 var _path_requested_tick: int = 0
 var _drink_from_store: bool = false
+var _drink_resource: StringName = &""
 ## Why this villager is not working, in their own words.
 ##
 ## Every decision in think() can come back empty — no reachable shelf with food on it, no well
@@ -259,6 +271,9 @@ func _ready() -> void:
 	super()
 	if profile.stable_id.is_empty():
 		profile = _make_profile(Colony.villagers.size(), false)
+	if profile.villager_type == &"nephilim":
+		max_health = maxf(max_health, 120.0)
+		health = max_health
 	statuses = profile.statuses.duplicate(true)
 	_ring.visible = false
 	_apply_selection_style()
@@ -319,6 +334,9 @@ func profile_dict() -> Dictionary:
 func restore_profile(data: Dictionary) -> void:
 	profile = VillagerRecord.from_dict(data)
 	statuses = profile.statuses.duplicate(true)
+	if profile.villager_type == &"nephilim":
+		max_health = maxf(max_health, 120.0)
+		health = minf(health, max_health)
 
 
 func _exit_tree() -> void:
@@ -397,7 +415,13 @@ func _work_multiplier() -> float:
 	var item_def := Items.get_item(StringName(row.get("def", &"")))
 	if item_def != null:
 		multiplier *= 1.0 + float(item_def.modifiers.get(&"work_speed", 0.0))
-	return multiplier
+	var comfort_factor := lerpf(0.45, 1.0, profile.thermal_comfort / NEED_MAX)
+	var faith_factor := lerpf(0.70, 1.08, profile.faith / NEED_MAX)
+	var stress_factor := lerpf(1.0, 0.55, profile.stress / NEED_MAX)
+	var panic_factor := lerpf(1.0, 0.35, profile.panic / NEED_MAX)
+	var confusion_factor := lerpf(1.0, 0.60, profile.confusion / NEED_MAX)
+	return multiplier * comfort_factor * faith_factor * stress_factor * panic_factor \
+		* confusion_factor * Colony.global_work_multiplier()
 
 
 ## Credit a finished piece of work toward this villager's mastery of their job.
@@ -873,8 +897,16 @@ func _guard_post() -> int:
 ## out of. It can only fail because there is nowhere to drink, which on a normal map means the
 ## player has walled themselves off from the water without sinking a well.
 func _begin_drink() -> bool:
-	var source := Colony.nearest_item_source(cell(), &"waterskin")
+	_drink_resource = &"clean_water"
+	var source := Colony.nearest_storage_source(cell(), _drink_resource)
+	if source == -1:
+		_drink_resource = &"dirty_water"
+		source = Colony.nearest_storage_source(cell(), _drink_resource)
 	_drink_from_store = source != -1
+	if source == -1:
+		_drink_resource = &""
+		source = Colony.nearest_item_source(cell(), &"waterskin")
+		_drink_from_store = source != -1
 	if source == -1:
 		source = Colony.nearest_water_source(cell())
 	if source == -1:
@@ -900,13 +932,23 @@ func _tick_drinking() -> void:
 		state = State.IDLE
 		return
 	if _drink_from_store:
-		if Colony.consume_item_at(_target_cell, &"waterskin"):
+		if not _drink_resource.is_empty():
+			if Colony.withdraw_at(_target_cell, _drink_resource, 1) > 0:
+				water = minf(water + DRINK_RESTORE, NEED_MAX)
+				if _drink_resource == &"dirty_water":
+					apply_status(&"infected", 18.0)
+			else:
+				think_urgent = true
+		elif Colony.consume_item_at(_target_cell, &"waterskin"):
 			water = minf(water + 35.0, NEED_MAX)
 		else:
 			think_urgent = true
 	else:
 		water = minf(water + DRINK_RESTORE, NEED_MAX)
+		if not Colony.water_source_is_clean(_target_cell):
+			apply_status(&"infected", 12.0)
 	_drink_from_store = false
+	_drink_resource = &""
 	_target_cell = -1
 	state = State.IDLE
 
@@ -1034,6 +1076,20 @@ func _seek_work() -> void:
 	if not is_adult():
 		_wander()
 		return
+	# Panic and confusion are work eligibility, not decorative status bars. Severe panic makes a
+	# villager seek shelter; confusion and accumulated stress create visible idle/refusal time.
+	if profile.panic >= 75.0:
+		_begin_sleep()
+		return
+	if profile.confusion >= 70.0 or profile.stress >= 92.0:
+		_wander()
+		return
+
+	var def := Jobs.get_job(job)
+	if def != null and def.handles_work_orders:
+		if not _try_claim_work_order(def):
+			_wander()
+		return
 
 	# Mid-teardown. Go back to the building rather than looking for fresh work, because salvage
 	# comes out one armful at a time and each trip ends here.
@@ -1045,7 +1101,7 @@ func _seek_work() -> void:
 		_request_path(_site.work_cell(), State.BUILDING)
 		return
 
-	var def := Jobs.get_job(job)
+	def = Jobs.get_job(job)
 	# A standing defence or workshop request is time-sensitive in a way ordinary tidying is not.
 	# Requests sort ammunition first, need-producing workshops second and other production third.
 	if def != null and def.hauls and _begin_supply_fetch(def):
@@ -1165,7 +1221,8 @@ func _try_claim_workplace(def: JobDef) -> bool:
 	# up here so the worker looks for something else, instead of re-taking the slot they
 	# released one think ago and standing over it.
 	if _workplace != null and is_instance_valid(_workplace) and not _workplace.is_site():
-		if _workplace.production_is_available(def):
+		if _workplace.staffing_is_available() and (_workplace.production_paused \
+				or _workplace.production_is_available(def)):
 			_target_cell = _workplace.anchor
 			_request_path(_workplace.work_cell(), State.WORKING)
 			return true
@@ -1196,6 +1253,9 @@ func _tick_working(delta: float) -> void:
 		_release_target()
 		state = State.IDLE
 		return
+	if def.handles_work_orders and _work_order_id > 0:
+		_tick_work_order(def, delta)
+		return
 	if def.heals:
 		_tick_healing(def, delta)
 		return
@@ -1224,7 +1284,8 @@ func _tick_working(delta: float) -> void:
 
 	# The Ember's aura speeds up work. This is the whole point of the mechanic:
 	# where you put the light decides what actually gets done.
-	var rate := def.work_rate * Divine.work_bonus(cell()) * _work_multiplier()
+	var rate := def.work_rate * Divine.work_bonus(cell()) * _work_multiplier() \
+		* Colony.global_harvest_multiplier()
 	_work_progress += rate * delta
 
 	if _work_progress < Terrain.work_for(feature):
@@ -1240,6 +1301,45 @@ func _tick_working(delta: float) -> void:
 	_wear_equipment(&"tool")
 	_release_target()
 	_begin_haul()
+
+
+func _try_claim_work_order(def: JobDef) -> bool:
+	if _work_order_id > 0 and _target_cell != -1:
+		_request_path(_target_cell, State.WORKING)
+		return true
+	var claim := WorkOrders.claim_nearest(cell(), self)
+	if claim.is_empty():
+		_note_idle(&"no_work_order")
+		return false
+	_work_order_id = int(claim["order_id"])
+	_target_cell = int(claim["cell"])
+	_work_order_required = float(claim["work"])
+	_work_progress = 0.0
+	_request_path(World.nearest_walkable(_target_cell), State.WORKING)
+	return true
+
+
+func _tick_work_order(def: JobDef, delta: float) -> void:
+	if _target_cell == -1 or _work_order_id <= 0:
+		_release_work_order_claim()
+		state = State.IDLE
+		return
+	if is_moving():
+		return
+	if not _within_reach(_target_cell):
+		_release_work_order_claim()
+		state = State.IDLE
+		return
+	_work_progress += def.work_rate * Divine.work_bonus(cell()) * _work_multiplier() * delta
+	if _work_progress < _work_order_required:
+		return
+	WorkOrders.complete(_work_order_id, _target_cell, self)
+	_credit_mastery()
+	_work_order_id = 0
+	_work_order_required = 0.0
+	_work_progress = 0.0
+	_target_cell = -1
+	state = State.IDLE
 
 
 ## Take the nearest unclaimed construction site, if any. Builders are a ROLE rather
@@ -1696,7 +1796,8 @@ func _tick_building(delta: float) -> void:
 
 	# The Ember speeds construction just as it speeds gathering, so parking it over
 	# the builders is a real way to get a wall up before dusk.
-	if _site.add_work(delta * Divine.work_bonus(cell())):
+	if _site.add_work(delta * Divine.work_bonus(cell()) * _work_multiplier() \
+			* Colony.global_build_multiplier()):
 		_release_target()
 		_site = null
 		state = State.IDLE
@@ -1711,7 +1812,8 @@ func _tick_building(delta: float) -> void:
 func _tick_demolish(delta: float) -> void:
 	# The Ember helps here too. Clearing a burnt-out district under the light is one of the few
 	# things worth doing with it during the day.
-	if not _site.add_work(delta * Divine.work_bonus(cell())):
+	if not _site.add_work(delta * Divine.work_bonus(cell()) * _work_multiplier() \
+			* Colony.global_build_multiplier()):
 		return
 
 	# Explicitly typed, not inferred. `_site` is a plain Node, so anything it returns arrives as a
@@ -1737,6 +1839,21 @@ func _tick_workplace(def: JobDef, delta: float) -> void:
 	if _workplace == null or not is_instance_valid(_workplace) or _workplace.is_site():
 		_release_workplace()
 		state = State.IDLE
+		return
+	if not _workplace.staffing_is_available():
+		_work_progress = 0.0
+		_release_workplace()
+		state = State.IDLE
+		return
+	if _workplace.production_paused:
+		# A paused workplace remains staffed. Its workers stop cycling, recover stress and rebuild
+		# personal Faith instead of entering a release/reclaim loop or being silently reassigned.
+		_work_progress = 0.0
+		profile.stress = maxf(profile.stress \
+			- _workplace.def.paused_stress_recovery * delta, 0.0)
+		profile.faith = minf(profile.faith \
+			+ _workplace.def.paused_faith_recovery * delta, NEED_MAX)
+		mood = minf(mood + _workplace.def.paused_faith_recovery * 0.5 * delta, NEED_MAX)
 		return
 	if not _workplace.production_is_available(def):
 		_work_progress = 0.0
@@ -1900,6 +2017,38 @@ func _decay_needs(delta: float) -> void:
 		* sleep_scale * delta, 0.0)
 	rest = maxf(rest - REST_RATE * wear * delta, 0.0)
 
+	# Shelters temper the outside air instead of granting complete immunity. Comfort is the
+	# persistent physiological state; temperature is recomputed from deterministic climate.
+	var outside_temperature := Climate.ambient_temperature_c()
+	var felt_temperature := lerpf(outside_temperature, TEMPERATURE_IDEAL_C, 0.82) \
+		if _sheltered else outside_temperature
+	var comfort_target := clampf(NEED_MAX \
+		- absf(felt_temperature - TEMPERATURE_IDEAL_C) * TEMPERATURE_COMFORT_PER_DEGREE,
+		0.0, NEED_MAX)
+	profile.thermal_comfort = move_toward(profile.thermal_comfort, comfort_target,
+		TEMPERATURE_DRIFT * delta)
+	if profile.thermal_comfort <= 0.01:
+		var thermal_cause: StringName = &"heatstroke" \
+			if felt_temperature > TEMPERATURE_IDEAL_C else &"hypothermia"
+		_last_damage_reason = thermal_cause
+		_damage_reason_timer = 4.0
+		var thermal_damage := TEMPERATURE_DAMAGE * delta
+		if health <= thermal_damage:
+			die(thermal_cause)
+		else:
+			_receive_harm(thermal_damage, thermal_cause)
+		if not alive:
+			return
+
+	profile.panic = maxf(profile.panic - PANIC_DECAY * delta, 0.0)
+	profile.confusion = maxf(profile.confusion - CONFUSION_DECAY * delta, 0.0)
+	var exerting := state in [State.WORKING, State.BUILDING, State.HAULING,
+		State.FETCHING, State.DELIVERING, State.GUARDING]
+	if exerting:
+		profile.stress = minf(profile.stress + STRESS_WORK_RATE * delta, NEED_MAX)
+	elif state in [State.SLEEPING, State.RESTING, State.IDLE]:
+		profile.stress = maxf(profile.stress - STRESS_RECOVERY_RATE * delta, 0.0)
+
 	# Empty stomach and nothing to eat: this is the only way a villager dies of
 	# neglect, and it is what gives the food economy actual stakes rather than
 	# being a bar that goes down.
@@ -1956,6 +2105,13 @@ func _decay_needs(delta: float) -> void:
 	target = clampf(target, 0.0, NEED_MAX)
 	var rate := MOOD_DRIFT if target > mood else MOOD_DRIFT * MOOD_FALL_SCALE
 	mood = move_toward(mood, target, rate * delta)
+
+	# Individual Faith follows lived conditions and is the villager contribution read by
+	# DivineLedger. Casting reactions may move it instantly; this slow drift supplies recovery.
+	var faith_target := clampf(mood - profile.stress * 0.35 - profile.panic * 0.45
+		- profile.confusion * 0.30 + (12.0 if Divine.is_within_ember(cell()) else 0.0),
+		0.0, NEED_MAX)
+	profile.faith = move_toward(profile.faith, faith_target, FAITH_DRIFT * delta)
 
 
 func _wander() -> void:
@@ -2117,6 +2273,7 @@ func _cancel_path_request() -> void:
 
 func _release_target() -> void:
 	_cancel_path_request()
+	_release_work_order_claim()
 	_release_patient()
 	_release_supply_task()
 	if _target_cell != -1:
@@ -2129,6 +2286,13 @@ func _release_target() -> void:
 	_fetch_for_workplace = false
 	_fetch_loose_drop = false
 	_fetch_drop_id = -1
+
+
+func _release_work_order_claim() -> void:
+	if _work_order_id > 0 and _target_cell != -1:
+		WorkOrders.release_claim(_work_order_id, _target_cell, self)
+	_work_order_id = 0
+	_work_order_required = 0.0
 
 
 func _release_supply_task() -> void:
@@ -2192,6 +2356,15 @@ func on_death(cause: StringName) -> void:
 			cell(), &"villager_pending")
 	pending_loads.clear()
 	Colony.drop_essence(cell(), 4, &"villager")
+	# The soul remains a physical object until an Occultist binds it into an Eerie Vessel.
+	Colony.drop_resource(&"ghost_dust", 1, cell(), &"unbound_soul")
+	if cause != &"age" and not profile.partner_id.is_empty():
+		for survivor: Villager in Colony.villagers:
+			if survivor != self and is_instance_valid(survivor) and survivor.alive \
+					and survivor.profile.stable_id == profile.partner_id:
+				# Official Update 2 rule: a surviving mate loses 25% of their total Faith.
+				survivor.profile.faith *= 0.75
+				break
 	_drop_equipment()
 	Colony.record_memorial(profile.to_dict())
 	Events.villager_died.emit(self, cause)

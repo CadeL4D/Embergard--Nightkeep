@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"goldsmith"
+display_name = "JOB_GOLDSMITH"
+workplace = &"foundry"
+cycle_yield = {&"gold_ingot": 2}
+cycle_cost = {&"gold_ore": 4, &"wood": 2}
+cycle_work = 18.0
+work_rate = 1.0
+carry_capacity = 7
+priority = 4
+default_quota = 0
+color = Color(0.86, 0.69, 0.24, 1)

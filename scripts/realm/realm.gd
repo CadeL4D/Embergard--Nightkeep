@@ -4,14 +4,16 @@ extends Node
 ## The Realm is one continuous generated landscape. Each square on it is a complete local map;
 ## only one is awake at a time, while every other founded region advances from its own ledger.
 
-const REGION_WIDTH := 12
-const REGION_HEIGHT := 8
+const REGION_WIDTH := 9
+const REGION_HEIGHT := 5
 const REGION_COUNT := REGION_WIDTH * REGION_HEIGHT
 const MACRO_PIXELS_PER_REGION := 32
 
 const SETTLEMENT_COST := {&"wood": 30, &"stone": 15, &"food": 24}
 const STARTING_CARGO := {&"wood": 10, &"stone": 5, &"food": 12}
 const SETTLERS_REQUIRED := 2
+const MIGRATION_ELIGIBLE_ADULTS := 16
+const MIGRATION_PARTY_SIZE := 5
 const RECOVERY_COST := {&"wood": 24, &"stone": 18, &"food": 18}
 const RECOVERY_CARGO := {&"wood": 8, &"stone": 4, &"food": 12}
 const RECOVERY_SETTLERS := 2
@@ -51,6 +53,8 @@ var macro_texture: ImageTexture
 var _region_preview_cache: Dictionary = {}
 var corruption_sources: Array[Vector2i] = []
 var routes: Array[TradeRoute] = []
+var region_states: Dictionary = {}   ## StringName -> RegionState
+var pending_migrations: Array[MigrationOrder] = []
 var selected_doctrines: Array[StringName] = []
 
 var _threat_serial: int = 0
@@ -93,11 +97,16 @@ func start_new(seed_value: int) -> void:
 	_threat_serial = 0
 	_route_serial = 0
 	routes.clear()
+	region_states.clear()
+	pending_migrations.clear()
 	selected_doctrines.clear()
 	corruption_sources.clear()
 	_configure_noise()
 	_configure_continent()
 	_build_regions()
+	var campaign_errors := validate_campaign()
+	if not campaign_errors.is_empty():
+		push_error("Invalid Update 2d campaign graph: %s" % "; ".join(campaign_errors))
 	_build_macro_texture()
 	Events.realm_changed.emit()
 
@@ -183,8 +192,8 @@ func _build_regions() -> void:
 		for x in REGION_WIDTH:
 			var id := region_id(Vector2i(x, y))
 			var sampled := _sample_landscape(x + 0.5, y + 0.5)
-			var biome: StringName = sampled["biome"]
-			var settleable := biome != &"ocean"
+			var biome: StringName = _fixed_region_biome(x, y)
+			var settleable := true
 			sites[id] = {
 				"id": id,
 				"name": _region_name(x, y),
@@ -203,6 +212,14 @@ func _build_regions() -> void:
 				"settleable": settleable,
 				"blight_core": false,
 			}
+			var state := RegionState.new()
+			state.id = id
+			state.display_name = String(sites[id]["name"])
+			state.index = y * REGION_WIDTH + x
+			state.coord = Vector2i(x, y)
+			state.biome = biome
+			state.local_seed = int(sites[id]["seed"])
+			region_states[id] = state
 
 	# Cardinal neighbours make movement easy to read: a caravan crosses one map edge at a time.
 	for id: StringName in sites:
@@ -216,6 +233,7 @@ func _build_regions() -> void:
 			if not other.is_empty() and bool(other.get("settleable", false)):
 				links.append(StringName(other["id"]))
 		row["connections"] = links
+		region_states[id].connections.assign(links)
 
 	blight_core_id = _choose_blight_core()
 	_choose_corruption_sources()
@@ -240,12 +258,21 @@ func _build_regions() -> void:
 		total_corruption += corruption
 		land_count += 1
 	sites[blight_core_id]["blight_core"] = true
-	sites[blight_core_id]["settleable"] = false
-	sites[blight_core_id]["connections"] = []
-	for id: StringName in sites:
-		var links: Array = sites[id].get("connections", [])
-		links.erase(blight_core_id)
 	global_corruption = clampf(total_corruption / float(maxi(land_count, 1)), 0.0, 1.0)
+
+
+func _fixed_region_biome(x: int, y: int) -> StringName:
+	if y == 0:
+		return &"desert"
+	if y == REGION_HEIGHT - 1:
+		return &"dry_lands"
+	if x <= 1:
+		return &"haven"
+	if x >= REGION_WIDTH - 2:
+		return &"marsh"
+	if x in [3, 4, 5]:
+		return &"forest"
+	return &"outlands"
 
 
 func _sample_landscape(x: float, y: float) -> Dictionary:
@@ -308,7 +335,9 @@ func local_landscape_at(region_coord: Vector2i, uv: Vector2) -> Dictionary:
 	var rx := float(region_coord.x) + clampf(uv.x, 0.0, 1.0)
 	var ry := float(region_coord.y) + clampf(uv.y, 0.0, 1.0)
 	var sampled := _sample_landscape(rx, ry)
-	var biome := StringName(sampled["biome"])
+	var biome := _fixed_region_biome(region_coord.x, region_coord.y)
+	sampled["biome"] = biome
+	sampled["landness"] = maxf(float(sampled.get("landness", 0.0)), 0.2)
 	var material := _macro_material(biome)
 	var river_line := absf(_river.get_noise_2d(rx, ry))
 	if biome not in [&"ocean", &"coast", &"highland"] \
@@ -481,7 +510,8 @@ func _build_macro_texture() -> void:
 			var rx := (float(px) + 0.5) / MACRO_PIXELS_PER_REGION
 			var ry := (float(py) + 0.5) / MACRO_PIXELS_PER_REGION
 			var sampled := _sample_landscape(rx, ry)
-			var biome: StringName = sampled["biome"]
+			var biome: StringName = _fixed_region_biome(floori(rx), floori(ry))
+			sampled["biome"] = biome
 			var material := _macro_material(biome)
 			var river_line := absf(_river.get_noise_2d(rx, ry))
 			if biome not in [&"ocean", &"coast", &"highland"] \
@@ -539,6 +569,10 @@ func _build_macro_texture() -> void:
 
 func _macro_material(biome: StringName) -> int:
 	match biome:
+		&"desert": return 6
+		&"dry_lands": return 6
+		&"haven": return 2
+		&"outlands": return 5
 		&"ocean": return 0
 		&"coast": return 1
 		&"tundra": return 1
@@ -757,6 +791,14 @@ func _region_name(x: int, y: int) -> String:
 
 func _regional_identity(biome: StringName) -> Dictionary:
 	match biome:
+		&"desert":
+			return {"specialty": &"gold_ore", "demand": &"clean_water", "local_floor": &"stone"}
+		&"dry_lands":
+			return {"specialty": &"iron_ore", "demand": &"rations", "local_floor": &"stone"}
+		&"haven":
+			return {"specialty": &"food", "demand": &"crystal", "local_floor": &"wood"}
+		&"outlands":
+			return {"specialty": &"crystal", "demand": &"tools", "local_floor": &"wood"}
 		&"coast":
 			return {"specialty": &"food", "demand": &"cut_stone", "local_floor": &"wood"}
 		&"forest":
@@ -834,6 +876,11 @@ func register_first_from_live(site_id: StringName) -> void:
 	ledger.last_advanced_day = Sim.day
 	ledger.corruption = float(row.get("corruption", 0.0))
 	colonies[ledger.id] = ledger
+	if region_states.has(site_id):
+		var region: RegionState = region_states[site_id]
+		region.status = RegionState.Status.SETTLED
+		region.settlement_day = 1
+		region.threat_modifier = 1.0
 	awake_id = ledger.id
 	heart_region_id = ledger.id
 	Abstractor.capture(ledger)
@@ -884,6 +931,8 @@ func mark_awake_purified() -> void:
 		var row: Dictionary = sites[ledger.id]
 		row["corruption"] = 0.0
 		sites[ledger.id] = row
+	if region_states.has(ledger.id):
+		region_states[ledger.id].status = RegionState.Status.PURIFIED
 	_recompute_global_corruption()
 	Events.realm_changed.emit()
 
@@ -910,13 +959,19 @@ func connected(from_id: StringName, to_id: StringName) -> bool:
 
 
 func can_found(site_id: StringName) -> Dictionary:
-	if not sites.has(site_id) or colonies.has(site_id):
+	if not sites.has(site_id) or colonies.has(site_id) or _migration_targets(site_id):
 		return {"ok": false, "reason": L10n.t(&"REALM_REASON_SETTLED")}
+	if region_states.has(site_id) and region_states[site_id].status == RegionState.Status.LOST:
+		return {"ok": false, "reason": tr(&"REALM_REASON_PERMANENT_LOSS")}
 	if not bool(sites[site_id].get("settleable", false)):
 		return {"ok": false, "reason": L10n.t(&"REALM_REASON_UNSETTLEABLE")}
+	if bool(sites[site_id].get("blight_core", false)):
+		return {"ok": false, "reason": L10n.t(&"REALM_REASON_CORE")}
 	if not connected(awake_id, site_id):
 		return {"ok": false, "reason": L10n.t(&"REALM_REASON_NO_ROAD")}
-	if Colony.population() <= SETTLERS_REQUIRED:
+	if not _has_migration_way_station():
+		return {"ok": false, "reason": tr(&"REALM_REASON_WAY_STATION")}
+	if eligible_migration_adults().size() < MIGRATION_ELIGIBLE_ADULTS:
 		return {"ok": false, "reason": L10n.t(&"REALM_REASON_SETTLERS")}
 	for kind: StringName in SETTLEMENT_COST:
 		if Colony.available(kind) < int(SETTLEMENT_COST[kind]):
@@ -929,39 +984,108 @@ func prepare_settlement(site_id: StringName) -> Dictionary:
 	var check := can_found(site_id)
 	if not bool(check["ok"]):
 		return check
-	capture_awake()
-	var source := awake_ledger()
-	for kind: StringName in SETTLEMENT_COST:
-		Colony.spend({kind: int(SETTLEMENT_COST[kind])})
-	# The resource cache and physical building inventories must be captured together. Updating only
-	# `state.stock` would make the spent founding cargo reappear when the source wakes again.
-	capture_awake()
-	source = awake_ledger()
-
-	var settlers: Array = []
-	var source_rows: Array = source.state.get("villagers", [])
-	for _i in SETTLERS_REQUIRED:
-		settlers.append(source_rows.pop_back())
-	source.state["villagers"] = source_rows
-
-	var row: Dictionary = sites[site_id]
-	var ledger := ColonyLedger.new()
-	ledger.id = site_id
-	ledger.display_name = String(row["name"])
-	ledger.seed_value = int(row["seed"])
-	ledger.realm_position = Vector2(row["coord"])
-	ledger.connections.assign(row["connections"])
-	ledger.founded_day = Sim.day
-	ledger.last_advanced_day = Sim.day
-	ledger.corruption = float(row.get("corruption", 0.0))
-	colonies[site_id] = ledger
+	var order := MigrationOrder.new()
+	_route_serial += 1
+	order.order_id = _route_serial
+	order.source_id = awake_id
+	order.destination_id = site_id
+	order.ordered_day = Sim.day
+	order.departure_day = Sim.day + 1
+	order.courier_golems = 2
+	order.cargo = STARTING_CARGO.duplicate(true)
+	var candidates := eligible_migration_adults()
+	candidates.sort_custom(func(a: Villager, b: Villager) -> bool:
+		return a.profile.stress < b.profile.stress)
+	for i in mini(MIGRATION_PARTY_SIZE, candidates.size()):
+		order.migrants.append(_migration_snapshot(candidates[i]))
+	pending_migrations.append(order)
 	Events.realm_changed.emit()
-	return {
-		"ok": true,
-		"ledger": ledger,
-		"settlers": settlers,
-		"cargo": STARTING_CARGO.duplicate(true),
-	}
+	return {"ok": true, "scheduled": true, "order": order,
+		"reason": L10n.t(&"REALM_MIGRATION_SCHEDULED", [order.departure_day])}
+
+
+func eligible_migration_adults() -> Array[Villager]:
+	var out: Array[Villager] = []
+	for villager in Colony.villagers:
+		if is_instance_valid(villager) and villager.alive and villager.is_adult() \
+				and villager.health >= villager.max_health * 0.8 \
+				and villager.profile.thermal_comfort >= 35.0 \
+				and villager.profile.panic < 50.0 and villager.statuses.is_empty():
+			out.append(villager)
+	return out
+
+
+func _has_migration_way_station() -> bool:
+	for building in Colony.buildings:
+		if is_instance_valid(building) and not building.is_site() and building.def.enables_migration:
+			return true
+	return false
+
+
+func _migration_targets(site_id: StringName) -> bool:
+	for order in pending_migrations:
+		if order.status == &"scheduled" and order.destination_id == site_id:
+			return true
+	return false
+
+
+func _migration_snapshot(villager: Villager) -> Dictionary:
+	return {"x": villager.position.x, "y": villager.position.y, "job": villager.job,
+		"food": villager.food, "water": villager.water, "rest": villager.rest,
+		"mood": villager.mood, "health": villager.health,
+		"carry_kind": villager.carry_kind, "carry_amount": villager.carry_amount,
+		"pending_loads": villager.pending_loads.duplicate(true),
+		"statuses": villager.statuses.duplicate(true), "record": villager.profile_dict()}
+
+
+func _process_migrations(day_number: int) -> void:
+	for order in pending_migrations:
+		if order.status != &"scheduled" or order.departure_day > day_number:
+			continue
+		if order.source_id != awake_id or not Colony.can_afford(SETTLEMENT_COST):
+			order.status = &"failed"
+			continue
+		var ids: Dictionary = {}
+		for row: Dictionary in order.migrants:
+			ids[String(row.get("record", {}).get("id", ""))] = true
+		var departing: Array[Villager] = []
+		for villager in Colony.villagers:
+			if is_instance_valid(villager) and villager.alive \
+					and ids.has(villager.profile.stable_id):
+				departing.append(villager)
+		if departing.size() != order.migrants.size():
+			order.status = &"failed"
+			continue
+		Colony.spend(SETTLEMENT_COST)
+		for villager in departing:
+			villager.alive = false
+			villager.queue_free()
+		capture_awake()
+		var row: Dictionary = sites[order.destination_id]
+		var ledger := ColonyLedger.new()
+		ledger.id = order.destination_id
+		ledger.display_name = String(row["name"])
+		ledger.seed_value = int(row["seed"])
+		ledger.realm_position = Vector2(row["coord"])
+		ledger.connections.assign(row["connections"])
+		ledger.founded_day = day_number
+		ledger.last_advanced_day = day_number
+		ledger.corruption = float(row.get("corruption", 0.0)) * 0.65
+		ledger.pressure = 0.0
+		ledger.shield_integrity = 0.75
+		colonies[ledger.id] = ledger
+		if region_states.has(ledger.id):
+			var region: RegionState = region_states[ledger.id]
+			region.status = RegionState.Status.SETTLED
+			# Every migrated colony opens on its own Day 1 even though the world calendar
+			# continues. The reduced opening threat is durable campaign state, not a
+			# transient UI promise.
+			region.settlement_day = 1
+			region.threat_modifier = 0.65
+		order.status = &"departed"
+		Meta.lifetime_stats["colonies_founded"] = int(Meta.lifetime_stats.get(
+			"colonies_founded", 0)) + 1
+		Events.migration_ready.emit(order, ledger)
 
 
 func can_travel(target_id: StringName) -> bool:
@@ -1383,6 +1507,8 @@ func mark_awake_fallen() -> int:
 		ledger.state["villagers"] = []
 		ledger.state["refugees"] = int(ledger.state.get("refugees", 0)) + refugees
 		ledger.state["fallen_day"] = Sim.day
+		if region_states.has(ledger.id):
+			region_states[ledger.id].status = RegionState.Status.LOST
 	Events.realm_changed.emit()
 	return refugees
 
@@ -1391,6 +1517,8 @@ func can_recover(site_id: StringName) -> Dictionary:
 	var ledger := colony(site_id)
 	if ledger == null or not ledger.fallen:
 		return {"ok": false, "reason": tr(&"REALM_RECOVERY_NOT_RUIN")}
+	return {"ok": false, "reason": tr(&"REALM_REASON_PERMANENT_LOSS")}
+	# Legacy recovery code remains below for old test fixtures but is unreachable in schema 14.
 	if site_id == heart_region_id:
 		return {"ok": false, "reason": tr(&"REALM_RECOVERY_HEART")}
 	if not connected(awake_id, site_id):
@@ -1407,6 +1535,10 @@ func can_recover(site_id: StringName) -> Dictionary:
 ## structures, stockpile policies, and control zones remain exact; only a basic Hearth and the
 ## recovery party are guaranteed so the mission cannot load into an unwinnable empty scene.
 func prepare_recovery(site_id: StringName) -> Dictionary:
+	# Update 2d worlds have permanent regional loss. Keep this entry point so old UI and
+	# external callers receive a stable answer instead of accidentally reviving a ledger.
+	if region_states.has(site_id) and region_states[site_id].status == RegionState.Status.LOST:
+		return {"ok": false, "reason": tr(&"REALM_REASON_PERMANENT_LOSS")}
 	var check := can_recover(site_id)
 	if not bool(check["ok"]):
 		return check
@@ -1472,6 +1604,7 @@ func _ensure_recovery_hearth(ledger: ColonyLedger) -> void:
 
 func _on_day_advanced(day_number: int) -> void:
 	_advance_heart_regrowth()
+	_process_migrations(day_number)
 	_process_routes(day_number)
 	for id in colonies:
 		if id == awake_id:
@@ -1643,7 +1776,7 @@ func to_dict() -> Dictionary:
 	for ledger: ColonyLedger in colonies.values():
 		packed_colonies.append(ledger.to_dict())
 	return {
-		"format": 4,
+		"format": 5,
 		"world_seed": world_seed,
 		"colonies": packed_colonies,
 		"awake_id": String(awake_id),
@@ -1658,15 +1791,23 @@ func to_dict() -> Dictionary:
 		"threat_serial": _threat_serial,
 		"route_serial": _route_serial,
 		"routes": routes.map(func(route: TradeRoute) -> Dictionary: return route.to_dict()),
+		"regions": region_states.values().map(
+			func(region: RegionState) -> Dictionary: return region.to_dict()),
+		"migrations": pending_migrations.map(
+			func(order: MigrationOrder) -> Dictionary: return order.to_dict()),
 		"selected_doctrines": selected_doctrines.map(func(id: StringName) -> String: return String(id)),
 	}
 
 
 func load_dict(data: Dictionary) -> bool:
-	if data.is_empty() or int(data.get("format", 0)) != 4:
+	if data.is_empty() or int(data.get("format", 0)) != 5:
 		return false
 	var old_colonies: Array = data.get("colonies", []).duplicate(true)
 	start_new(int(data.get("world_seed", 0)))
+	for packed_region: Dictionary in data.get("regions", []):
+		var restored_region := RegionState.from_dict(packed_region)
+		if region_states.has(restored_region.id):
+			region_states[restored_region.id] = restored_region
 	for packed: Dictionary in old_colonies:
 		var ledger := ColonyLedger.from_dict(packed)
 		if not sites.has(ledger.id):
@@ -1697,5 +1838,58 @@ func load_dict(data: Dictionary) -> bool:
 		if colonies.has(route.source_id) and colonies.has(route.destination_id):
 			routes.append(route)
 			_route_serial = maxi(_route_serial, route.route_id)
+	pending_migrations.clear()
+	for packed_migration: Dictionary in data.get("migrations", []):
+		var migration := MigrationOrder.from_dict(packed_migration)
+		if sites.has(migration.source_id) and sites.has(migration.destination_id):
+			pending_migrations.append(migration)
+			_route_serial = maxi(_route_serial, migration.order_id)
 	Events.realm_changed.emit()
 	return colonies.has(awake_id)
+
+
+## Doom World deletes only campaign/run state. Meta owns God XP, perks, completed goals and chest
+## slots in a separate profile and is intentionally untouched.
+func doom_world(typed_confirmation: String, next_seed: int = 0) -> bool:
+	if typed_confirmation != "RESET":
+		return false
+	var replacement_seed := next_seed if next_seed != 0 else world_seed + 104729
+	start_new(replacement_seed)
+	return true
+
+
+## Development and acceptance-test invariant for the fixed Update 2d campaign topology.
+func validate_campaign() -> PackedStringArray:
+	var errors := PackedStringArray()
+	if sites.size() != REGION_COUNT or region_states.size() != REGION_COUNT:
+		errors.append("expected %d regions; got %d sites and %d records" % [
+			REGION_COUNT, sites.size(), region_states.size()])
+	var biome_counts: Dictionary = {}
+	for id: StringName in sites:
+		var row: Dictionary = sites[id]
+		var biome := StringName(row.get("biome", &""))
+		biome_counts[biome] = int(biome_counts.get(biome, 0)) + 1
+		if not region_states.has(id):
+			errors.append("missing RegionState for %s" % id)
+			continue
+		for other: StringName in row.get("connections", []):
+			if not sites.has(other) or id not in sites[other].get("connections", []):
+				errors.append("asymmetric connection %s -> %s" % [id, other])
+	for required: StringName in [&"forest", &"desert", &"marsh", &"dry_lands", &"haven", &"outlands"]:
+		if int(biome_counts.get(required, 0)) == 0:
+			errors.append("missing biome zone %s" % required)
+	if not sites.is_empty():
+		var start: StringName = sites.keys()[0]
+		var visited: Dictionary = {start: true}
+		var frontier: Array[StringName] = [start]
+		while not frontier.is_empty():
+			var current: StringName = frontier.pop_front()
+			for raw_next in sites[current].get("connections", []):
+				var next := StringName(raw_next)
+				if not visited.has(next):
+					visited[next] = true
+					frontier.append(next)
+		if visited.size() != REGION_COUNT:
+			errors.append("campaign graph is disconnected (%d/%d reachable)" % [
+				visited.size(), REGION_COUNT])
+	return errors

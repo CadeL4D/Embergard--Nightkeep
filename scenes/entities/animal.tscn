@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/colony/animal.gd" id="1_animal"]
+[ext_resource type="Texture2D" path="res://assets/sprites/agents/villager.png" id="2_sprite"]
+
+[node name="Animal" type="Node2D"]
+script = ExtResource("1_animal")
+max_health = 28.0
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_sprite")
+offset = Vector2(0, -5)
+hframes = 6
+frame = 4
+scale = Vector2(0.72, 0.55)

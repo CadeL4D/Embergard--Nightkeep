@@ -7,11 +7,10 @@ script = ExtResource("1_job_def")
 id = &"fletching"
 display_name = "JOB_FLETCHING"
 workplace = &"bowyer"
-cycle_yield = {&"arrows": 8}
+cycle_yield = {&"arrows": 8, &"bolts": 4}
 cycle_cost = {&"boards": 1}
 cycle_work = 11.0
 carry_capacity = 16
 priority = 5
 default_quota = 0
 color = Color(0.56, 0.72, 0.4, 1)
-

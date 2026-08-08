@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/toolsmith.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"foundry"
+display_name = "BUILDING_FOUNDRY"
+description = "BUILDING_FOUNDRY_DESC"
+sprite = ExtResource("2")
+category = &"production"
+tier = 2
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"cut_stone": 12, &"boards": 8, &"tools": 2}
+build_work = 34.0
+max_hp = 220.0
+repair_cost = {&"cut_stone": 2, &"boards": 1}
+input_capacity = 100
+output_capacity = 80
+influence_radius = 5
+worker_slots = 4
+order = 26
+color = Color(0.69, 0.48, 0.31, 1)

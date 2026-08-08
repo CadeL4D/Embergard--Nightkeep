@@ -9,11 +9,18 @@ extends Node
 
 const SAVE_PATH := "user://profile.cfg"
 const SECTION := "profile"
-const SCHEMA_VERSION := 4
+const SCHEMA_VERSION := 5
 const HISTORY_LIMIT := 24
-const ACHIEVEMENT_TOTAL := 8
+const ACHIEVEMENT_TOTAL := 117
 
 var shards: int = 0
+var god_experience: int:
+	get: return shards
+	set(value): shards = maxi(value, 0)
+var unlocked_chest_slots: int = 0
+var chest_progress: float = 0.0
+var chests: Array[Dictionary] = []
+var god_perks: Dictionary = {}
 var unlocked: Array[StringName] = []
 var ascension: int = 0
 var best_day: int = 0
@@ -27,6 +34,9 @@ var lifetime_stats: Dictionary = {
 	"villagers_lost": 0,
 	"realms_completed": 0,
 	"events": 0,
+	"resources_hauled": 0,
+	"powers_cast": 0,
+	"colonies_founded": 0,
 }
 var achievements: Array[StringName] = []
 var chronicle_completed: Array[StringName] = []
@@ -48,8 +58,9 @@ func load_profile() -> void:
 	if cfg.load(SAVE_PATH) != OK:
 		return
 	var version: int = cfg.get_value(SECTION, "version", 0)
-	if version < SCHEMA_VERSION:
-		_migrate(cfg, version)
+	if version != SCHEMA_VERSION:
+		_reset_progression()
+		return
 	shards = cfg.get_value(SECTION, "shards", 0)
 	ascension = cfg.get_value(SECTION, "ascension", 0)
 	best_day = cfg.get_value(SECTION, "best_day", 0)
@@ -60,6 +71,10 @@ func load_profile() -> void:
 	lifetime_stats.merge(cfg.get_value(SECTION, "lifetime_stats", {}), true)
 	achievements.assign(cfg.get_value(SECTION, "achievements", []))
 	chronicle_completed.assign(cfg.get_value(SECTION, "chronicle_completed", []))
+	unlocked_chest_slots = int(cfg.get_value(SECTION, "unlocked_chest_slots", 0))
+	chest_progress = float(cfg.get_value(SECTION, "chest_progress", 0.0))
+	chests.assign(cfg.get_value(SECTION, "chests", []))
+	god_perks = cfg.get_value(SECTION, "god_perks", {}).duplicate(true)
 	equipped_doctrines = Doctrines.sanitize(cfg.get_value(SECTION, "equipped_doctrines", []))
 
 
@@ -79,6 +94,10 @@ func save_profile() -> void:
 	cfg.set_value(SECTION, "lifetime_stats", lifetime_stats)
 	cfg.set_value(SECTION, "achievements", achievements)
 	cfg.set_value(SECTION, "chronicle_completed", chronicle_completed)
+	cfg.set_value(SECTION, "unlocked_chest_slots", unlocked_chest_slots)
+	cfg.set_value(SECTION, "chest_progress", chest_progress)
+	cfg.set_value(SECTION, "chests", chests)
+	cfg.set_value(SECTION, "god_perks", god_perks)
 	cfg.set_value(SECTION, "equipped_doctrines", equipped_doctrines)
 	cfg.save(SAVE_PATH)
 
@@ -96,6 +115,27 @@ func _migrate(_cfg: ConfigFile, _from_version: int) -> void:
 	# Schema 2 only adds fields with safe defaults. Keeping migration explicit documents that
 	# old profiles are retained rather than treated as invalid.
 	pass
+
+
+func _reset_progression() -> void:
+	shards = 0
+	unlocked.clear()
+	ascension = 0
+	best_day = 0
+	runs_played = 0
+	run_history.clear()
+	lifetime_stats = {
+		"days": 0, "buildings": 0, "nests": 0, "monsters": 0,
+		"villagers_lost": 0, "realms_completed": 0, "events": 0,
+		"resources_hauled": 0, "powers_cast": 0, "colonies_founded": 0,
+	}
+	achievements.clear()
+	chronicle_completed.clear()
+	equipped_doctrines.clear()
+	unlocked_chest_slots = 0
+	chest_progress = 0.0
+	chests.clear()
+	god_perks.clear()
 
 
 # --- Unlocks -----------------------------------------------------------------------
@@ -173,13 +213,68 @@ func record_run(record: Dictionary) -> Array[StringName]:
 		for goal: Dictionary in Chronicle.evaluate(lifetime_stats, chronicle_completed):
 			var goal_id := StringName(goal["id"])
 			new_goals.append(goal_id)
-			shards += int(goal.get("shards", 0))
+			god_experience += int(goal.get("god_xp", goal.get("shards", 0)))
+			add_chest_progress(float(goal.get("god_xp", goal.get("shards", 0))))
+			if goal_id not in achievements:
+				achievements.append(goal_id)
+			unlocked_chest_slots += int(goal.get("chest_slots", 0))
 			var doctrine_id := StringName(goal.get("unlock", &""))
 			if doctrine_id != &"" and doctrine_id not in unlocked:
 				unlocked.append(doctrine_id)
 	clean["new_goals"] = new_goals
 	save_profile()
 	return newly_unlocked
+
+
+## Chest progress and slots are profile state, so Doom World cannot erase an earned reward.
+func add_chest_progress(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	chest_progress += amount
+	while chest_progress >= 100.0 and chests.size() < unlocked_chest_slots:
+		chest_progress -= 100.0
+		chests.append(_roll_chest(chests.size() + achievements.size()))
+	chest_progress = minf(chest_progress, 100.0 if chests.size() >= unlocked_chest_slots else INF)
+
+
+func open_chest(slot: int) -> Dictionary:
+	if slot < 0 or slot >= chests.size():
+		return {}
+	var reward: Dictionary = chests[slot].duplicate(true)
+	chests.remove_at(slot)
+	match StringName(reward.get("kind", &"")):
+		&"god_xp":
+			god_experience += int(reward.get("amount", 0))
+		&"chest_slot":
+			unlocked_chest_slots += int(reward.get("amount", 1))
+		&"perk_point":
+			god_perks[&"unspent"] = int(god_perks.get(&"unspent", 0)) \
+				+ int(reward.get("amount", 1))
+	save_profile()
+	return reward
+
+
+func purchase_perk(id: StringName, xp_cost: int, max_rank: int = 5) -> bool:
+	var rank := int(god_perks.get(id, 0))
+	if id.is_empty() or rank >= max_rank or god_experience < xp_cost:
+		return false
+	god_experience -= xp_cost
+	god_perks[id] = rank + 1
+	save_profile()
+	return true
+
+
+func perk_rank(id: StringName) -> int:
+	return int(god_perks.get(id, 0))
+
+
+func _roll_chest(serial: int) -> Dictionary:
+	var roll := posmod(serial * 1103515245 + runs_played * 8191 + best_day, 100)
+	if roll < 12:
+		return {"kind": &"chest_slot", "amount": 1, "rarity": &"rare"}
+	if roll < 42:
+		return {"kind": &"perk_point", "amount": 1, "rarity": &"uncommon"}
+	return {"kind": &"god_xp", "amount": 25 + (roll % 4) * 10, "rarity": &"common"}
 
 
 func _unlock_achievement(id: StringName, condition: bool,

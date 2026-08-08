@@ -52,6 +52,39 @@ const SEASON_EFFECTS := {
 		"move": 0.90},
 }
 
+## Ambient temperature is kept deterministic for awake and sleeping regions alike. Values are
+## deliberately centralized here so parity research can replace a row without touching villager
+## physiology or campaign simulation.
+const SEASON_TEMPERATURE_C := {
+	&"spring": 18.0,
+	&"summer": 28.0,
+	&"autumn": 14.0,
+	&"winter": -3.0,
+}
+const BIOME_TEMPERATURE_OFFSET_C := {
+	&"forest": 0.0,
+	&"desert": 9.0,
+	&"marsh": 1.0,
+	&"dry_lands": 5.0,
+	&"haven": -1.0,
+	&"outlands": 2.0,
+	# Compatibility biomes used by pre-redesign scenarios.
+	&"coast": 0.0,
+	&"grassland": 0.0,
+	&"highland": -4.0,
+	&"badlands": 6.0,
+	&"tundra": -10.0,
+}
+const WEATHER_TEMPERATURE_OFFSET_C := {
+	&"clear": 0.0,
+	&"rain": -2.0,
+	&"storm": -3.0,
+	&"fog": -1.0,
+	&"drought": 3.0,
+	&"snow": -8.0,
+	&"heatwave": 8.0,
+}
+
 ## Seasons in which open water is frozen over and cannot be drunk from.
 ##
 ## The one seasonal effect that is structural rather than a multiplier, and it exists to make a
@@ -72,6 +105,14 @@ func shores_frozen() -> bool:
 
 ## Weighted tables keep weather compatible with the land without hard-coding one outcome.
 const BIOME_WEATHER := {
+	&"desert": {&"clear": 34, &"rain": 5, &"storm": 8, &"fog": 3,
+		&"drought": 29, &"snow": 1, &"heatwave": 20},
+	&"dry_lands": {&"clear": 31, &"rain": 8, &"storm": 10, &"fog": 5,
+		&"drought": 25, &"snow": 3, &"heatwave": 18},
+	&"haven": {&"clear": 31, &"rain": 27, &"storm": 8, &"fog": 14,
+		&"drought": 7, &"snow": 8, &"heatwave": 5},
+	&"outlands": {&"clear": 25, &"rain": 17, &"storm": 17, &"fog": 12,
+		&"drought": 12, &"snow": 9, &"heatwave": 8},
 	&"coast": {&"clear": 18, &"rain": 31, &"storm": 23, &"fog": 18, &"drought": 3,
 		&"snow": 5, &"heatwave": 2},
 	&"grassland": {&"clear": 34, &"rain": 25, &"storm": 10, &"fog": 9,
@@ -271,6 +312,21 @@ func movement_multiplier(terrain_type: int) -> float:
 
 func mood_offset() -> float:
 	return float(effects.get("mood", 0.0))
+
+
+## Current outside air temperature. Shelter is applied by the villager because different
+## creatures and future equipment can have different insulation without changing the weather.
+func ambient_temperature_c() -> float:
+	return temperature_for(season, weather, severity, biome)
+
+
+static func temperature_for(season_id: StringName, weather_id: StringName,
+		weather_severity: float, biome_id: StringName) -> float:
+	var base := float(SEASON_TEMPERATURE_C.get(season_id, 18.0))
+	var biome_offset := float(BIOME_TEMPERATURE_OFFSET_C.get(biome_id, 0.0))
+	var weather_offset := float(WEATHER_TEMPERATURE_OFFSET_C.get(weather_id, 0.0)) \
+		* clampf(weather_severity, 0.0, 1.0)
+	return base + biome_offset + weather_offset
 
 
 func production_multiplier(job: JobDef, resource: StringName) -> float:

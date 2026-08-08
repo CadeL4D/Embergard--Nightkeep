@@ -217,6 +217,7 @@ func step(tick: int) -> void:
 			# ever update on spread and purify, and a tile deepening from "taking hold" to
 			# "taken" would never actually change.
 			if before < TileAtlas.CORRUPT_THRESHOLD and blight[cell] >= TileAtlas.CORRUPT_THRESHOLD:
+				_world.on_corruption_takeover(cell)
 				Events.blight_changed.emit(cell, true)
 
 		var open := _open_neighbours(cell)
@@ -257,9 +258,40 @@ func _open_neighbours(cell: int) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	var blight: PackedByteArray = _world.blight
 	for n in _world.grid.neighbours_4(cell):
-		if blight[n] == 0 and _world.is_walkable(n):
+		if blight[n] == 0 and _world.terrain_at(n) != Terrain.Type.DEEP_WATER \
+				and _world.claimed[n] == 0:
 			out.append(n)
 	return out
+
+
+## Blight fragments severed from every nest and enemy structure dissolve after displacement.
+func dissolve_displaced() -> int:
+	var anchored := PackedByteArray()
+	anchored.resize(_world.grid.cell_count)
+	var queue := PackedInt32Array()
+	for nest in _world.live_nest_cells():
+		if _world.blight[nest] > 0:
+			queue.append(nest)
+	for raw_cell in _world.blight_structures:
+		var structure_cell := int(raw_cell)
+		if _world.blight[structure_cell] > 0:
+			queue.append(structure_cell)
+	var cursor := 0
+	while cursor < queue.size():
+		var current := queue[cursor]
+		cursor += 1
+		if anchored[current] != 0:
+			continue
+		anchored[current] = 1
+		for neighbour in _world.grid.neighbours_4(current):
+			if anchored[neighbour] == 0 and _world.blight[neighbour] > 0:
+				queue.append(neighbour)
+	var dissolved := 0
+	for candidate in _world.blight.size():
+		if _world.blight[candidate] > 0 and anchored[candidate] == 0:
+			if purify(candidate, 255):
+				dissolved += 1
+	return dissolved
 
 
 # --- Frontier bookkeeping ---------------------------------------------------------------

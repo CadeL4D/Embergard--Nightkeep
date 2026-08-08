@@ -64,6 +64,7 @@ func _ready() -> void:
 	Events.building_completed.connect(_on_building_completed)
 	Events.monster_died.connect(_on_monster_died)
 	Events.heart_shattered.connect(_on_heart_shattered)
+	Events.migration_ready.connect(_on_migration_ready)
 	Events.storyteller_resolved.connect(func(_event_id: StringName, _choice_id: StringName) -> void:
 		_story_events += 1
 	)
@@ -117,6 +118,7 @@ func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool
 	# modal map. Clear all live run state and halt the clock before either picker.
 	Sim.stop_run()
 	Colony.reset()
+	WorkOrders.reset()
 	Divine.reset()
 	Threat.reset()
 	_ended = false
@@ -146,6 +148,19 @@ func start_run(seed_value: int, difficulty_id: StringName = &"", pick_site: bool
 	var start_region := Realm.site(start_id)
 	World.generate(int(start_region["seed"]), -1, start_region)
 	_found_colony(seed_value, start_id)
+
+
+## Doom World is deliberately routed through the run root so the live scene, volatile save and
+## campaign graph are reset together while Meta remains untouched.
+func doom_world(typed_confirmation: String) -> bool:
+	if typed_confirmation != "RESET":
+		return false
+	var next_seed := Realm.world_seed + 104729
+	var doctrines := Realm.selected_doctrines.duplicate()
+	if not Realm.doom_world(typed_confirmation, next_seed):
+		return false
+	start_run(next_seed, Difficulties.current_id(), true, doctrines)
+	return true
 
 
 ## Show the generated land and let the player choose where to settle.
@@ -200,6 +215,7 @@ func confirm_site(cell: int) -> void:
 
 func _found_colony(seed_value: int, site_id: StringName) -> void:
 	Colony.reset()
+	WorkOrders.reset()
 	Divine.reset()
 	Threat.reset(true)
 	# Monsters share the Y-sorted container with villagers and buildings so they
@@ -216,6 +232,7 @@ func _found_colony(seed_value: int, site_id: StringName) -> void:
 	_raise_hearth()
 
 	_spawn_starting_villagers()
+	_spawn_starting_animals()
 
 	camera.center_on_cell(World.keep_cell)
 	Sim.start_run()
@@ -258,7 +275,18 @@ func _clear_entities() -> void:
 		child.free()
 	Colony.villagers.clear()
 	Colony.golems.clear()
+	Colony.animals.clear()
 	Colony.buildings.clear()
+
+
+func _spawn_starting_animals() -> void:
+	var cells := _spawn_cells(3)
+	if cells.size() > 0:
+		Colony.spawn_animal(&"animal", cells[0])
+	if cells.size() > 1:
+		Colony.spawn_animal(&"doggo", cells[1])
+	if cells.size() > 2 and posmod(World.seed_value, 12) == 0:
+		Colony.spawn_animal(&"doofy_doggo", cells[2])
 
 
 func _spawn_starting_villagers() -> void:
@@ -363,22 +391,41 @@ func found_realm_site(site_id: StringName) -> bool:
 	if not bool(caravan.get("ok", false)):
 		Events.notice.emit(String(caravan.get("reason", tr(&"REALM_REASON_CARAVAN"))), 1)
 		return false
+	if bool(caravan.get("scheduled", false)):
+		Events.notice.emit(String(caravan.get("reason", tr(&"REALM_MIGRATION_SCHEDULED"))), 0)
+		RunSave.save()
+		return true
+	return _establish_realm_site(caravan["ledger"], caravan["settlers"], caravan["cargo"])
+
+
+func _on_migration_ready(order: MigrationOrder, ledger: ColonyLedger) -> void:
+	_establish_realm_site(ledger, order.migrants, order.cargo, order.courier_golems)
+
+
+func _establish_realm_site(ledger: ColonyLedger, settlers: Array,
+		cargo: Dictionary, courier_golems: int = 0) -> bool:
+	var site_id := ledger.id
 	var previous_paused := Sim.paused
 	Sim.set_paused(true)
 	_clear_entities()
-	var ledger: ColonyLedger = caravan["ledger"]
 	World.generate(ledger.seed_value, -1, Realm.site(site_id))
 	ledger.keep_cell = World.keep_cell
 	Colony.reset()
+	WorkOrders.reset()
 	Divine.reset()
 	Threat.reset(true)
 	Threat.set_spawn_parent(entities)
 	Colony.set_spawn_parent(entities)
-	for kind: StringName in caravan["cargo"]:
-		Colony.add(kind, int(caravan["cargo"][kind]))
+	for kind: StringName in cargo:
+		Colony.add(kind, int(cargo[kind]))
 	Divine.place_ember(World.keep_cell)
 	_raise_hearth()
-	_spawn_transferred_villagers(caravan["settlers"])
+	_spawn_transferred_villagers(settlers)
+	var courier_def := Powers.get_power(&"courier_golem")
+	for i in courier_golems:
+		var spawn_cell := World.nearest_walkable(World.keep_cell + i + 1)
+		if courier_def != null and spawn_cell != -1:
+			Colony.spawn_golem(courier_def, spawn_cell)
 	Realm.set_awake(site_id)
 	Abstractor.capture(ledger)
 	Sim.paused = previous_paused
@@ -572,7 +619,7 @@ func _end_run(ascended: bool, message: String) -> void:
 		"events": _story_events,
 		"shards": shards,
 		"ascended": ascended,
-		"realm_completed": false,
+		"realm_completed": Realm.heart_shattered and Realm.ring_closed(),
 		"progression_awards": Difficulties.progression_awards(),
 	})
 	RunSave.clear()

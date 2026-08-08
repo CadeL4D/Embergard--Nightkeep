@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"crystal_golem"
+display_name = "POWER_CRYSTAL_GOLEM"
+description = "POWER_CRYSTAL_GOLEM_DESC"
+kind = 10
+faith_cost = 38.0
+cooldown = 10.0
+persistent_entity = true
+dismissible = true
+persistent_limit = 4
+maintenance_influence = 1.0
+construct_role = &"crystal"
+construct_move_speed = 26.0
+construct_max_health = 82.0
+construct_work_rate = 1.25
+construct_carry_capacity = 10
+construct_resistances = {&"magic": 0.45, &"blight": 0.25}
+construct_light_radius = 3
+required_temple_tier = 2
+burden = 0.1
+color = Color(0.43, 0.85, 0.95, 1)
+order = 16

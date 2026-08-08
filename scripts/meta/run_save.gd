@@ -6,7 +6,7 @@ extends RefCounted
 ## purification, the regrowing Heart, and physical building-supply requests. This project has no
 ## released save contract, so older schemas are deliberately invalidated rather than guessed into
 ## the new progression or logistics state.
-const SCHEMA_VERSION := 13
+const SCHEMA_VERSION := 14
 
 
 static func has_save() -> bool:
@@ -22,6 +22,7 @@ static func save() -> bool:
 		return false
 	var data := {
 		"version": SCHEMA_VERSION,
+		"save_envelope": SaveEnvelope.header(),
 		"difficulty": String(Difficulties.current_id()),
 		"game_rules": Difficulties.rules_dict(),
 		"tick": Sim.tick,
@@ -42,6 +43,9 @@ static func load_into(_run: Node, entities: Node) -> bool:
 	var version := int(data.get("version", 0))
 	if version != SCHEMA_VERSION:
 		push_warning("RunSave: schema %d is not supported" % version)
+		return false
+	if not SaveEnvelope.valid(data.get("save_envelope", {})):
+		push_warning("RunSave: save envelope is not supported")
 		return false
 
 	if data.has("game_rules"):

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"crystal_harvester"
+display_name = "JOB_CRYSTAL_HARVESTER"
+target_features = Array[int]([7])
+work_rate = 1.0
+carry_capacity = 8
+equipment_tags = Array[StringName]([&"mining"])
+priority = 2
+default_quota = 0
+color = Color(0.65, 0.45, 0.9, 1)

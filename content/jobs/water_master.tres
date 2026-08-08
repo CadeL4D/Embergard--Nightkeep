@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"water_master"
+display_name = "JOB_WATER_MASTER"
+workplace = &"water_purifier"
+cycle_yield = {&"clean_water": 8}
+cycle_cost = {&"dirty_water": 10, &"wood": 1}
+cycle_work = 10.0
+work_rate = 1.0
+carry_capacity = 12
+priority = 3
+default_quota = 0
+color = Color(0.38, 0.76, 0.92, 1)

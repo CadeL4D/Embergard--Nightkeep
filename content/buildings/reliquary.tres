@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/shrine.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"reliquary"
+display_name = "BUILDING_RELIQUARY"
+description = "BUILDING_RELIQUARY_DESC"
+sprite = ExtResource("2")
+category = &"divine"
+tier = 3
+footprint = Vector2i(3, 2)
+blocks_movement = true
+cost = {&"cut_stone": 16, &"gold_ingot": 8, &"crystal": 12, &"tools": 2}
+build_work = 48.0
+max_hp = 280.0
+repair_cost = {&"cut_stone": 2, &"gold_ingot": 1}
+light_radius = 6
+input_capacity = 80
+output_capacity = 60
+influence_radius = 8
+worker_slots = 4
+order = 33
+color = Color(0.68, 0.58, 0.88, 1)

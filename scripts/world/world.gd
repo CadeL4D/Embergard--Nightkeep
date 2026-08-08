@@ -152,6 +152,7 @@ func _on_phase_changed(phase: int, _duration: float) -> void:
 	if phase != Sim.Phase.DAWN or blight_field == null or region_purified:
 		return
 	var cleared := blight_field.reclaim_lit_ground()
+	cleared += blight_field.dissolve_displaced()
 	if cleared > 0:
 		if Threat:
 			Threat.note_reclaimed_tiles(cleared)
@@ -563,6 +564,41 @@ func clear_feature(i: int) -> void:
 	if Terrain.FEATURE_BLOCKS.get(was, false):
 		cost_dirty = true
 	Events.terrain_changed.emit(i)
+
+
+## Runtime terrain edits used by Waymaker dig/destroy orders. Every derived navigation layer is
+## invalidated here so mutable terrain cannot leave stale movement or threat fields behind.
+func set_terrain_type(i: int, type: Terrain.Type) -> void:
+	if not grid.is_valid_index(i) or terrain[i] == type:
+		return
+	terrain[i] = type
+	cost_dirty = true
+	if Threat:
+		Threat.mark_field_dirty()
+	Events.terrain_changed.emit(i)
+
+
+func set_feature(i: int, value: Terrain.Feature) -> void:
+	if not grid.is_valid_index(i):
+		return
+	clear_feature(i)
+	feature[i] = value
+	if resources and Terrain.is_harvestable(value):
+		resources.add(i)
+	if Terrain.FEATURE_BLOCKS.get(value, false):
+		cost_dirty = true
+	Events.terrain_changed.emit(i)
+
+
+func on_corruption_takeover(i: int) -> void:
+	if not grid.is_valid_index(i):
+		return
+	var existing := feature_at(i)
+	if existing not in [Terrain.Feature.TREE, Terrain.Feature.BERRIES]:
+		return
+	clear_feature(i)
+	if posmod(i * 1103515245 + seed_value, 5) == 0:
+		set_feature(i, Terrain.Feature.DARK_CRYSTAL)
 
 
 func set_occupancy(cells: PackedInt32Array, building_id: int) -> void:

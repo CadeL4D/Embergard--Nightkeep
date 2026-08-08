@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/well.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"water_purifier"
+display_name = "BUILDING_WATER_PURIFIER"
+description = "BUILDING_WATER_PURIFIER_DESC"
+sprite = ExtResource("2")
+category = &"production"
+tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = false
+cost = {&"boards": 8, &"cut_stone": 6, &"tools": 1}
+build_work = 24.0
+max_hp = 150.0
+repair_cost = {&"boards": 1, &"cut_stone": 1}
+is_stockpile = true
+inventory_capacity = 180
+storage_tags = Array[StringName]([&"water"])
+input_capacity = 80
+output_capacity = 80
+influence_radius = 5
+worker_slots = 3
+order = 21
+color = Color(0.45, 0.73, 0.86, 1)

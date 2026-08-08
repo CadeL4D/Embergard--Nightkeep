@@ -33,6 +33,7 @@ attack_cooldown = 0.36
 attack_type = &"piercing"
 ammo_kind = &"arrows"
 ammo_per_shot = 1
+ammo_efficiency = 1.20
 input_capacity = 12
 order = 38
 color = Color(0.54, 0.72, 0.52, 1)

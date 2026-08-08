@@ -1940,6 +1940,19 @@ static func carry_frames() -> Dictionary:
 		&"tools": CARRY_TOOLS,
 		&"arrows": CARRY_ARROWS,
 		&"bolts": CARRY_BOLTS,
+		&"dirty_water": CARRY_MEDICINE,
+		&"clean_water": CARRY_MEDICINE,
+		&"crystal": CARRY_EMBERGLASS,
+		&"crylithium": CARRY_EMBERGLASS,
+		&"iron_ore": CARRY_ORE,
+		&"iron_ingot": CARRY_INGOTS,
+		&"gold_ore": CARRY_ORE,
+		&"gold_ingot": CARRY_INGOTS,
+		&"stone_balls": CARRY_STONE,
+		&"trash": CARRY_WOOD,
+		&"empty_vessel": CARRY_MEDICINE,
+		&"filled_vessel": CARRY_EMBERGLASS,
+		&"ghost_dust": CARRY_EMBERGLASS,
 	}
 
 

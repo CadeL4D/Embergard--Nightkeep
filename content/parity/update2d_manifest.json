@@ -1,0 +1,71 @@
+{
+  "target_version": "Rise to Ruins Update 2d",
+  "verified_on": "2026-08-07",
+  "primary_sources": [
+    "https://steamcommunity.com/app/328080/announcements/",
+    "https://rayvolution.itch.io/risetoruins"
+  ],
+  "source_precedence": [
+    "Update 2d observable game data and tooltips",
+    "official Update 2/2d change logs",
+    "two corroborating current secondary sources"
+  ],
+  "catalog_policy": {
+    "default_status": "implementation_complete_numeric_unverified",
+    "verified_statuses": ["verified_official", "verified_observable"],
+    "blocking_statuses": ["implementation_complete_numeric_unverified", "behavior_verified_numeric_pending", "unknown"],
+    "rule": "A catalog row with a blocking status cannot be called Update 2d parity-complete. Unknown values are never promoted to verified by implementation tests."
+  },
+  "catalogs": {
+    "resource": {"unit": "resource definition", "status": "implementation_complete_numeric_unverified"},
+    "recipe": {"unit": "production cycle", "status": "implementation_complete_numeric_unverified"},
+    "job": {"unit": "job definition", "status": "implementation_complete_numeric_unverified"},
+    "building": {"unit": "building definition", "status": "implementation_complete_numeric_unverified"},
+    "upgrade": {"unit": "upgrade edge", "status": "implementation_complete_numeric_unverified"},
+    "power": {"unit": "spell or construct definition", "status": "behavior_verified_numeric_pending"},
+    "creature": {"unit": "creature definition", "status": "implementation_complete_numeric_unverified"},
+    "event": {"unit": "event definition", "status": "implementation_complete_numeric_unverified"},
+    "biome": {"unit": "biome definition", "status": "implementation_complete_numeric_unverified"},
+    "goal": {"unit": "goal definition", "status": "implementation_complete_numeric_unverified"}
+  },
+  "entry_overrides": {
+    "job:occultist": {"status": "behavior_verified_numeric_pending", "source": "official_update_2d"},
+    "building:essence_altar": {"status": "behavior_verified_numeric_pending", "source": "official_update_2d"},
+    "building:essence_collector": {"status": "behavior_verified_numeric_pending", "source": "official_update_2d"},
+    "building:reliquary": {"status": "behavior_verified_numeric_pending", "source": "official_update_2d"},
+    "resource:empty_vessel": {"status": "verified_official", "source": "official_update_2d"},
+    "resource:filled_vessel": {"status": "behavior_verified_numeric_pending", "source": "official_update_2d"}
+  },
+  "sources": {
+    "official_update_2d": "https://steamcommunity.com/app/328080/announcements/",
+    "official_listing": "https://rayvolution.itch.io/risetoruins",
+    "project_definition": "Godot resource_path recorded on each runtime ledger row"
+  },
+  "constants": {
+    "goal_count": {"value": 117, "unit": "goals", "status": "verified_official"},
+    "occultist_prayer_essence": {"value": 3, "unit": "essence_motes_per_action", "status": "verified_official", "source": "official_update_2d"},
+    "essence_energy_value": {"value": 3, "unit": "energy_per_essence", "status": "verified_official", "source": "official_update_2d"},
+    "empty_vessel_iron_cost": {"value": 1, "unit": "iron_ingot", "status": "verified_official", "source": "official_update_2d"},
+    "empty_vessel_gold_cost": {"value": 1, "unit": "gold_ingot", "status": "verified_official", "source": "official_update_2d"},
+    "mate_death_faith_loss": {"value": 25, "unit": "percent_current_faith", "status": "verified_official", "source": "official_update_2d"},
+    "nephilim_conception_threshold": {"value": 90, "unit": "percent_combined_max_faith", "status": "verified_official", "source": "official_update_2d"},
+    "ordinary_animal_influence": {"value": 5, "unit": "influence", "status": "verified_official"},
+    "doggo_influence": {"value": 20, "unit": "influence", "status": "verified_official"},
+    "doofy_doggo_influence": {"value": 50, "unit": "influence", "status": "verified_official"},
+    "migration_population_gate": {"value": 15, "unit": "healthy_adults", "status": "reference_verified"},
+    "world_region_count": {"value": 45, "unit": "regions", "status": "reference_verified"},
+    "world_biome_count": {"value": 6, "unit": "biomes", "status": "reference_verified"}
+  },
+  "mobile_deviations": [
+    {
+      "id": "adaptive_hostile_concurrency",
+      "reason": "preserve mobile frame time",
+      "rule": "queue excess verified wave bodies without changing total threat or rewards"
+    },
+    {
+      "id": "touch_first_controls",
+      "reason": "keyboard cannot be required on handheld devices",
+      "rule": "every hotkey action has an on-screen equivalent"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"rain_collector"
+display_name = "JOB_RAIN_COLLECTOR"
+workplace = &"rain_catcher"
+cycle_yield = {&"dirty_water": 12}
+required_weather = Array[StringName]([&"rain", &"storm"])
+cycle_work = 8.0
+work_rate = 1.0
+carry_capacity = 12
+priority = 3
+default_quota = 0
+color = Color(0.34, 0.58, 0.84, 1)

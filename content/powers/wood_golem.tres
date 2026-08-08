@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="PowerDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/power_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"wood_golem"
+display_name = "POWER_WOOD_GOLEM"
+description = "POWER_WOOD_GOLEM_DESC"
+kind = 10
+faith_cost = 24.0
+cooldown = 8.0
+persistent_entity = true
+dismissible = true
+persistent_limit = 4
+maintenance_influence = 0.6
+construct_role = &"wood"
+construct_move_speed = 28.0
+construct_max_health = 60.0
+construct_work_rate = 1.35
+construct_carry_capacity = 12
+construct_resistances = {&"blight": 0.1}
+required_temple_tier = 1
+burden = 0.06
+color = Color(0.68, 0.48, 0.25, 1)
+order = 14

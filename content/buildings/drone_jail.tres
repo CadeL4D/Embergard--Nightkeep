@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/palisade.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"drone_jail"
+display_name = "BUILDING_DRONE_JAIL"
+description = "BUILDING_DRONE_JAIL_DESC"
+sprite = ExtResource("2")
+category = &"defence"
+tier = 2
+footprint = Vector2i(2, 2)
+blocks_movement = true
+cost = {&"cut_stone": 10, &"boards": 8, &"iron_ingot": 2}
+build_work = 28.0
+max_hp = 260.0
+repair_cost = {&"cut_stone": 2, &"boards": 1}
+light_radius = 3
+influence_radius = 5
+jails_drones = true
+order = 34
+color = Color(0.47, 0.5, 0.58, 1)

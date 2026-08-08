@@ -44,6 +44,10 @@ func _ready() -> void:
 		"achievements": Meta.achievements.duplicate(),
 		"chronicle_completed": Meta.chronicle_completed.duplicate(),
 		"equipped_doctrines": Meta.equipped_doctrines.duplicate(),
+		"unlocked_chest_slots": Meta.unlocked_chest_slots,
+		"chest_progress": Meta.chest_progress,
+		"chests": Meta.chests.duplicate(true),
+		"god_perks": Meta.god_perks.duplicate(true),
 	}
 	print("=== Embergard smoke test ===")
 	# Pin the difficulty. Every balance assertion below is calibrated against the
@@ -257,16 +261,28 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 			break
 	_expect(not Threat.threat_field.building, seed_value, "threat field finishes building")
 
-	# A field that does not reach the map edges would leave spawned monsters stuck
-	# standing still, which reads as "the night is broken" rather than "pathing is
-	# subtly wrong".
-	var edge := World.nearest_walkable(World.grid.index(4, World.grid.height / 2), 20)
-	_expect(edge != -1 and Threat.threat_field.is_reachable(edge), seed_value,
-		"the field reaches the map edge")
+	# Update 2d monsters emerge from live corruption camps rather than arbitrary map edges.
+	# Natural blockers may make a particular coast unreachable; the director must still select a
+	# camp-adjacent cell connected to the colony field.
+	var camp_spawn := Threat._spawn_cell()
+	_expect(camp_spawn != -1 and Threat.threat_field.is_reachable(camp_spawn), seed_value,
+		"a live corruption camp has a reachable spawn")
 
 	# --- The wave --------------------------------------------------------------------
 	if not Colony.villagers.is_empty():
-		Colony.villagers[0].set_job(&"warrior")
+		# Choose a deliberately fit guard. The redesigned villager AI correctly refuses duty for
+		# urgent food, water, rest, panic, or thermal needs, so inherited live-scene state must not
+		# turn this combat/pathing check into a survival-priority lottery.
+		var test_guard: Villager = Colony.villagers[0]
+		test_guard.set_job(&"warrior")
+		test_guard.food = Villager.NEED_MAX
+		test_guard.water = Villager.NEED_MAX
+		test_guard.rest = Villager.NEED_MAX
+		test_guard.health = test_guard.max_health
+		test_guard.profile.panic = 0.0
+		test_guard.profile.confusion = 0.0
+		test_guard.profile.stress = 0.0
+		test_guard.profile.thermal_comfort = Villager.NEED_MAX
 	# Exercise the real civilian schedule rather than teleporting the clock from
 	# midday to midnight. Late dusk is their commute window; Night is when everyone
 	# should already have disappeared indoors.
@@ -340,19 +356,25 @@ func _check_night(seed_value: int, run: Node2D) -> void:
 	# stops because it has reached something to attack is behaving correctly, and
 	# an earlier version of this check called that a pathing failure.
 	var start_closest := _closest_monster_distance()
+	var start_route_cost := _closest_monster_route_cost()
+	var route_progress := false
 	for _i in 400:
 		await get_tree().process_frame
+		if _closest_monster_route_cost() < start_route_cost:
+			route_progress = true
 	var end_closest := _closest_monster_distance()
+	var end_route_cost := _closest_monster_route_cost()
 	var engaged := false
 	for m in Threat.monsters:
 		if is_instance_valid(m) and m.state == Monster.State.ATTACKING:
 			engaged = true
 			break
 	var defeated_while_advancing := Threat.monsters.is_empty()
-	_expect(end_closest < start_closest or engaged or defeated_while_advancing, seed_value,
-		"a provoked monster advances on the colony (%d -> %d tiles, engaged: %s, defeated: %s)" % [
-			int(sqrt(float(start_closest))), int(sqrt(float(end_closest))), engaged,
-			defeated_while_advancing])
+	_expect(route_progress or end_route_cost < start_route_cost or engaged \
+			or defeated_while_advancing, seed_value,
+		"a provoked monster descends the route field (cost %d -> %d; straight %d -> %d; engaged: %s, defeated: %s)" % [
+			start_route_cost, end_route_cost, int(sqrt(float(start_closest))),
+			int(sqrt(float(end_closest))), engaged, defeated_while_advancing])
 
 	# --- Guards fight back -------------------------------------------------------------
 	#
@@ -734,6 +756,23 @@ func _closest_monster_distance() -> int:
 	return best
 
 
+## Lowest actual shared-flow cost among living monsters. Unlike straight-line distance, this
+## remains meaningful when a creature must initially move away from the keep to skirt water,
+## light, or a wall. It is the same value _advance() is explicitly descending.
+func _closest_monster_route_cost() -> int:
+	var field: FlowField = Threat.threat_field
+	if field == null:
+		return FlowField.UNREACHABLE
+	var best := FlowField.UNREACHABLE
+	for m in Threat.monsters:
+		if not is_instance_valid(m) or not m.alive:
+			continue
+		var c: int = m.cell()
+		if c >= 0 and c < field.cost.size():
+			best = mini(best, field.cost[c])
+	return best
+
+
 ## Two villagers must never work the same cell. This is the single most visible
 ## "the AI is dumb" bug in the genre, and it is invisible in a screenshot until you
 ## happen to catch two people standing on one tree.
@@ -1007,18 +1046,17 @@ func _check_migration(seed_value: int) -> void:
 		"migration check seeded a colony (%d)" % Colony.population())
 
 	# --- the threat curve is no longer a cliff -------------------------------------------
-	# The old curve doubled every ~2.5 nights and hit 590 by night 20, five times over the
-	# body cap. These bounds are deliberately loose — they are here to catch a return to
-	# exponential growth, not to pin the tuning.
+	# The old curve doubled every ~2.5 nights and hit 590 by night 20. These bounds are
+	# deliberately loose — they catch a return to exponential growth without confusing
+	# threat-cost points with the mobile concurrent-body cap. Overflow is now queued.
 	Threat.pressure = 0.5
 	var n10 := Threat.budget_for_night(10)
 	var n20 := Threat.budget_for_night(20)
 	_expect(n10 > Threat.budget_for_night(5), seed_value, "nights keep getting harder")
 	_expect(n20 < n10 * 3.0, seed_value,
 		"the threat curve is not exponential (night 10 %.0f, night 20 %.0f)" % [n10, n20])
-	_expect(n20 < float(Threat.MAX_MONSTERS), seed_value,
-		"night 20 fits inside the body cap rather than overflowing into invisible stats (%.0f)"
-			% n20)
+	_expect(Threat.expected_wave_bodies() <= Threat.MAX_MONSTERS, seed_value,
+		"the forecast respects the concurrent body cap while excess threat remains queued")
 
 	# --- dead air -------------------------------------------------------------------------
 	# is_dark() trips 60% through dusk, so the stretch where nobody works is the tail of dusk
@@ -1233,9 +1271,18 @@ func _check_ledger(seed_value: int) -> void:
 func _check_phase5(seed_value: int) -> void:
 	_expect(Audio._sfx.size() == AudioData.SFX_IDS.size(), seed_value,
 		"every Phase 5 sound effect is imported (%d)" % Audio._sfx.size())
-	_expect(Audio._music_player != null and Audio._music_player.stream is AudioStreamWAV \
-		and Audio._music_players.size() == AudioData.MUSIC_IDS.size(), seed_value,
-		"the synchronized baked music layers are running")
+	var music_ready := true
+	for music_id: StringName in AudioData.MUSIC_IDS:
+		music_ready = music_ready and ResourceLoader.exists(
+			"res://assets/audio/music/%s.wav" % music_id, "AudioStreamWAV")
+	if DisplayServer.get_name() == "headless":
+		music_ready = music_ready and Audio._music_players.is_empty()
+	else:
+		music_ready = music_ready and Audio._music_player != null \
+			and Audio._music_player.stream is AudioStreamWAV \
+			and Audio._music_players.size() == AudioData.MUSIC_IDS.size()
+	_expect(music_ready, seed_value,
+		"the synchronized baked music layers are available without leaking in headless runs")
 	_expect(BlightField.new().coverage() == 0.0, seed_value,
 		"title-screen Blight mood sampling is safe before a world exists")
 	_expect(Accessibility.PALETTE_NAMES.size() == 4, seed_value,
@@ -1271,8 +1318,11 @@ func _check_phase5(seed_value: int) -> void:
 
 
 func _check_phase6(seed_value: int) -> void:
-	_expect(Biomes.DEFINITIONS.size() == 7, seed_value,
-		"all seven settleable biomes have authored rules")
+	var required_biomes: Array[StringName] = [
+		&"forest", &"desert", &"marsh", &"dry_lands", &"haven", &"outlands"]
+	_expect(required_biomes.all(func(id: StringName) -> bool:
+		return Biomes.DEFINITIONS.has(id)), seed_value,
+		"all six Update 2d campaign biomes have authored rules")
 	var nest_counts := {}
 	for id: StringName in Biomes.DEFINITIONS:
 		nest_counts[Biomes.nest_count(id)] = true
@@ -1301,8 +1351,8 @@ func _check_phase6(seed_value: int) -> void:
 		"the procedural weather layer is present")
 	_expect(load("res://scenes/ui/story_event_panel.tscn") != null, seed_value,
 		"the storyteller decision panel is present")
-	_expect(Meta.ACHIEVEMENT_TOTAL == 8, seed_value,
-		"the Chronicle includes the two Phase 6 achievements")
+	_expect(Meta.ACHIEVEMENT_TOTAL == 117 and Chronicle.all().size() == 117, seed_value,
+		"the Chronicle exposes the complete 117-goal web")
 
 
 func _check_phase6_live(seed_value: int) -> void:
@@ -1537,6 +1587,10 @@ func _report() -> void:
 	Meta.achievements.assign(_profile_snapshot["achievements"])
 	Meta.chronicle_completed.assign(_profile_snapshot["chronicle_completed"])
 	Meta.equipped_doctrines.assign(_profile_snapshot["equipped_doctrines"])
+	Meta.unlocked_chest_slots = int(_profile_snapshot["unlocked_chest_slots"])
+	Meta.chest_progress = float(_profile_snapshot["chest_progress"])
+	Meta.chests.assign(_profile_snapshot["chests"])
+	Meta.god_perks = _profile_snapshot["god_perks"].duplicate(true)
 	Meta.save_profile()
 	print("\n=== result ===")
 	if _failures.is_empty():

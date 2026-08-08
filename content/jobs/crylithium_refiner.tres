@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobDef" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/data/job_def.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = &"crylithium_refiner"
+display_name = "JOB_CRYLITHIUM_REFINER"
+workplace = &"crystillery"
+cycle_yield = {&"crylithium": 2}
+cycle_cost = {&"crystal": 4, &"clean_water": 2}
+cycle_work = 16.0
+work_rate = 1.0
+carry_capacity = 8
+priority = 4
+default_quota = 0
+color = Color(0.66, 0.46, 0.91, 1)

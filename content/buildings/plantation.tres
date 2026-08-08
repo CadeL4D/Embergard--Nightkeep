@@ -24,6 +24,7 @@ inventory_capacity = 180
 storage_tags = Array[StringName]([&"food", &"rations"])
 influence_radius = 6
 worker_slots = 5
+harvest_speed_multiplier = 1.20
 workplace_role = &"farm"
 output_capacity = 120
 order = 20

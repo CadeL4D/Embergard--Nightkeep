@@ -12,19 +12,24 @@ extends Node
 ## resource would collapse both the site-picker decision and the Well's reason to exist.
 const KINDS: Array[StringName] = [
 	# Raw — pulled out of the map.
-	&"wood", &"stone", &"food", &"ore", &"emberglass", &"herbs",
+	&"wood", &"stone", &"food", &"ore", &"emberglass", &"herbs", &"dirty_water",
+	&"crystal", &"iron_ore", &"gold_ore", &"trash", &"ghost_dust",
 	# Processed — a workplace turned raw material into something better. See JobDef.cycle_cost.
-	&"boards", &"cut_stone", &"ingots", &"rations", &"medicine",
+	&"boards", &"cut_stone", &"ingots", &"rations", &"medicine", &"clean_water",
+	&"crylithium", &"iron_ingot", &"gold_ingot",
 	# Made — the gate to the upper half of the building list.
-	&"tools", &"arrows", &"bolts",
+	&"tools", &"arrows", &"bolts", &"stone_balls", &"empty_vessel", &"filled_vessel",
 ]
 
 ## Groups for the resource readout, so eleven numbers do not arrive as one undifferentiated
 ## strip. Keys are locale keys; values are the kinds in display order.
 const KIND_GROUPS: Array = [
-	[&"GROUP_RAW", [&"wood", &"stone", &"food", &"ore", &"emberglass", &"herbs"]],
-	[&"GROUP_PROCESSED", [&"boards", &"cut_stone", &"ingots", &"rations", &"medicine"]],
-	[&"GROUP_MADE", [&"tools", &"arrows", &"bolts"]],
+	[&"GROUP_RAW", [&"wood", &"stone", &"food", &"ore", &"emberglass", &"herbs",
+		&"dirty_water", &"crystal", &"iron_ore", &"gold_ore", &"trash", &"ghost_dust"]],
+	[&"GROUP_PROCESSED", [&"boards", &"cut_stone", &"ingots", &"rations", &"medicine",
+		&"clean_water", &"crylithium", &"iron_ingot", &"gold_ingot"]],
+	[&"GROUP_MADE", [&"tools", &"arrows", &"bolts", &"stone_balls", &"empty_vessel",
+		&"filled_vessel"]],
 ]
 
 ## How often the labour reconciler runs, in seconds. Quotas are a coarse control;
@@ -34,6 +39,7 @@ const REBALANCE_INTERVAL := 3.0
 
 const VILLAGER_SCENE := preload("res://scenes/entities/villager.tscn")
 const GOLEM_SCENE := preload("res://scenes/entities/golem.tscn")
+const ANIMAL_SCENE := preload("res://scenes/entities/animal.tscn")
 ## Mobile divine constructs share one hard budget because they use the same path queue as people.
 const GOLEM_CAP := 12
 
@@ -146,6 +152,7 @@ var _supply_refresh_tick: int = -1
 var quotas: Dictionary = {}               ## job id -> headcount the player wants
 var villagers: Array = []
 var golems: Array = []
+var animals: Array = []
 var buildings: Array = []
 var memorials: Array = []
 
@@ -229,6 +236,7 @@ func reset() -> void:
 	quotas.clear()
 	villagers.clear()
 	golems.clear()
+	animals.clear()
 	buildings.clear()
 	memorials.clear()
 	stockpiles = PackedInt32Array()
@@ -553,7 +561,7 @@ func admit_event_survivors(count: int) -> int:
 
 
 func admit_route_settler(row: Dictionary) -> bool:
-	if _spawn_parent == null or population() >= Difficulties.max_villagers():
+	if _spawn_parent == null or population() >= workforce_cap():
 		return false
 	var cell := _arrival_cell()
 	if cell == -1:
@@ -607,7 +615,7 @@ func _arrival_cell() -> int:
 ## two can never drift apart.
 func spawn_villager(cell: int, born: bool = false) -> Node:
 	if _spawn_parent == null or not World.grid.is_valid_index(cell) \
-			or population() >= Difficulties.max_villagers():
+			or population() >= workforce_cap():
 		return null
 	var v: Villager = VILLAGER_SCENE.instantiate()
 	v.profile = Villager._make_profile(villagers.size(), born)
@@ -615,8 +623,26 @@ func spawn_villager(cell: int, born: bool = false) -> Node:
 		var parents := _eligible_birth_pair()
 		if parents.size() == 2:
 			v.profile.household_id = parents[0].profile.household_id
+			# Update 2 faith conception: a pair within 90% of their combined maximum
+			# conceives a Nephilim child. This is decided before the node enters the tree,
+			# so Influence contribution and restoration see one stable identity.
+			var combined_faith := float(parents[0].profile.faith) \
+				+ float(parents[1].profile.faith)
+			v.profile.villager_type = &"nephilim" if combined_faith >= 180.0 else &"child"
 			for parent in parents:
 				parent.profile.birth_cooldown_until_day = Sim.day + 5
+				v.profile.parents.append(parent.profile.stable_id)
+			# Children inherit part of both parents' learned knowledge, while their active mastery
+			# begins lower so lived experience still matters. Every job is serialized by id.
+			var inherited_jobs: Dictionary = {}
+			for parent in parents:
+				for learned_job in parent.profile.mastery:
+					inherited_jobs[learned_job] = float(inherited_jobs.get(learned_job, 0.0)) \
+						+ parent.profile.mastery_of(learned_job) * 0.5
+			for learned_job in inherited_jobs:
+				var inherited := clampf(float(inherited_jobs[learned_job]) * 0.35, 0.0, 0.35)
+				v.profile.inherited_mastery[learned_job] = inherited
+				v.profile.mastery[learned_job] = inherited
 	v.position = World.grid.to_world_index(cell)
 	_spawn_parent.add_child(v)
 	_form_households()
@@ -648,6 +674,17 @@ func golem_count(power_id: StringName = &"") -> int:
 		if power_id.is_empty() or golem.power_id == power_id:
 			count += 1
 	return count
+
+
+func spawn_animal(kind: StringName, at_cell: int) -> Animal:
+	if _spawn_parent == null or not World.grid.is_valid_index(at_cell) \
+			or not World.is_walkable(at_cell):
+		return null
+	var animal: Animal = ANIMAL_SCENE.instantiate()
+	animal.setup(kind)
+	animal.position = World.grid.to_world_index(at_cell)
+	_spawn_parent.add_child(animal)
+	return animal
 
 
 func _supply_carriers() -> Array:
@@ -716,7 +753,12 @@ func _on_day_advanced(_day: int) -> void:
 		var was_adult: bool = v.is_adult()
 		v.profile.age_days += 1
 		if not was_adult and v.is_adult():
+			if v.profile.villager_type != &"nephilim":
+				v.profile.villager_type = &"adult"
 			Events.notice.emit("%s has come of age." % v.profile.display_name, 0)
+		elif v.profile.villager_type != &"nephilim" and v.is_adult() \
+				and v.profile.age_days >= int(v.profile.max_age_days * 0.67):
+			v.profile.villager_type = &"elder"
 		if v.profile.age_days >= v.profile.max_age_days:
 			v.die(&"age")
 	_form_households()
@@ -1471,7 +1513,8 @@ func consume_item_at(cell: int, def_id: StringName) -> bool:
 
 
 func has_stored_water() -> bool:
-	return item_count(&"waterskin") > 0
+	return item_count(&"waterskin") > 0 or amount_of(&"clean_water") > 0 \
+		or amount_of(&"dirty_water") > 0
 
 
 func total_item_count(def_id: StringName = &"") -> int:
@@ -1884,6 +1927,14 @@ func unregister_building(b: Node) -> void:
 	refresh_supply_requests(true)
 
 
+func building_covering(cell: int) -> Building:
+	for candidate in buildings:
+		var b := candidate as Building
+		if b != null and is_instance_valid(b) and cell in b.cells:
+			return b
+	return null
+
+
 # --- The Village Center -------------------------------------------------------------------
 
 ## The colony's development tier — the one dial the whole building list is gated behind.
@@ -1898,6 +1949,55 @@ func center_tier() -> int:
 		if is_instance_valid(b) and not b.is_site():
 			var def: BuildingDef = b.def
 			best = maxi(best, def.center_tier)
+	return best
+
+
+## Update 2d progression makes the Village Center and supporting buildings grant caps. The
+## difficulty values remain hard safety ceilings for mobile scenarios, while the live cap is a
+## visible colony statistic that can be raised through construction.
+func building_cap() -> int:
+	var base_by_tier: Array[int] = [0, 80, 120, 160]
+	var tier := clampi(center_tier(), 1, base_by_tier.size() - 1)
+	var cap := base_by_tier[tier]
+	for b in buildings:
+		if is_instance_valid(b) and not b.is_site():
+			cap += b.def.building_cap_bonus
+	return mini(cap, Difficulties.max_player_buildings())
+
+
+func workforce_cap() -> int:
+	var base_by_tier: Array[int] = [0, 24, 44, 64]
+	var tier := clampi(center_tier(), 1, base_by_tier.size() - 1)
+	var cap := base_by_tier[tier]
+	for b in buildings:
+		if is_instance_valid(b) and not b.is_site():
+			cap += b.def.workforce_cap_bonus
+	return mini(cap, Difficulties.max_villagers())
+
+
+## Global bonuses use the strongest completed provider. Upgrade branches are alternatives, so
+## stacking every copy would turn a layout choice into an exponential exploit.
+func global_work_multiplier() -> float:
+	var best := 1.0
+	for b in buildings:
+		if is_instance_valid(b) and not b.is_site():
+			best = maxf(best, b.def.global_work_speed_multiplier)
+	return best
+
+
+func global_build_multiplier() -> float:
+	var best := 1.0
+	for b in buildings:
+		if is_instance_valid(b) and not b.is_site():
+			best = maxf(best, b.def.global_build_speed_multiplier)
+	return best
+
+
+func global_harvest_multiplier() -> float:
+	var best := 1.0
+	for b in buildings:
+		if is_instance_valid(b) and not b.is_site():
+			best = maxf(best, b.def.harvest_speed_multiplier)
 	return best
 
 
@@ -2031,8 +2131,8 @@ func check_placement(def: BuildingDef, anchor: int) -> Dictionary:
 	if def == null or not grid.is_valid_index(anchor):
 		result["reason"] = tr(&"PLACE_OFF_MAP")
 		return result
-	if buildings.size() >= Difficulties.max_player_buildings():
-		result["reason"] = L10n.t(&"PLACE_BUILDING_CAP", [Difficulties.max_player_buildings()])
+	if buildings.size() >= building_cap():
+		result["reason"] = L10n.t(&"PLACE_BUILDING_CAP", [building_cap()])
 		return result
 
 	var cells := grid.footprint_cells(grid.coord(anchor), def.footprint)
@@ -2251,6 +2351,15 @@ func nearest_water_source(from: int) -> int:
 	return best
 
 
+## Wells and cisterns are protected clean sources; an unbuilt shoreline is untreated water.
+func water_source_is_clean(cell: int) -> bool:
+	for b in buildings:
+		if is_instance_valid(b) and not b.is_site() and b.def.provides_water \
+				and b.work_cell() == cell:
+			return true
+	return false
+
+
 ## Water that survives a freeze: a well or a cistern, as opposed to the river.
 ##
 ## Distinct from has_water_access(), which counts the shore and is therefore true right up until
@@ -2361,13 +2470,15 @@ func nearest_bed(from: int) -> Node:
 ## barn was full stood on the spot doing that at 10 Hz for the rest of the run, never moving and
 ## never looking for other work. Both sides ask the same question now.
 func workplace_free(b: Node, job: JobDef = null) -> bool:
-	return b.production_is_available(job) \
+	return b.staffing_is_available() and (b.production_paused or b.production_is_available(job)) \
 		and _slot_users(_work_users, b).size() < b.effective_worker_slots()
 
 
 func claim_workplace(b: Node, who: Object, job: JobDef = null) -> bool:
 	var users := _slot_users(_work_users, b)
-	if not b.production_is_available(job) or users.size() >= b.effective_worker_slots() \
+	if not b.staffing_is_available() \
+			or (not b.production_paused and not b.production_is_available(job)) \
+			or users.size() >= b.effective_worker_slots() \
 			or who in users:
 		return false
 	users.append(who)

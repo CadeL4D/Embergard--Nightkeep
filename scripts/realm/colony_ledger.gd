@@ -96,7 +96,7 @@ func defense_strength() -> float:
 	var strength := float(population()) * 0.035
 	for row: Dictionary in state.get("golems", []):
 		var power := Powers.get_power(StringName(row.get("power", &"")))
-		if power != null and power.construct_role == &"guard":
+		if power != null and power.construct_role in [&"guard", &"holy"]:
 			strength += clampf(power.construct_attack_damage \
 				/ maxf(power.construct_attack_cooldown, 0.1) / 75.0, 0.08, 0.24)
 	for row: Dictionary in state.get("buildings", []):

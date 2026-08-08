@@ -22,6 +22,7 @@ is_stockpile = true
 inventory_capacity = 720
 storage_tags = Array[StringName]([&"food", &"rations", &"herbs"])
 spoilage_multiplier = 0.08
+building_cap_bonus = 2
 influence_radius = 6
 order = 10
 color = Color(0.78, 0.7, 0.34, 1)

@@ -15,6 +15,7 @@ var home_cell: int = -1
 var target_cell: int = -1
 var carry_mass: int = 0
 var work_left: float = 0.0
+var jailed_anchor: int = -1
 var _awaiting_path := false
 var _anim_time := 0.0
 
@@ -119,6 +120,12 @@ func _idle() -> void:
 func restore_record(row: Dictionary) -> void:
 	home_cell = int(row.get("home", home_cell))
 	carry_mass = int(row.get("carry", 0))
+	jailed_anchor = int(row.get("jailed_anchor", -1))
+	if jailed_anchor != -1:
+		var jail := Colony.building_covering(jailed_anchor)
+		if jail != null and jail.def.jails_drones:
+			jail_at(jail)
+			return
 	var task: Dictionary = row.get("task", {}).duplicate(true)
 	if not task.is_empty():
 		Threat.restore_worker_task(self, task)
@@ -127,6 +134,25 @@ func restore_record(row: Dictionary) -> void:
 	else:
 		state = State.IDLE
 		think_urgent = true
+
+
+func jail_at(building: Building) -> void:
+	stop()
+	World.paths.cancel_for(self)
+	jailed_anchor = building.anchor
+	position = building.centre_position()
+	held_by_hand = true
+	state = State.IDLE
+	target_cell = -1
+
+
+func release_from_jail(cell_index: int) -> void:
+	jailed_anchor = -1
+	held_by_hand = false
+	var release_cell := World.nearest_walkable(cell_index)
+	if release_cell != -1:
+		position = World.grid.to_world_index(release_cell)
+	think_urgent = true
 
 
 func on_path_finished() -> void:

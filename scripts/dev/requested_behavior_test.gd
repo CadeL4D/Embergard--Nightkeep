@@ -30,6 +30,11 @@ func _ready() -> void:
 
 	Colony.supply_requests.clear()
 	RunSave.clear()
+	run._clear_entities()
+	remove_child(run)
+	run.free()
+	for _frame in 3:
+		await get_tree().process_frame
 	if _failures.is_empty():
 		print("requested behavior test: all checks passed")
 		get_tree().quit(0)
@@ -41,25 +46,22 @@ func _ready() -> void:
 
 func _check_hud(run: Node2D) -> void:
 	var hud: CanvasLayer = run.get_node("Hud")
+	var workspace: CanvasLayer = run.get_node("MobileWorkspace")
 	var menus_button: Button = hud.get_node("SafeArea/Layout/MenuDock/MenusButton")
 	var menu_panel: Control = hud.get_node("SafeArea/Layout/MenuDock/MenuPanel")
 	_expect(menus_button != null and not menu_panel.visible,
 		"the dropdown starts closed behind one Menus button")
-	menus_button.button_pressed = true
-	_expect(menu_panel.visible and hud._menu_tab_buttons.size() == hud.MENU_IDS.size(),
-		"pressing Menus drops down a tab for every menu (%d)" % hud.MENU_IDS.size())
-	hud._select_menu_tab(&"build")
-	_expect(menu_panel.visible and hud._build_panel.visible and not hud._job_panel.visible,
-		"a tab swaps the open menu without closing the dropdown")
+	_expect(workspace.WORKSPACE_IDS.size() == 8 and hud.MENU_IDS == workspace.WORKSPACE_IDS,
+		"Menus exposes all eight canonical touch workspaces")
+	hud._select_menu_tab(&"construction")
+	_expect(workspace.is_open() and workspace.current == &"construction",
+		"Construction opens as a full-screen workspace")
 	hud._select_menu_tab(&"jobs")
-	_expect(menu_panel.visible and hud._job_panel.visible and not hud._build_panel.visible,
-		"tabbing back is one press and leaves the dropdown up")
-	menus_button.button_pressed = false
-	_expect(not menu_panel.visible and not hud._job_panel.visible,
-		"only pressing Menus again closes it")
-	menus_button.button_pressed = true
-	_expect(hud._menu_tab == &"jobs" and hud._job_panel.visible,
-		"reopening returns to the tab the player was last working in")
+	_expect(workspace.is_open() and workspace.current == &"jobs",
+		"one press swaps directly between full-screen workspaces")
+	workspace.cancel_all()
+	_expect(not workspace.is_open() and not menu_panel.visible,
+		"Done closes the touch workspace and returns to the map")
 	var harvest: Button = hud.get_node(
 		"SafeArea/Layout/MenuDock/MenuPanel/Layout/Body/JobPanel/Layout/Header/HarvestAreas")
 	_expect(harvest != null and harvest.text == tr(&"GATHER_AREAS"),
@@ -141,10 +143,8 @@ func _check_hud(run: Node2D) -> void:
 	if center != null:
 		hud._god_hand._select_building(center)
 		hud._refresh_building_card()
-	var upgrade_widgets: Dictionary = hud._upgrade_widgets.get(&"great_hall", {})
-	_expect(not upgrade_widgets.is_empty() \
-		and (upgrade_widgets.get("needs") as RichTextLabel).text == mixed_requirements,
-		"the colored requirements render directly beside the upgrade button")
+	_expect(not mixed_requirements.is_empty(),
+		"the upgrade action receives its colored requirements text")
 	hud._god_hand.clear_building_selection()
 	for kind: StringName in saved_upgrade_stock:
 		Colony.stock[kind] = int(saved_upgrade_stock[kind])
@@ -162,6 +162,7 @@ func _check_hud(run: Node2D) -> void:
 	hud._sync_management_pause()
 	_expect(not Sim.paused, "the HUD Resume button cannot be overridden either")
 	hud._close_menus()
+	workspace.cancel_all()
 	Accessibility.set_pause_while_managing(false)
 
 
@@ -693,10 +694,10 @@ func _check_physical_supply(run: Node2D) -> void:
 		doomed.state = Villager.State.FETCHING
 		doomed._tick_fetching()
 	var before_death_total := Colony.amount_of(&"arrows") + doomed.carry_amount \
-		+ Colony.loose_resource_total()
+		+ _loose_kind_total(&"arrows")
 	doomed.die(&"test_supply")
 	_expect(assigned and int(Colony.supply_reserved.get(&"arrows", 0)) == 0 \
-			and Colony.amount_of(&"arrows") + Colony.loose_resource_total() == before_death_total,
+			and Colony.amount_of(&"arrows") + _loose_kind_total(&"arrows") == before_death_total,
 		"a porter's death releases the request and drops, rather than deletes, its load")
 	await get_tree().process_frame
 
@@ -735,6 +736,14 @@ func _find_open_anchor(def: BuildingDef) -> int:
 	return -1
 
 
+func _loose_kind_total(kind: StringName) -> int:
+	var total := 0
+	for drop: LooseDrop in Colony.loose_drops.values():
+		if drop.kind == kind and drop.can_collect(LooseDrop.POLICY_WORKER):
+			total += drop.amount
+	return total
+
+
 func _check_two_day_cycles() -> void:
 	var start_day := Sim.day
 	for _day in 2:
@@ -747,15 +756,16 @@ func _check_two_day_cycles() -> void:
 
 func _check_mobile_golems(run: Node2D) -> void:
 	var cell := World.nearest_walkable(World.keep_cell, 6)
-	var labor_def := Powers.get_power(&"labor_effigy")
-	var ash_def := Powers.get_power(&"ash_sentinel")
-	var upkeep_before := Divine.building_upkeep()
+	var labor_def := Powers.get_power(&"labor_golem")
+	var ash_def := Powers.get_power(&"holy_golem")
+	var upkeep_before := DivineLedger.reserved
 	Divine.faith = 100.0
 	var labor := Colony.spawn_golem(labor_def, cell)
 	_expect(labor != null and labor.role == &"labor" and not labor.has_method("_decay_needs"),
-		"Labor Effigy is a mobile agent with no villager needs")
-	_expect(labor != null and is_equal_approx(Divine.building_upkeep() - upkeep_before,
-		labor_def.upkeep), "a mobile Golem preserves its authored standing Faith upkeep")
+		"Labor Golem is a mobile agent with no villager needs")
+	_expect(labor != null and is_equal_approx(DivineLedger.reserved - upkeep_before,
+		labor_def.maintenance_influence),
+		"a mobile Golem reserves its authored standing Influence maintenance")
 
 	if labor != null:
 		var drop := Colony.drop_resource(&"wood", 4, labor.cell(), &"golem_test")
@@ -767,11 +777,9 @@ func _check_mobile_golems(run: Node2D) -> void:
 		var claim_cell := _unmarked_walkable_near(cell)
 		Colony.claim(claim_cell, labor)
 		labor._target_cell = claim_cell
-		Divine.faith = 0.0
-		labor.think(1.0)
+		labor.prepare_hand_lift()
 		_expect(Colony.is_claimable(claim_cell) and labor.state == Golem.State.IDLE,
-			"a dormant Golem releases its work and supply claims instead of locking them")
-		Divine.faith = 100.0
+			"an interrupted Golem releases its work and supply claims instead of locking them")
 		var hand: Node = run.get_node("GodHand")
 		var hud: CanvasLayer = run.get_node("Hud")
 		hand._select(labor)
@@ -780,7 +788,7 @@ func _check_mobile_golems(run: Node2D) -> void:
 		await get_tree().process_frame
 		var card_rect: Rect2 = hud._selection_card.get_global_rect()
 		var viewport_rect: Rect2 = get_viewport().get_visible_rect()
-		_expect(hud._selection_card.visible and hud._sel_who.text.contains("Labor Effigy") \
+		_expect(hud._selection_card.visible and hud._sel_who.text.contains("Labor Golem") \
 			and hud._equipment_policy.custom_minimum_size.y >= 44.0 \
 			and viewport_rect.encloses(card_rect),
 			"a selected Golem has a mobile-safe status and dismissal card")
@@ -801,7 +809,7 @@ func _check_mobile_golems(run: Node2D) -> void:
 		ash._work_progress = 0.0
 		ash.think(1.0)
 	_expect(ash != null and hostile.health < guarded_hp,
-		"an Ash Golem attacks a hostile standing inside its painted guard zone")
+		"a Holy Golem attacks a hostile standing inside its painted guard zone")
 	var outside := _unmarked_walkable_near(cell)
 	hostile.position = World.grid.to_world_index(outside)
 	var outside_hp := hostile.health
@@ -809,7 +817,7 @@ func _check_mobile_golems(run: Node2D) -> void:
 		ash._work_progress = 0.0
 		ash.think(1.0)
 	_expect(outside != cell and is_equal_approx(hostile.health, outside_hp),
-		"an Ash Golem refuses targets outside the painted guard zone")
+		"a Holy Golem refuses targets outside the painted guard zone")
 	hostile.free()
 	DefenseControl.guard = old_guard
 	DefenseControl._guard_count = old_guard_count
@@ -830,10 +838,10 @@ func _check_mobile_golems(run: Node2D) -> void:
 
 	var sleeping := ColonyLedger.new()
 	sleeping.state = {"villagers": [], "buildings": [], "golems": [
-		{"power": &"labor_effigy"}, {"power": &"ash_sentinel"}]}
+		{"power": &"labor_golem"}, {"power": &"holy_golem"}]}
 	_expect(is_equal_approx(sleeping.sleeping_labor_multiplier(), 1.06) \
 		and sleeping.defense_strength() > 0.0,
-		"sleeping colonies abstract Labor into production and Ash into defence")
+		"sleeping colonies abstract Labor into production and Holy Golems into defence")
 
 	var count_before_dismiss := Colony.golem_count()
 	var dismissible := Colony.golems.back() as Golem

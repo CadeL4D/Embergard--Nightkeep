@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/run/run.gd" id="1_run"]
 [ext_resource type="Script" path="res://scripts/divine/god_hand.gd" id="8_god_hand"]
@@ -26,6 +26,8 @@
 [ext_resource type="Script" path="res://scripts/world/loose_drop_view.gd" id="27_drops"]
 [ext_resource type="Script" path="res://scripts/world/terrain_transition_overlay.gd" id="25_terrain_edges"]
 [ext_resource type="Script" path="res://scripts/world/path_surface_view.gd" id="26_path_surface"]
+[ext_resource type="Script" path="res://scripts/world/work_order_view.gd" id="28_work_orders"]
+[ext_resource type="Script" path="res://scripts/ui/mobile_workspace.gd" id="29_mobile_workspace"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_blight"]
 shader = ExtResource("4_blight")
@@ -117,6 +119,10 @@ script = ExtResource("27_drops")
 z_index = 5
 script = ExtResource("24_gather_view")
 
+[node name="WorkOrders" type="Node2D" parent="WorldView"]
+z_index = 6
+script = ExtResource("28_work_orders")
+
 [node name="PowerEffects" type="Node2D" parent="WorldView"]
 z_index = 9
 script = ExtResource("21_power_fx")
@@ -140,6 +146,9 @@ centered = false
 [node name="WeatherView" parent="." instance=ExtResource("18_weather")]
 
 [node name="Hud" parent="." instance = ExtResource("9_hud")]
+
+[node name="MobileWorkspace" type="CanvasLayer" parent="."]
+script = ExtResource("29_mobile_workspace")
 
 [node name="RunSummary" parent="." instance = ExtResource("11_summary")]
 

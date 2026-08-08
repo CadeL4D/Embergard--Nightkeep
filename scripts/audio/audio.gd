@@ -84,6 +84,7 @@ func _ensure_buses() -> void:
 		var p := AudioStreamPlayer.new()
 		p.bus = BUS_SFX
 		add_child(p)
+		p.finished.connect(_on_one_shot_finished.bind(p))
 		_pool.append(p)
 
 
@@ -145,6 +146,11 @@ func register_sfx(id: StringName, stream: AudioStream) -> void:
 ## written before the sound design lands.
 func play_sfx(id: StringName, pitch_variance: float = 0.08,
 		bus: StringName = BUS_SFX) -> void:
+	# Headless acceptance runs have no audio device to consume one-shot playback. Starting a WAV
+	# there can leave its AudioStreamPlayback alive on the mixer thread when the test process exits,
+	# producing a false ObjectDB/resource leak even though the player node was freed correctly.
+	if DisplayServer.get_name() == "headless":
+		return
 	var stream: AudioStream = _sfx.get(id)
 	if stream == null or _pool.is_empty():
 		return
@@ -156,6 +162,13 @@ func play_sfx(id: StringName, pitch_variance: float = 0.08,
 	# fastest way to make a soundscape grating.
 	p.pitch_scale = 1.0 + randf_range(-pitch_variance, pitch_variance)
 	p.play()
+
+
+func _on_one_shot_finished(player: AudioStreamPlayer) -> void:
+	# A pooled player only needs its stream while it is playing. Releasing it immediately keeps
+	# teardown deterministic on mobile suspension as well as ordinary desktop shutdown.
+	if player != null and not player.playing:
+		player.stream = null
 
 
 ## Hook for the procedural music layer. No-ops until that exists, so the phase machine can
@@ -174,6 +187,11 @@ func _register_catalog() -> void:
 
 
 func _build_music() -> void:
+	# Headless verification has no audio device and therefore cannot drain active WAV playback
+	# before engine shutdown. Music is presentation-only, so avoid loading or starting the three
+	# layers in that environment; desktop and mobile builds still use the authored mix below.
+	if DisplayServer.get_name() == "headless":
+		return
 	# Keep all three WAVs synchronized and cross-fade their player volumes.  This
 	# avoids AudioStreamGenerator on iOS and removes all sample synthesis from the
 	# main thread while retaining the layered day/night/Blight score.

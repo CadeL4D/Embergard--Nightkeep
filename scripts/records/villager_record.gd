@@ -20,6 +20,18 @@ var equipment_policy: StringName = &"best_available"
 var birth_cooldown_until_day: int = 0
 var memorial: Dictionary = {}
 
+## Update 2d separates a villager's personal belief from the Influence the player spends.
+## These values live on the persistent identity so sleeping regions and save round-trips use the
+## same physiology as the awake scene.
+var faith: float = 70.0
+var thermal_comfort: float = 50.0
+var panic: float = 0.0
+var confusion: float = 0.0
+var stress: float = 0.0
+var villager_type: StringName = &"adult"
+var parents: Array[String] = []
+var inherited_mastery: Dictionary = {}
+
 ## job id -> mastery, 0.0 to 1.0, earned by finishing work cycles of that job.
 ##
 ## The one thing a villager owns that grows. Every other number here is rolled at birth and never
@@ -71,6 +83,15 @@ func to_dict() -> Dictionary:
 		"equipment_policy": equipment_policy,
 		"birth_cooldown_until_day": birth_cooldown_until_day,
 		"memorial": memorial.duplicate(true),
+		"mastery": mastery.duplicate(true),
+		"faith": faith,
+		"thermal_comfort": thermal_comfort,
+		"panic": panic,
+		"confusion": confusion,
+		"stress": stress,
+		"villager_type": villager_type,
+		"parents": parents.duplicate(),
+		"inherited_mastery": inherited_mastery.duplicate(true),
 	}
 
 
@@ -94,4 +115,12 @@ static func from_dict(data: Dictionary) -> VillagerRecord:
 	record.birth_cooldown_until_day = int(data.get("birth_cooldown_until_day", 0))
 	record.memorial = data.get("memorial", {}).duplicate(true)
 	record.mastery = data.get("mastery", {}).duplicate()
+	record.faith = clampf(float(data.get("faith", 70.0)), 0.0, 100.0)
+	record.thermal_comfort = clampf(float(data.get("thermal_comfort", 50.0)), 0.0, 100.0)
+	record.panic = clampf(float(data.get("panic", 0.0)), 0.0, 100.0)
+	record.confusion = clampf(float(data.get("confusion", 0.0)), 0.0, 100.0)
+	record.stress = clampf(float(data.get("stress", 0.0)), 0.0, 100.0)
+	record.villager_type = StringName(data.get("villager_type", &"adult"))
+	record.parents.assign(data.get("parents", []))
+	record.inherited_mastery = data.get("inherited_mastery", {}).duplicate(true)
 	return record

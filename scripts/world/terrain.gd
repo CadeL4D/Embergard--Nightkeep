@@ -30,6 +30,7 @@ enum Feature {
 	RUIN_FLOOR,
 	NEST,          ## blight source; killing it permanently stops one spread origin
 	BERRIES,
+	DARK_CRYSTAL,
 }
 
 ## Terrain a unit can stand on. Water is impassable in the slice; bridges later.
@@ -64,6 +65,7 @@ const FEATURE_BLOCKS := {
 	Feature.RUIN_FLOOR: false,
 	Feature.NEST: true,
 	Feature.BERRIES: false,
+	Feature.DARK_CRYSTAL: true,
 }
 
 ## Extra pathing cost per terrain, in tenths. Kept small — big spreads make units
@@ -96,6 +98,7 @@ const FEATURE_YIELD := {
 	Feature.STONE: {&"stone": 5, &"ore": 1},
 	Feature.RUIN_WALL: {&"stone": 6, &"emberglass": 1},
 	Feature.BERRIES: {&"food": 5, &"herbs": 1},
+	Feature.DARK_CRYSTAL: {&"crystal": 4},
 }
 
 ## Hit points of a Blight nest.
@@ -121,6 +124,7 @@ const FEATURE_WORK := {
 	Feature.STONE: 18.0,
 	Feature.RUIN_WALL: 9.0,
 	Feature.BERRIES: 4.0,
+	Feature.DARK_CRYSTAL: 14.0,
 }
 
 
@@ -171,4 +175,5 @@ static func job_for_feature(feature: int) -> StringName:
 		Feature.TREE: return &"woodcutting"
 		Feature.STONE, Feature.RUIN_WALL: return &"quarrying"
 		Feature.BERRIES: return &"foraging"
+		Feature.DARK_CRYSTAL: return &"crystal_harvester"
 		_: return &""

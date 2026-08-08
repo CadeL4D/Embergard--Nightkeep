@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/data/building_def.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/stockpile.png" id="2"]
+[resource]
+script = ExtResource("1")
+id = &"ancillary"
+display_name = "BUILDING_ANCILLARY"
+description = "BUILDING_ANCILLARY_DESC"
+sprite = ExtResource("2")
+category = &"logistics"
+tier = 1
+footprint = Vector2i(2, 2)
+blocks_movement = false
+cost = {&"wood": 18, &"stone": 4}
+build_work = 16.0
+max_hp = 120.0
+repair_cost = {&"wood": 2}
+is_stockpile = true
+inventory_capacity = 180
+influence_radius = 5
+worker_slots = 3
+workplace_role = &"ancillary"
+building_cap_bonus = 3
+workforce_cap_bonus = 1
+order = 7
+color = Color(0.68, 0.59, 0.43, 1)

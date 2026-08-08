@@ -5,6 +5,7 @@ extends RefCounted
 const BUILDING_SCENE := preload("res://scenes/entities/building.tscn")
 const VILLAGER_SCENE := preload("res://scenes/entities/villager.tscn")
 const GOLEM_SCENE := preload("res://scenes/entities/golem.tscn")
+const ANIMAL_SCENE := preload("res://scenes/entities/animal.tscn")
 const BLIGHT_WORKER_SCENE := preload("res://scenes/entities/blight_worker.tscn")
 
 
@@ -35,6 +36,7 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 	World._build_shore_index()
 
 	Colony.reset()
+	WorkOrders.reset()
 	var has_physical_inventory := int(data.get("physical_inventory", 0)) > 0
 	if has_physical_inventory:
 		Colony.overflow = data.get("overflow", {}).duplicate(true)
@@ -58,6 +60,7 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 	Threat.blight_mass = int(data.get("blight_mass",
 		World.live_nest_cells().size() * Threat.INITIAL_MASS_PER_NEST))
 	DefenseControl.load_dict(data.get("defense_control", {}))
+	WorkOrders.load_dict(data.get("work_orders", {}))
 
 	for cell in data.get("blight_structures", {}):
 		var at := int(cell)
@@ -85,6 +88,7 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 		Colony.distribute_legacy_stock(data.get("stock", {}))
 	_restore_villagers(data.get("villagers", []), entities)
 	_restore_golems(data.get("golems", []), entities)
+	_restore_animals(data.get("animals", []), entities)
 	Colony.rebuild_supply_reservations_from_carriers()
 	Colony.refresh_households()
 	_restore_blight_workers(data.get("blight_workers", []), entities)
@@ -96,7 +100,11 @@ static func restore(ledger: ColonyLedger, entities: Node) -> bool:
 				Divine.taken_up.append(power_id)
 	Divine.restore_library(data.get("tomes", []), bool(data.get("library_auto_manage", true)))
 	Divine.place_ember(int(data.get("ember_cell", World.keep_cell)))
-	Divine.faith = float(data.get("faith", 20.0))
+	if data.has("divine_ledger"):
+		DivineLedger.load_dict(data.get("divine_ledger", {}))
+	else:
+		DivineLedger.set_available(float(data.get("faith", 20.0)))
+	Divine.faith = DivineLedger.available
 	Events.map_generated.emit()
 	return true
 
@@ -172,6 +180,16 @@ static func _restore_golems(rows: Array, entities: Node) -> void:
 		golem.carry_amount = maxi(int(row.get("carry_amount", 0)), 0)
 		golem._supply_request_id = int(row.get("supply_request_id", 0))
 		Diagnostics.record_golem_count(Colony.golem_count())
+
+
+static func _restore_animals(rows: Array, entities: Node) -> void:
+	for row: Dictionary in rows:
+		var animal: Animal = ANIMAL_SCENE.instantiate()
+		animal.setup(StringName(row.get("kind", &"animal")))
+		animal.position = Vector2(float(row.get("x", 0.0)), float(row.get("y", 0.0)))
+		entities.add_child(animal)
+		animal.health = clampf(float(row.get("health", animal.max_health)), 1.0,
+			animal.max_health)
 
 
 static func _restore_blight_workers(rows: Array, entities: Node) -> void:

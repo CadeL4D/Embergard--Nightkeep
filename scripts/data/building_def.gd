@@ -152,6 +152,19 @@ extends Resource
 @export_range(0.25, 3.0) var sleep_recovery_multiplier: float = 1.0
 ## How many villagers of a matching job may work here at once.
 @export var worker_slots: int = 0
+## Upgrade-specialization hooks shared by economic buildings and defenses.
+@export_range(0.1, 5.0) var harvest_speed_multiplier: float = 1.0
+@export_range(0.1, 5.0) var global_work_speed_multiplier: float = 1.0
+@export_range(0.1, 5.0) var global_build_speed_multiplier: float = 1.0
+@export var building_cap_bonus: int = 0
+@export var workforce_cap_bonus: int = 0
+@export_range(0.1, 5.0) var ammo_efficiency: float = 1.0
+@export_range(0.0, 10.0) var paused_stress_recovery: float = 0.35
+@export_range(0.0, 10.0) var paused_faith_recovery: float = 0.12
+@export var jails_drones: bool = false
+@export var destroys_drones: bool = false
+@export var drone_essence_yield: int = 0
+@export var enables_migration: bool = false
 
 ## What JobDef.workplace has to name to be worked here. Empty means "my own id".
 ##

@@ -74,7 +74,7 @@ var _sweep_touches: Dictionary = {}
 func _unhandled_input(event: InputEvent) -> void:
 	# The resource brush owns world input while active. Letting God Hand also see a
 	# paint stroke would move the Ember or select villagers underneath it.
-	if DefenseControl.gather_job != &"":
+	if DefenseControl.gather_job != &"" or WorkOrders.active_kind >= 0:
 		return
 	if event.is_action_pressed(&"game_cancel"):
 		_cancel_desktop_action()
@@ -284,6 +284,13 @@ func _pick_villager(world_pos: Vector2) -> Node:
 		if golem_distance <= best_dist:
 			best_dist = golem_distance
 			best = golem
+	for animal in Colony.animals:
+		if not is_instance_valid(animal) or not animal.alive:
+			continue
+		var animal_distance: float = animal.position.distance_squared_to(world_pos)
+		if animal_distance <= best_dist:
+			best_dist = animal_distance
+			best = animal
 	return best
 
 
@@ -353,6 +360,22 @@ func _handle_hand_tap(world_pos: Vector2) -> bool:
 		Events.notice.emit(L10n.t(&"HAND_NEED_FAITH", [ceili(cost)]), 1)
 		return true
 	var drowning := _is_drowning_drop(destination)
+	if held is BlightWorker:
+		var receiver := Colony.building_covering(destination)
+		if receiver != null and receiver.def.destroys_drones:
+			Threat.cull_worker(held, receiver)
+			held = null
+			_held_origin_cell = -1
+			_hand_preview_cell = -1
+			queue_redraw()
+			return true
+		if receiver != null and receiver.def.jails_drones:
+			Threat.jail_worker(held, receiver)
+			held = null
+			_held_origin_cell = -1
+			_hand_preview_cell = -1
+			queue_redraw()
+			return true
 	if held is Building:
 		held.drop_from_hand(destination)
 	else:
@@ -483,6 +506,10 @@ func _hand_drop_valid(destination: int) -> bool:
 		return false
 	if held is Building:
 		return held.can_drop_from_hand(destination)
+	if held is BlightWorker:
+		var receiver := Colony.building_covering(destination)
+		if receiver != null and (receiver.def.jails_drones or receiver.def.destroys_drones):
+			return true
 	# Water is a legal destination for something hostile, and a fatal one. This is the oldest
 	# verb in the genre and the reason picking a monster up feels like power rather than tidying:
 	# the Hand could already move a Shambler somewhere inconvenient, and now it can end it.
